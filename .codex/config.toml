@@ -1,5 +1,6 @@
 [mcp_servers.datenportal_integrator]
-command = "uv"
-args = ["run", "--locked", "datenportal-integrator", "serve"]
+command = ".datenportal-integrator/tools/java"
+args = ["-jar", "build/libs/datenportal-integrator.jar", "--config", "config/local.toml", "serve"]
 startup_timeout_sec = 30
 tool_timeout_sec = 600
+env_vars = ["DATENPORTAL_LOCAL_USER", "DATENPORTAL_LOCAL_TOKEN", "DATENPORTAL_JENKINS_USER", "DATENPORTAL_JENKINS_TOKEN"]

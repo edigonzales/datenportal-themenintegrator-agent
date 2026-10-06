@@ -1,13 +1,21 @@
 # datenportal-themenintegrator-agent
 
-For topic integration, read `skills/datenportal-themenintegrator/SKILL.md` and use
-this repository's CLI/MCP. Keep all integrator implementation, rules, tests and
-runtime files here. Never modify source files in datenportal-dev-stack, the
-Java datasheet MCP, Jenkins plugin, GRETL or portal as part of an integration.
-Only explicitly staged business changes belong in datenportal-themenrepo.
+For integration, read `skills/datenportal-themenintegrator/SKILL.md` and use this
+repository's Java CLI/MCP. Integrator implementation, rules, tests and runtime
+files belong here. Never modify source files in the dev-stack, datasheet MCP,
+interlis-mcp, Jenkins plugin, GRETL or portal. Only staged, reviewed business
+changes belong in datenportal-themenrepo.
 
-For development: `uv sync --locked`, `uv run pytest`, `uv run ruff check .`.
-The ignored local configuration is `config/local.toml`; start with its example.
-No credentials in source, command lines, reports or tests. Persist approvals for
-actual human responses, never fabricate them for a real delivery. Automated test
-fixtures must identify themselves as tests and cannot target INT/PROD.
+Development uses JDK 25 and Gradle: `./gradlew test jar spotlessCheck`.
+Run `./gradlew integrationTest` with the actual configured tools for integration
+verification. GRETL uses the existing Java-17 wrapper and existing versions.
+The local configuration is the ignored `config/local.toml`; secrets remain in
+environment variables or a credential store. Never print credential-bearing
+configuration or runtime Docker inspection output.
+
+Persist approvals only for actual human responses. Automated approvals are
+permitted solely in clearly marked, isolated test fixtures; they cannot authorize
+real topic-repository changes or INT/PROD publication. Resume recorded external
+runs; never retry an ambiguous upload. Keep actual, simulated and open acceptance
+checks distinct in docs/abnahme.md. Python is being replaced by Java; do not add
+new Python implementation, launchers, converter recipes or tests.

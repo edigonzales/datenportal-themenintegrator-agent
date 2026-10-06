@@ -3,7 +3,7 @@
   "mcp": {
     "datenportal_integrator": {
       "type": "local",
-      "command": ["uv", "run", "--locked", "datenportal-integrator", "serve"],
+      "command": [".datenportal-integrator/tools/java", "-jar", "build/libs/datenportal-integrator.jar", "--config", "config/local.toml", "serve"],
       "enabled": true,
       "timeout": 600000
     }

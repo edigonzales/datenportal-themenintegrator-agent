@@ -4,12 +4,24 @@ topics_repo = "../datenportal-themenrepo"
 stack_repo = "../datenportal-dev-stack"
 state_dir = ".datenportal-integrator/runs"
 datasheet_mcp_url = "http://127.0.0.1:8000/mcp"
-# Use an installed, pinned distribution. scripts/setup-tools.py provisions a local one.
+# Use an installed, pinned distribution. The Java CLI setup-tools provisions it.
 validator_command = ["java", "-jar", ".datenportal-integrator/tools/ilivalidator/ilivalidator-1.15.0.jar"]
 model_dirs = ["../datenportal-datenblatt-editor/mcp-java/src/main/resources/models"]
 compose_files = ["compose.yaml"]
 stack_start_args = []
 timeout_seconds = 300
+
+# GRETL retains the existing Java-17 wrapper and Jenkins binary bundle.
+# Set a real local JDK 17 path, or export GRADLE_JAVA_HOME_17.
+# gretl_java_home = "/path/to/jdk-17"
+gretl_offline_jars = ".datenportal-integrator/tools/gretl-runtime/jars"
+
+[interlis]
+transport = "stdio"
+jar = "../interlis-mcp/build/libs/interlis-mcp.jar"
+# Optional explicit executable; default is the integrator JVM's java.
+# java_command = "/path/to/jdk-25/bin/java"
+# Alternative: transport = "http", url = "http://localhost:8080/mcp"
 
 [environments.local]
 kind = "local"

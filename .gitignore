@@ -10,3 +10,4 @@ config/local.toml
 build/
 dist/
 *.egg-info/
+.gradle/

@@ -1,165 +1,48 @@
 {
-  "$defs": {
-    "Environment": {
-      "additionalProperties": false,
-      "properties": {
-        "kind": {
-          "enum": [
-            "local",
-            "int",
-            "prod"
-          ],
-          "title": "Kind",
-          "type": "string"
-        },
-        "jenkins_url": {
-          "title": "Jenkins Url",
-          "type": "string"
-        },
-        "portal_url": {
-          "title": "Portal Url",
-          "type": "string"
-        },
-        "manifest_url": {
-          "title": "Manifest Url",
-          "type": "string"
-        },
-        "seed_job": {
-          "default": "gretl-datenportal-seed",
-          "title": "Seed Job",
-          "type": "string"
-        },
-        "username_env": {
-          "default": "DATENPORTAL_JENKINS_USER",
-          "title": "Username Env",
-          "type": "string"
-        },
-        "token_env": {
-          "default": "DATENPORTAL_JENKINS_TOKEN",
-          "title": "Token Env",
-          "type": "string"
-        },
-        "git_remote": {
-          "default": "origin",
-          "title": "Git Remote",
-          "type": "string"
-        },
-        "git_branch": {
-          "default": "main",
-          "title": "Git Branch",
-          "type": "string"
-        },
-        "enabled": {
-          "default": false,
-          "title": "Enabled",
-          "type": "boolean"
-        },
-        "repository_mode": {
-          "default": "managed-git",
-          "enum": [
-            "working-tree",
-            "managed-git"
-          ],
-          "title": "Repository Mode",
-          "type": "string"
-        },
-        "git_write_back": {
-          "default": false,
-          "title": "Git Write Back",
-          "type": "boolean"
-        },
-        "reload_portal": {
-          "default": true,
-          "title": "Reload Portal",
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "kind",
-        "jenkins_url",
-        "portal_url",
-        "manifest_url"
-      ],
-      "title": "Environment",
-      "type": "object"
-    }
-  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Datenportal-Integrator lokale Konfiguration",
+  "type": "object",
   "additionalProperties": false,
+  "required": ["topics_repo", "stack_repo"],
   "properties": {
-    "topics_repo": {
-      "format": "path",
-      "title": "Topics Repo",
-      "type": "string"
-    },
-    "stack_repo": {
-      "format": "path",
-      "title": "Stack Repo",
-      "type": "string"
-    },
-    "state_dir": {
-      "default": ".datenportal-integrator/runs",
-      "format": "path",
-      "title": "State Dir",
-      "type": "string"
-    },
-    "datasheet_mcp_url": {
-      "default": "http://127.0.0.1:8000/mcp",
-      "title": "Datasheet Mcp Url",
-      "type": "string"
-    },
-    "validator_command": {
-      "items": {
-        "type": "string"
+    "root": {"type":"string","default":".."},
+    "topics_repo": {"type":"string"},
+    "stack_repo": {"type":"string"},
+    "state_dir": {"type":"string","default":".datenportal-integrator/runs"},
+    "datasheet_mcp_url": {"type":"string","format":"uri","default":"http://127.0.0.1:8000/mcp"},
+    "validator_command": {"type":"array","items":{"type":"string"},"minItems":1},
+    "model_dirs": {"type":"array","items":{"type":"string"}},
+    "compose_files": {"type":"array","items":{"type":"string"}},
+    "stack_start_args": {"type":"array","items":{"type":"string"}},
+    "timeout_seconds": {"type":"integer","minimum":1,"maximum":7200,"default":300},
+    "gretl_java_home": {"type":"string","description":"Lokales Java-17-Home; alternativ GRADLE_JAVA_HOME_17."},
+    "gretl_offline_jars": {"type":"string","default":".datenportal-integrator/tools/gretl-runtime/jars"},
+    "interlis": {
+      "type":"object","additionalProperties":false,
+      "properties": {
+        "transport":{"enum":["stdio","http"],"default":"stdio"},
+        "jar":{"type":"string"},"java_command":{"type":"string"},"url":{"type":"string","format":"uri"}
       },
-      "title": "Validator Command",
-      "type": "array"
+      "allOf":[
+        {"if":{"properties":{"transport":{"const":"http"}},"required":["transport"]},"then":{"required":["url"]},"else":{"required":["jar"]}}
+      ]
     },
-    "model_dirs": {
-      "items": {
-        "type": "string"
-      },
-      "title": "Model Dirs",
-      "type": "array"
-    },
-    "compose_files": {
-      "items": {
-        "type": "string"
-      },
-      "title": "Compose Files",
-      "type": "array"
-    },
-    "stack_start_args": {
-      "items": {
-        "type": "string"
-      },
-      "title": "Stack Start Args",
-      "type": "array"
-    },
-    "environments": {
-      "additionalProperties": {
-        "$ref": "#/$defs/Environment"
-      },
-      "title": "Environments",
-      "type": "object"
-    },
-    "timeout_seconds": {
-      "default": 300,
-      "maximum": 7200,
-      "minimum": 1,
-      "title": "Timeout Seconds",
-      "type": "integer"
-    },
-    "root": {
-      "default": ".",
-      "format": "path",
-      "title": "Root",
-      "type": "string"
-    }
+    "environments": {"type":"object","additionalProperties":{"$ref":"#/$defs/environment"}}
   },
-  "required": [
-    "topics_repo",
-    "stack_repo"
-  ],
-  "title": "Settings",
-  "type": "object"
+  "$defs": {
+    "environment": {
+      "type":"object","additionalProperties":false,
+      "required":["kind","jenkins_url","portal_url","manifest_url"],
+      "properties": {
+        "kind":{"enum":["local","int","prod"]},
+        "jenkins_url":{"type":"string","format":"uri"},"portal_url":{"type":"string","format":"uri"},"manifest_url":{"type":"string","format":"uri"},
+        "seed_job":{"type":"string","default":"gretl-datenportal-seed"},
+        "username_env":{"type":"string","default":"DATENPORTAL_JENKINS_USER"},"token_env":{"type":"string","default":"DATENPORTAL_JENKINS_TOKEN"},
+        "git_remote":{"type":"string","default":"origin"},"git_branch":{"type":"string","default":"main"},
+        "enabled":{"type":"boolean","default":false},
+        "repository_mode":{"enum":["working-tree","managed-git"],"default":"managed-git"},
+        "git_write_back":{"type":"boolean","default":false},"reload_portal":{"type":"boolean","default":true}
+      }
+    }
+  }
 }
