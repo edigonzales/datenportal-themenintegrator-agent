@@ -1,0 +1,17 @@
+INTERLIS 2.4;
+
+MODEL Datenportal_Integrator_Checks_20261005 (de)
+AT "https://github.com/edigonzales/datenportal-themenintegrator-agent"
+VERSION "2026-10-05" =
+  IMPORTS SO_AGI_DataCatalog_Datasheet_20260523, SO_AGI_DataCatalog_Base_20260529;
+
+  VIEW TOPIC Checks =
+    DEPENDS ON SO_AGI_DataCatalog_Datasheet_20260523.Metadata, SO_AGI_DataCatalog_Base_20260529.Office;
+    VIEW DatasheetOffice
+      PROJECTION OF SO_AGI_DataCatalog_Datasheet_20260523.Metadata.Dataset;
+      =
+      ALL OF Dataset;
+      EXISTENCE CONSTRAINT creatorRef REQUIRED IN SO_AGI_DataCatalog_Base_20260529.Office.Office: identifier;
+    END DatasheetOffice;
+  END Checks;
+END Datenportal_Integrator_Checks_20261005.

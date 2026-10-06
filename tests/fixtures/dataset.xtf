@@ -1,0 +1,51 @@
+<?xml version='1.0' encoding='utf-8'?>
+<ns0:transfer xmlns:ns0="http://www.interlis.ch/xtf/2.4/INTERLIS" xmlns:ns1="http://www.interlis.ch/xtf/2.4/SO_AGI_DataCatalog_Datasheet_20260523" xmlns:ns2="http://www.interlis.ch/xtf/2.4/SO_AGI_DataCatalog_Base_20260529">
+  <ns0:headersection>
+    <ns0:models>
+      <ns0:model>SO_AGI_DataCatalog_Datasheet_20260523</ns0:model>
+      <ns0:model>SO_AGI_DataCatalog_Base_20260529</ns0:model>
+    </ns0:models>
+    <ns0:sender>datenblatt-editor</ns0:sender>
+  </ns0:headersection>
+  <ns0:datasection>
+    <ns1:Metadata ns0:bid="x1">
+      <ns1:Dataset ns0:tid="ch.so.grundwasser.qualitaet">
+        <ns1:identifier>ch.so.grundwasser.qualitaet</ns1:identifier>
+        <ns1:title>Wasserqualität Grundwasser Kanton Solothurn</ns1:title>
+        <ns1:description>Messdaten der Grundwasserqualitätsuntersuchungen im Kanton Solothurn.</ns1:description>
+        <ns1:accessLevel>open</ns1:accessLevel>
+        <ns1:publicationStatus>published</ns1:publicationStatus>
+        <ns1:creatorRef>ch.so.afu</ns1:creatorRef>
+        <ns1:contactPoint>
+          <ns2:ContactPoint>
+            <ns2:name>Evgenia Rohner</ns2:name>
+            <ns2:organizationUnit>AfU Abteilung Wasser</ns2:organizationUnit>
+            <ns2:email>mailto:afu@bd.so.ch</ns2:email>
+          </ns2:ContactPoint>
+        </ns1:contactPoint>
+        <ns1:themes>Raum_und_Umwelt</ns1:themes>
+        <ns1:keywords>Wasserqualität</ns1:keywords>
+        <ns1:keywords>Grundwasser</ns1:keywords>
+        <ns1:accrualPeriodicity>annually</ns1:accrualPeriodicity>
+        <ns1:modified>2025-05-19</ns1:modified>
+        <ns1:temporalCoverage>
+          <ns1:ClosedTemporalCoverage>
+            <ns2:startDate>2024-01-01</ns2:startDate>
+            <ns2:endDate>2024-12-31</ns2:endDate>
+          </ns1:ClosedTemporalCoverage>
+        </ns1:temporalCoverage>
+        <ns1:surveyMethod>Vor-Ort und Laboranalyse.</ns1:surveyMethod>
+        <ns1:attributes>
+          <ns2:DatasetAttribute>
+            <ns2:name>Jahr</ns2:name>
+            <ns2:dataType>INTEGER</ns2:dataType>
+            <ns2:mandatory>false</ns2:mandatory>
+          </ns2:DatasetAttribute>
+        </ns1:attributes>
+        <ns1:dataAvailableFrom>ab 1998</ns1:dataAvailableFrom>
+        <ns1:furtherUses>Monitoring und Gewässerschutz.</ns1:furtherUses>
+        <ns1:auxiliaryData>Laborproben und Messstellenverzeichnis</ns1:auxiliaryData>
+      </ns1:Dataset>
+      </ns1:Metadata>
+  </ns0:datasection>
+</ns0:transfer>

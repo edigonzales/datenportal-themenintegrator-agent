@@ -1,0 +1,254 @@
+INTERLIS 2.4;
+
+/** Hierarchisches Erfassungs- und Transfermodell für den Datenkatalog
+ * des Kantons Solothurn.
+ * 
+ * Zweck:
+ * - Das Modell dient der fachfreundlichen Erfassung von Metadaten im
+ * Datenblatt-Editor durch die Fachämter.
+ * - Es beschreibt bewusst nicht den vollständigen publizierten Katalog,
+ * sondern die fachlich erfassbaren Angaben eines Datenblatts.
+ * - Es ist nicht auf Open Government Data beschränkt: Über accessLevel
+ * können auch eingeschränkt zugängliche oder interne Daten beschrieben
+ * werden.
+ * - Das Modell ist hierarchisch aufgebaut: Eine DatasetSeries enthält ihre
+ * Ausgaben als BAG OF STRUCTURE. Dadurch bleibt die Erfassung für
+ * Datenreihen kompakt und lesbar.
+ * 
+ * Verhältnis zum Publikationsmodell:
+ * - Dataset entspricht fachlich einem dcat:Dataset beziehungsweise einer
+ * katalogisierten Ressource.
+ * - DatasetSeries entspricht fachlich einer dcat:DatasetSeries.
+ * - DatasetIssue beschreibt eine einzelne Ausgabe einer DatasetSeries. Im
+ * Publikationsmodell kann daraus ein vollständig materialisiertes Dataset
+ * erzeugt werden.
+ * - Angaben, die für die Publikation nötig sind, aber nicht vom Fachamt
+ * erfasst werden sollen, werden später durch GRETL, statische Konfiguration
+ * oder die Datenportal-Anwendung ergänzt. Dazu gehören beispielsweise
+ * Publisher, Landingpage, Zugriffs- und Download-URLs, Datenformate,
+ * Lizenz- und URI-Mappings.
+ * 
+ * Sprache:
+ * - Die Textattribute werden einmalig, in der Regel deutsch, erfasst. Ein
+ * späterer RDF/XML-Export kann daraus sprachmarkierte Literale erzeugen.
+ */
+MODEL SO_AGI_DataCatalog_Datasheet_20260523 (en)
+  AT "https://agi.so.ch"
+  VERSION "2026-05-23"
+  =
+  IMPORTS SO_AGI_DataCatalog_Base_20260529;
+
+  TOPIC Metadata =
+    OID AS SO_AGI_DataCatalog_Base_20260529.DCOID;
+
+    /** Zeitliche Abdeckung, die für das Erfassungsmodell bewusst strenger ist
+     * als die generische TemporalCoverage aus dem Basismodell.
+     * 
+     * Erlaubt ist entweder ein geschlossenes Intervall mit Start- und Enddatum
+     * oder ein einzelner Stichtag. Offene Intervalle werden in diesem
+     * Erfassungsmodell nicht zugelassen.
+     */
+    STRUCTURE ClosedTemporalCoverage EXTENDS SO_AGI_DataCatalog_Base_20260529.TemporalCoverage =
+      /** Erzwingt entweder ein geschlossenes Intervall oder einen Stichtag.
+       */
+      MANDATORY CONSTRAINT (DEFINED(startDate) AND DEFINED(endDate) AND NOT (DEFINED(referenceDate))) OR (DEFINED(referenceDate) AND NOT (DEFINED(startDate)) AND NOT (DEFINED(endDate)));
+    END ClosedTemporalCoverage;
+
+    /** Hierarchische Ausgabe beziehungsweise Edition einer DatasetSeries.
+     * 
+     * Eine DatasetIssue enthält die Angaben, die von der Datenreihe abweichen
+     * oder eine konkrete Ausgabe beschreiben. Im Publikationsmodell kann eine
+     * DatasetIssue zu einem vollständig beschriebenen dcat:Dataset
+     * materialisiert werden.
+     */
+    !!@ dcatap.class=dcat:Dataset
+    STRUCTURE DatasetIssue =
+      /** Stabiler Identifikator der Ausgabe.
+       * 
+       * Der Wert sollte innerhalb des späteren Katalogs eindeutig sein und wird
+       * im Publikationsmodell als dct:identifier verwendet.
+       */
+      !!@ dcatap.property=dct:identifier
+      identifier : MANDATORY TEXT*255;
+      /** Titel der Ausgabe.
+       * 
+       * Wenn kein eigener Titel gesetzt wird, kann GRETL den Titel aus dem
+       * Titel der DatasetSeries und dem issueLabel ableiten.
+       */
+      !!@ dcatap.property=dct:title
+      title : TEXT*255;
+      /** Beschreibung der Ausgabe.
+       * 
+       * Wenn keine eigene Beschreibung gesetzt wird, kann GRETL die Beschreibung
+       * der DatasetSeries übernehmen.
+       */
+      !!@ dcatap.property=dct:description
+      description : TEXT*1024;
+      /** Bezeichnung der Ausgabe, z.B. "2026", "2025-05" oder
+       * "Stand_2026-01-01".
+       */
+      issueLabel : MANDATORY TEXT*255;
+      /** Kennzeichnet die aktuelle Ausgabe innerhalb der DatasetSeries.
+       * 
+       * Dieses Attribut dient der Datenportal-GUI und der späteren
+       * Materialisierung, hat aber kein direktes DCAT-AP-CH-Mapping.
+       */
+      isCurrentIssue : MANDATORY BOOLEAN;
+      /** Interner Publikationsstatus der Ausgabe im Erfassungs- und
+       * Publikationsprozess.
+       */
+      publicationStatus : MANDATORY SO_AGI_DataCatalog_Base_20260529.PublicationStatus;
+      /** Aktualisierungsintervall der Ausgabe, falls es von der DatasetSeries
+       * abweicht.
+       */
+      !!@ dcatap.property=dct:accrualPeriodicity
+      accrualPeriodicity : SO_AGI_DataCatalog_Base_20260529.MaintenanceFrequencyCode;
+      /** Formales Erstpublikationsdatum der Ressource.
+       */
+      !!@ dcatap.property=dct:issued
+      issued : DATE;
+      /** Datum der letzten inhaltlich relevanten Änderung dieser Ausgabe.
+       */
+      !!@ dcatap.property=dct:modified
+      modified : DATE;
+      /** Zeitliche Abdeckung oder Stichtag dieser Ausgabe.
+       */
+      !!@ dcatap.property=dct:temporal
+      temporalCoverage : SO_AGI_DataCatalog_Datasheet_20260523.Metadata.ClosedTemporalCoverage;
+      /** Beschreibung der Erhebungs-, Mess- oder Erfassungsmethode dieser
+       * Ausgabe.
+       */
+      surveyMethod : MTEXT;
+      /** Beschreibung der fachlichen Attribute beziehungsweise Spalten dieser
+       * Ausgabe.
+       */
+      attributes : BAG {0..*} OF SO_AGI_DataCatalog_Base_20260529.DatasetAttribute;
+      /** Name oder Referenz des Datenmodells, auf dem diese Ausgabe basiert.
+       */
+      model : TEXT*255;
+      /** Freitextangabe, ab wann Daten für diese Ausgabe verfügbar sind.
+       */
+      dataAvailableFrom : TEXT*255;
+      /** Hinweise auf weitere Verwendungen der Daten.
+       */
+      furtherUses : MTEXT;
+      /** Hinweise auf Hilfsdaten oder zusätzliche Datengrundlagen.
+       */
+      auxiliaryData : MTEXT;
+    END DatasetIssue;
+
+    /** Eigenständiger Datensatz im hierarchischen Erfassungsmodell.
+     * 
+     * Ein Dataset ist nicht Teil einer DatasetSeries. Fachlich entspricht es
+     * einem dcat:Dataset beziehungsweise einer katalogisierten Ressource.
+     */
+    !!@ dcatap.class=dcat:Dataset
+    CLASS Dataset =
+      /** Stabiler Identifikator des Datensatzes.
+       * 
+       * Der Wert wird später als dct:identifier verwendet und sollte innerhalb
+       * des publizierten Katalogs eindeutig sein.
+       */
+      !!@ dcatap.property=dct:identifier
+      identifier : MANDATORY TEXT*255;
+      /** Titel des Datensatzes.
+       */
+      !!@ dcatap.property=dct:title
+      title : MANDATORY TEXT*255;
+      /** Beschreibung des Datensatzes.
+       */
+      !!@ dcatap.property=dct:description
+      description : MANDATORY TEXT*1024;
+      /** Zugänglichkeitsstufe des Datensatzes im Datenportal.
+       * 
+       * Der lokale Wert wird später auf einen dct:accessRights-Wert gemappt.
+       */
+      !!@ dcatap.property=dct:accessRights
+      accessLevel : MANDATORY SO_AGI_DataCatalog_Base_20260529.AccessLevel;
+      /** Interner Publikationsstatus des Datensatzes im Erfassungs- und
+       * Publikationsprozess.
+       */
+      publicationStatus : MANDATORY SO_AGI_DataCatalog_Base_20260529.PublicationStatus;
+      /** Referenz auf den fachlichen Datenherrn beziehungsweise Creator.
+       * 
+       * Der Wert verweist im Erfassungsmodell auf eine Amtsstelle und wird im
+       * Publikationsmodell zu einer vollständigen Office-/Agent-Struktur
+       * aufgelöst.
+       */
+      !!@ dcatap.property=dct:creator
+      creatorRef : MANDATORY TEXT*255;
+      /** Kontaktstelle für fachliche oder organisatorische Rückfragen zum
+       * Datensatz.
+       */
+      !!@ dcatap.property=dcat:contactPoint
+      contactPoint : MANDATORY SO_AGI_DataCatalog_Base_20260529.ContactPoint;
+      /** Themen des Datensatzes gemäss lokalem Themenkatalog.
+       * 
+       * Die lokalen Werte werden im Publikationsmodell auf die für
+       * DCAT-AP-CH/opendata.swiss benötigten Themen-URIs gemappt.
+       */
+      !!@ dcatap.property=dcat:theme
+      themes : BAG {1..*} OF SO_AGI_DataCatalog_Base_20260529.Theme;
+      /** Suchbegriffe zum Datensatz.
+       */
+      !!@ dcatap.property=dcat:keyword
+      keywords : BAG {0..*} OF TEXT*255;
+      /** Aktualisierungsintervall des Datensatzes.
+       * 
+       * Der lokale Code wird im Publikationsmodell auf die entsprechende
+       * Frequency-URI gemappt.
+       */
+      !!@ dcatap.property=dct:accrualPeriodicity
+      accrualPeriodicity : SO_AGI_DataCatalog_Base_20260529.MaintenanceFrequencyCode;
+      /** Formales Erstpublikationsdatum der Ressource.
+      */
+      !!@ dcatap.property=dct:issued
+      issued : DATE;
+      /** Datum der letzten inhaltlich relevanten Änderung des Datensatzes.
+       */
+      !!@ dcatap.property=dct:modified
+      modified : MANDATORY DATE;
+      /** Zeitliche Abdeckung oder Stichtag des Datensatzes.
+       */
+      !!@ dcatap.property=dct:temporal
+      temporalCoverage : SO_AGI_DataCatalog_Datasheet_20260523.Metadata.ClosedTemporalCoverage;
+      /** Beschreibung der Erhebungs-, Mess- oder Erfassungsmethode des
+       * Datensatzes.
+       */
+      surveyMethod : MTEXT;
+      /** Beschreibung der fachlichen Attribute beziehungsweise Spalten des
+       * Datensatzes.
+       */
+      attributes : BAG {0..*} OF SO_AGI_DataCatalog_Base_20260529.DatasetAttribute;
+      /** Name oder Referenz des Datenmodells, auf dem der Datensatz basiert.
+       */
+      model : TEXT*255;
+      /** Freitextangabe, ab wann Daten verfügbar sind.
+       */
+      dataAvailableFrom : TEXT*255;
+      /** Hinweise auf weitere Verwendungen der Daten.
+       */
+      furtherUses : MTEXT;
+      /** Hinweise auf Hilfsdaten oder zusätzliche Datengrundlagen.
+       */
+      auxiliaryData : MTEXT;
+      UNIQUE identifier;
+    END Dataset;
+
+    /** Hierarchische Datenreihe im Erfassungsmodell.
+     * 
+     * Die DatasetSeries trägt die gemeinsamen Metadaten der Datenreihe. Die
+     * einzelnen Ausgaben werden als DatasetIssue geführt und können später im
+     * Publikationsmodell als vollständige Datasets materialisiert werden.
+     */
+    !!@ dcatap.class=dcat:DatasetSeries
+    CLASS DatasetSeries EXTENDS SO_AGI_DataCatalog_Datasheet_20260523.Metadata.Dataset =
+      /** Ausgaben beziehungsweise Editionen der Datenreihe.
+       */
+      issues : BAG {1..*} OF SO_AGI_DataCatalog_Datasheet_20260523.Metadata.DatasetIssue;
+      UNIQUE (LOCAL) issues: identifier;
+    END DatasetSeries;
+
+  END Metadata;
+
+END SO_AGI_DataCatalog_Datasheet_20260523.

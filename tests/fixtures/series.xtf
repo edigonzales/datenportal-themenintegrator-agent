@@ -1,0 +1,72 @@
+<?xml version='1.0' encoding='utf-8'?>
+<ns0:transfer xmlns:ns0="http://www.interlis.ch/xtf/2.4/INTERLIS" xmlns:ns1="http://www.interlis.ch/xtf/2.4/SO_AGI_DataCatalog_Datasheet_20260523" xmlns:ns2="http://www.interlis.ch/xtf/2.4/SO_AGI_DataCatalog_Base_20260529">
+  <ns0:headersection>
+    <ns0:models>
+      <ns0:model>SO_AGI_DataCatalog_Datasheet_20260523</ns0:model>
+      <ns0:model>SO_AGI_DataCatalog_Base_20260529</ns0:model>
+    </ns0:models>
+    <ns0:sender>datenblatt-editor</ns0:sender>
+  </ns0:headersection>
+  <ns0:datasection>
+    <ns1:Metadata ns0:bid="x1">
+      <ns1:DatasetSeries ns0:tid="ch.so.bevoelkerung.altersstruktur">
+        <ns1:identifier>ch.so.bevoelkerung.altersstruktur</ns1:identifier>
+        <ns1:title>Altersstruktur der Wohnbevölkerung</ns1:title>
+        <ns1:description>Altersstruktur der Wohnbevölkerung im Kanton Solothurn.</ns1:description>
+        <ns1:accessLevel>open</ns1:accessLevel>
+        <ns1:publicationStatus>published</ns1:publicationStatus>
+        <ns1:creatorRef>ch.so.afin</ns1:creatorRef>
+        <ns1:contactPoint>
+          <ns2:ContactPoint>
+            <ns2:name>Amt für Finanzen, Statistik (AFIN)</ns2:name>
+            <ns2:organizationUnit>Statistik</ns2:organizationUnit>
+            <ns2:email>mailto:statistik@fd.so.ch</ns2:email>
+          </ns2:ContactPoint>
+        </ns1:contactPoint>
+        <ns1:themes>Bevoelkerung</ns1:themes>
+        <ns1:keywords>Altersstruktur</ns1:keywords>
+        <ns1:keywords>Wohnbevölkerung</ns1:keywords>
+        <ns1:accrualPeriodicity>annually</ns1:accrualPeriodicity>
+        <ns1:modified>2025-12-31</ns1:modified>
+        <ns1:temporalCoverage>
+          <ns1:ClosedTemporalCoverage>
+            <ns2:referenceDate>2025-12-31</ns2:referenceDate>
+          </ns1:ClosedTemporalCoverage>
+        </ns1:temporalCoverage>
+        <ns1:surveyMethod>Quelle: Einwohnerregister Kanton Solothurn.</ns1:surveyMethod>
+        <ns1:attributes>
+          <ns2:DatasetAttribute>
+            <ns2:name>Jahrgang</ns2:name>
+            <ns2:dataType>INTEGER</ns2:dataType>
+            <ns2:description>Geburtsjahr</ns2:description>
+            <ns2:unit>Jahr</ns2:unit>
+            <ns2:mandatory>true</ns2:mandatory>
+          </ns2:DatasetAttribute>
+        </ns1:attributes>
+        <ns1:dataAvailableFrom>2025</ns1:dataAvailableFrom>
+        <ns1:furtherUses>Planungsgrundlage und Statistik.</ns1:furtherUses>
+        <ns1:auxiliaryData>Einwohnerregister als fachliche Grundlage</ns1:auxiliaryData>
+        <ns1:issues>
+          <ns1:DatasetIssue>
+            <ns1:identifier>ch.so.bevoelkerung.altersstruktur_2025</ns1:identifier>
+            <ns1:title>Altersstruktur der Wohnbevölkerung 2025</ns1:title>
+            <ns1:description>Ausgabe 2025 der DatasetSeries.</ns1:description>
+            <ns1:issueLabel>2025</ns1:issueLabel>
+            <ns1:isCurrentIssue>true</ns1:isCurrentIssue>
+            <ns1:publicationStatus>published</ns1:publicationStatus>
+            <ns1:accrualPeriodicity>annually</ns1:accrualPeriodicity>
+            <ns1:modified>2025-12-31</ns1:modified>
+            <ns1:temporalCoverage>
+              <ns1:ClosedTemporalCoverage>
+                <ns2:referenceDate>2025-12-31</ns2:referenceDate>
+              </ns1:ClosedTemporalCoverage>
+            </ns1:temporalCoverage>
+            <ns1:surveyMethod>Quelle: Einwohnerregister Kanton Solothurn.</ns1:surveyMethod>
+            <ns1:dataAvailableFrom>1920</ns1:dataAvailableFrom>
+            <ns1:auxiliaryData>Einwohnerregister Kanton Solothurn</ns1:auxiliaryData>
+          </ns1:DatasetIssue>
+        </ns1:issues>
+      </ns1:DatasetSeries>
+    </ns1:Metadata>
+  </ns0:datasection>
+</ns0:transfer>

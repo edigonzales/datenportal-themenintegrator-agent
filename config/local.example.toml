@@ -1,0 +1,28 @@
+# Relative paths resolve against root, itself relative to this configuration file.
+root = ".."
+topics_repo = "../datenportal-themenrepo"
+stack_repo = "../datenportal-dev-stack"
+state_dir = ".datenportal-integrator/runs"
+datasheet_mcp_url = "http://127.0.0.1:8000/mcp"
+# Use an installed, pinned distribution. scripts/setup-tools.py provisions a local one.
+validator_command = ["java", "-jar", ".datenportal-integrator/tools/ilivalidator/ilivalidator-1.15.0.jar"]
+model_dirs = ["../datenportal-datenblatt-editor/mcp-java/src/main/resources/models"]
+compose_files = ["compose.yaml"]
+stack_start_args = []
+timeout_seconds = 300
+
+[environments.local]
+kind = "local"
+enabled = true
+jenkins_url = "http://localhost:8081/jenkins"
+portal_url = "http://localhost:8081"
+manifest_url = "http://localhost:8081/ch.so.daten/current.json"
+repository_mode = "working-tree"
+username_env = "DATENPORTAL_LOCAL_USER"
+token_env = "DATENPORTAL_LOCAL_TOKEN"
+git_write_back = false
+reload_portal = true
+
+# INT/PROD are deliberately not preconfigured. Copy a profile, set the real
+# URLs/branch and credential variable names, confirm managed-git/writeBack=false,
+# then enable it. Credentials must never appear in this file or in Git.

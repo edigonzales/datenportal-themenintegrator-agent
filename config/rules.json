@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "source": "https://sogis.github.io/datenportal-dokumentation/datenpublikation/main/#datenformat",
+  "encoding": "utf-8-sig",
+  "delimiter": ";",
+  "header_pattern": "^[A-Za-z][A-Za-z0-9_]*$",
+  "supported_types": ["TEXT", "INTEGER", "NUMERIC", "DECIMAL", "BOOLEAN", "DATE", "DATETIME"],
+  "datetime_offset": "+01:00",
+  "recommendations": ["Keine redundanten Totalspalten; fachliche Ausnahmen prüfen", "Nachweisgrenzen fachlich erklären", "Einheiten und Rundungen in Metadaten dokumentieren"]
+}

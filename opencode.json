@@ -1,0 +1,11 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "datenportal_integrator": {
+      "type": "local",
+      "command": ["uv", "run", "--locked", "datenportal-integrator", "serve"],
+      "enabled": true,
+      "timeout": 600000
+    }
+  }
+}
