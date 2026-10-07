@@ -26,7 +26,7 @@ public final class Main {
       }
       if (args.isEmpty() || args.getFirst().equals("--help")) {
         System.out.println(
-            "Java 25 Themenintegrator\njava -jar build/libs/datenportal-integrator.jar [--config PATH] doctor|serve|schema OP|call OP [--json JSON|--args-file PATH|-]\nWeitere Helfer: setup-tools, start-datasheet, harness-config, codex");
+            "Java 25 Themenintegrator\njava -jar build/libs/datenportal-integrator.jar [--config PATH] doctor|serve|schema OP|call OP [--json JSON|--args-file PATH|-]\nWeitere Helfer: setup-tools, setup-mcps [--update], setup-gretl, harness-config, codex");
         return 0;
       }
       String command = args.removeFirst();
@@ -52,6 +52,7 @@ public final class Main {
               "setup-java",
               "setup-tools",
               "setup-gretl",
+              "setup-mcps",
               "start-datasheet",
               "harness-config",
               "codex")
@@ -82,7 +83,9 @@ public final class Main {
               default -> throw new Problem("invalid_arguments", "Unbekanntes CLI-Argument.");
             };
       }
-      print(new Workflow(s).call(operation, Json.read(raw)));
+      try (var workflow = new Workflow(s)) {
+        print(workflow.call(operation, Json.read(raw)));
+      }
       return 0;
     } catch (Problem p) {
       print(p.result());
@@ -112,22 +115,50 @@ public final class Main {
             "topics_repo",
             Files.isDirectory(s.topics),
             "stack_repo",
-            Files.isDirectory(s.stack),
-            "configuration_fingerprint",
-            s.fingerprint());
+            Files.isDirectory(s.stack));
+    try {
+      checks.put("configuration_fingerprint", s.fingerprint());
+    } catch (Problem p) {
+      checks.put("configuration_fingerprint", p.result());
+    }
     try {
       checks.put("stack", new Stack(s, new ProcessRunner()).inspect());
     } catch (Problem e) {
       checks.put("stack", e.result());
     }
-    try {
-      checks.put(
-          "datasheet_mcp", !McpClients.datasheet(s).call("describe_schema", Json.map()).isEmpty());
-    } catch (Problem e) {
-      checks.put("datasheet_mcp", e.result());
+    for (String service : List.of("datasheet", "interlis")) {
+      try (var client =
+          service.equals("datasheet") ? McpClients.datasheet(s) : McpClients.interlis(s)) {
+        var tools = client.tools();
+        var expected =
+            service.equals("datasheet")
+                ? Set.of(
+                    "describe_schema",
+                    "import_xtf",
+                    "read_datasheet",
+                    "update_metadata",
+                    "upsert_attribute",
+                    "remove_attribute",
+                    "upsert_issue",
+                    "remove_issue",
+                    "validate_datasheet",
+                    "export_xtf")
+                : Set.of(
+                    "authorIliModel", "applyIliModelChanges", "reviewIliModel", "reviewIliChange");
+        checks.put(
+            service + "_mcp",
+            Json.map(
+                "valid",
+                tools.containsAll(expected),
+                "tools",
+                tools.stream().sorted().toList(),
+                "missing_tools",
+                expected.stream().filter(t -> !tools.contains(t)).sorted().toList()));
+      } catch (Problem p) {
+        checks.put(service + "_mcp", p.result());
+      }
     }
-    var interlis = Json.obj(s.values.get("interlis"));
-    checks.put("interlis_configured", !interlis.isEmpty());
+    checks.put("interlis_configured", !s.mcp("interlis").isEmpty());
     return checks;
   }
 
@@ -204,9 +235,17 @@ public final class Main {
                 "Menschliche Freigaben nur nach tatsächlicher Antwort protokollieren. Modellableitung ausdrücklich anfordern. Fehlende Benutzer/Office-Fakten erfragen. Bei unklarem Upload vorhandene Laufkennung aufklären.")
             .tools(tools)
             .build();
-    Runtime.getRuntime().addShutdownHook(new Thread(server::close));
+    Runnable close =
+        () -> {
+          try {
+            server.close();
+          } finally {
+            workflow.close();
+          }
+        };
+    Runtime.getRuntime().addShutdownHook(new Thread(close));
     // SDK owns stdin and exits its transport on EOF; wait until input closes.
     ended.await();
-    server.close();
+    close.run();
   }
 }

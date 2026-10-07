@@ -19,7 +19,17 @@ public final class Setup {
       case "setup-tools" -> tools();
       case "setup-java" -> javaLauncher();
       case "setup-gretl" -> GretlRuntime.setup(s, new ProcessRunner());
-      case "start-datasheet" -> datasheet(args);
+      case "setup-mcps" -> {
+        if (!args.isEmpty() && !args.equals(List.of("--update")))
+          throw new Problem("invalid_arguments", "setup-mcps [--update]");
+        yield new DockerMcps(s, new ProcessRunner()).setup(!args.isEmpty());
+      }
+      case "start-datasheet" ->
+          Json.map(
+              "deprecated",
+              true,
+              "hint",
+              "setup-mcps ausführen. stdio-MCPs werden vom Integrator bei Bedarf gestartet; kein Quellbuild.");
       case "harness-config" -> harness();
       case "codex" -> codex(args);
       default -> throw new Problem("unknown_operation", "Unbekannter Helfer.");
@@ -64,49 +74,6 @@ public final class Setup {
       throw e;
     } catch (Exception e) {
       throw new Problem("tool_setup_failed", "ilivalidator konnte nicht installiert werden.");
-    }
-  }
-
-  Object datasheet(List<String> args) {
-    Path source = s.root.getParent().resolve("datenportal-datenblatt-editor/mcp-java");
-    if (!args.isEmpty()) {
-      if (args.size() != 2 || !args.getFirst().equals("--source"))
-        throw new Problem("invalid_arguments", "start-datasheet [--source PATH]");
-      source = Path.of(args.get(1));
-    }
-    Path copy = s.root.resolve(".datenportal-integrator/tools/datasheet-source");
-    Workspace.copy(source, copy);
-    var runner = new ProcessRunner();
-    Path log = s.root.resolve(".datenportal-integrator/tools/datasheet-build.log");
-    var result =
-        runner.run(
-            List.of(
-                "env",
-                "JAVA_HOME=" + System.getProperty("java.home"),
-                "bash",
-                copy.resolve("gradlew").toString(),
-                "-p",
-                copy.toString(),
-                "bootJar",
-                "--console=plain"),
-            copy,
-            s.timeout,
-            log);
-    if (result.exitCode() != 0)
-      throw new Problem(
-          "datasheet_build_failed",
-          "Isolierter Datenblatt-MCP-Build fehlgeschlagen.",
-          "log",
-          log.toString());
-    try {
-      var process =
-          new ProcessBuilder(
-                  java(), "-jar", copy.resolve("build/libs/datasheet-mcp.jar").toString())
-              .inheritIO()
-              .start();
-      return Json.map("exit_code", process.waitFor());
-    } catch (Exception e) {
-      throw new Problem("datasheet_start_failed", "Datenblatt-MCP kann nicht gestartet werden.");
     }
   }
 

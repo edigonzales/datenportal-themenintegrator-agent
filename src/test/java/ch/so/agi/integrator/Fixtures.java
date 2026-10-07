@@ -28,7 +28,10 @@ final class Fixtures {
     this.temp = temp;
     repo = temp.resolve("repo");
     Files.createDirectories(repo.resolve("shared/data"));
-    Files.copy(FIXTURES.resolve("offices.xtf"), repo.resolve("shared/data/offices.xtf"));
+    Files.copy(
+        FIXTURES.resolve("offices.xtf"),
+        repo.resolve("shared/data/offices.xtf"),
+        StandardCopyOption.REPLACE_EXISTING);
     Json.write(
         repo.resolve("shared/gretl-datenportal-teams.yaml"),
         "teams:\n  readers:\n    users: [fixture-reader]\n  builders:\n    users: [fixture-builder]\n");

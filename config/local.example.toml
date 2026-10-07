@@ -3,10 +3,10 @@ root = ".."
 topics_repo = "../datenportal-themenrepo"
 stack_repo = "../datenportal-dev-stack"
 state_dir = ".datenportal-integrator/runs"
-datasheet_mcp_url = "http://127.0.0.1:8000/mcp"
 # Use an installed, pinned distribution. The Java CLI setup-tools provisions it.
 validator_command = ["java", "-jar", ".datenportal-integrator/tools/ilivalidator/ilivalidator-1.15.0.jar"]
-model_dirs = ["../datenportal-datenblatt-editor/mcp-java/src/main/resources/models"]
+# Originalmodelle kommen aus dem festgelegten Datenblatt-Image; zusätzliche Modelle optional.
+model_dirs = []
 compose_files = ["compose.yaml"]
 stack_start_args = []
 timeout_seconds = 300
@@ -16,12 +16,16 @@ timeout_seconds = 300
 # gretl_java_home = "/path/to/jdk-17"
 gretl_offline_jars = ".datenportal-integrator/tools/gretl-runtime/jars"
 
+[datasheet]
+transport = "stdio"
+image = "sogis/datenportal-datenblatt-mcp@sha256:b391421578f8c4652fb7a64465187746a3057ab4413d17cfc20a56025b470da1"
+# Alternative: transport = "http", url = "http://127.0.0.1:8000/mcp"
+# image bleibt als Quelle für Originalmodelle auch bei HTTP möglich.
+
 [interlis]
 transport = "stdio"
-jar = "../interlis-mcp/build/libs/interlis-mcp.jar"
-# Optional explicit executable; default is the integrator JVM's java.
-# java_command = "/path/to/jdk-25/bin/java"
-# Alternative: transport = "http", url = "http://localhost:8080/mcp"
+image = "sogis/interlis-mcp@sha256:b3ed1e738ccfe670f92ecebcbb014cf67aade5f0609e15be1f75948e15e899ff"
+# Alternative: transport = "http", url = "http://localhost:8080/mcp"; image entfernen.
 
 [environments.local]
 kind = "local"

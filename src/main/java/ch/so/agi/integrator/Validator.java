@@ -32,7 +32,7 @@ public final class Validator {
         new ArrayList<>(
             settings.strings("validator_command", List.of("java", "-jar", "ilivalidator.jar")));
     var dirs = new ArrayList<String>();
-    for (String p : settings.strings("model_dirs", List.of()))
+    for (String p : settings.modelDirectories())
       dirs.add(p.startsWith("https://") ? p : settings.path(p).toString());
     dirs.add(settings.root.resolve("validation").toString());
     args.addAll(List.of("--modeldir", String.join(";", dirs)));

@@ -5,7 +5,7 @@ description: Integriere Datenportal-Themen aus CSV/XTF/XLSX, leite ausdrücklich
 
 Verwende die Werkzeuge des `datenportal_integrator`-MCP. CLI-Fallback im Integrator-Repo:
 `java -jar build/libs/datenportal-integrator.jar call <operation> --args-file <datei.json>`.
-`schema <operation>` zeigt verbindliche Argumente, `doctor` prüft die Einrichtung.
+`schema <operation>` zeigt verbindliche Argumente. `setup-mcps` bereitet konfigurierte Docker-Images und deren Originalmodelle vor; `doctor` prüft beide echten MCP-Verbindungen. Keine Fach-MCP-Quellbuilds ausführen. Image-Versionen nur bewusst mit `setup-mcps --update` wechseln und anschliessend betroffene Prüfungen/Freigaben erneuern.
 Einrichtung und Beispiele stehen im [Anwenderhandbuch](../../docs/anwenderhandbuch.md).
 
 ## Grenzen und Entscheidungen
@@ -53,7 +53,7 @@ Eigenständiger `model`-Vorgang: HTML zeigen, tatsächliches Modell-OK mit `gate
 
 **Ziel-Stopp:** lokale Beendigung, INT oder PROD anbieten. `publication_plan` zeigt den konkreten Stand. Nur nach ausdrücklichem OK `approve(gate=publish:<profil>)`. `prepare_pr` bei Repository-Änderungen; URL zeigen und in Codex, falls verfügbar, als Artefakt anhängen. Ein Mensch mergt. Nach Fortsetzung Zielbranch/Head/Bytes durch den Kern prüfen und erst dann Seed/Lieferung ausführen. Kein PR für reine Datenlieferung ohne Git-Änderung.
 
-`status` statt zweitem Vorgang. Schema-1-Vorgänge mit `migrate_run` zuerst in Vorschau, dann mit Sicherung übernehmen; historische Freigaben erneuern. Datenblatt-Neustart: `metadata(operation=restore)` rekonstruiert den bestätigten Snapshot, neue interne IDs verwenden. Unbestätigte Operation separat prüfen und neu beauftragen.
+`status` statt zweitem Vorgang. Schema-1-Vorgänge mit `migrate_run` zuerst in Vorschau, dann mit Sicherung übernehmen; historische Freigaben erneuern. Neue stdio-Verbindung oder verlorener Entwurf: bestätigten Snapshot automatisch rekonstruieren und frühere IDs eindeutig zuordnen lassen. Unbestätigte Operationen blockieren; `metadata(operation=restore)` stellt ausdrücklich den bestätigten Stand her. Den gezeigten unbestätigten Auftrag separat prüfen und bewusst neu beauftragen. Unveränderte Wiederaufnahme ersetzt keine Freigabe und entwertet vorhandene Exportbytes nicht.
 
 Bei `submission_unknown` vorhandenen Lauf anhand Vorgangskennung und Parametern aufklären; `reconcile`/`reconcile_seed` ordnen zu. Niemals blind erneut hochladen. `publication=accepted` mit Reload-/RDF-/Downloadfehler ist eine erfolgte Publikation: getrennt reparieren und mit `verify_delivery` erneut prüfen. Ohne Bericht kein sicherer Retry. `retry_delivery` nur bei eindeutig fehlgeschlagener, nicht publizierter Lieferung.
 

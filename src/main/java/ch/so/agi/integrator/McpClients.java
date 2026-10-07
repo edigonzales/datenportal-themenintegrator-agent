@@ -8,49 +8,173 @@ import java.time.Duration;
 import java.util.*;
 
 public final class McpClients {
-  public interface ToolClient {
+  public interface ToolClient extends AutoCloseable {
     Map<String, Object> call(String name, Map<String, Object> args);
+
+    default String sessionKey() {
+      return null;
+    }
+
+    default Set<String> tools() {
+      return Set.of();
+    }
+
+    @Override
+    default void close() {}
   }
 
   public static ToolClient datasheet(Settings s) {
-    return (name, args) ->
-        call(
-            http(Json.str(s.values, "datasheet_mcp_url", "http://127.0.0.1:8000/mcp")),
-            name,
-            args,
-            s.timeout);
+    return new Managed(s, "datasheet");
   }
 
   public static ToolClient interlis(Settings s) {
-    return (name, args) -> {
-      var c = Json.obj(s.values.get("interlis"));
-      String transport = Json.str(c, "transport", "stdio");
-      if (transport.equals("http"))
-        return call(http(Json.required(c, "url")), name, args, s.timeout);
-      if (!transport.equals("stdio"))
-        throw new Problem("invalid_configuration", "INTERLIS-Transport muss stdio oder http sein.");
-      var jar = s.path(Json.required(c, "jar"));
-      if (!java.nio.file.Files.isRegularFile(jar))
+    return new Managed(s, "interlis");
+  }
+
+  static final class Managed implements ToolClient {
+    final Settings settings;
+    final String service;
+    final DockerMcps docker;
+    McpSyncClient client;
+    String container, session, identity;
+
+    Managed(Settings s, String service) {
+      settings = s;
+      this.service = service;
+      docker = new DockerMcps(s, new ProcessRunner());
+    }
+
+    synchronized void connect() {
+      var config = settings.mcp(service);
+      var selected = config.containsKey("image") ? docker.selected(service, false) : Json.map();
+      String expectedIdentity = Json.digest(Json.map("config", config, "runtime", selected));
+      if (client != null && !expectedIdentity.equals(identity)) close();
+      if (client != null) return;
+      try {
+        McpClientTransport transport;
+        if (Json.str(config, "transport", "stdio").equals("http")) {
+          transport = http(Json.required(config, "url"));
+        } else {
+          List<String> command;
+          if (config.containsKey("image")) {
+            selected = docker.selected(service, true);
+            docker.reap();
+            container = docker.name(service);
+            docker.register(container);
+            command = docker.launch(container, Json.required(selected, "image_id"));
+          } else {
+            var jar = settings.path(Json.required(config, "jar"));
+            if (!java.nio.file.Files.isRegularFile(jar))
+              throw new Problem(
+                  "interlis_unavailable",
+                  "Konfiguriertes INTERLIS-MCP-JAR fehlt.",
+                  "path",
+                  jar.toString());
+            command =
+                List.of(
+                    Json.str(
+                        config,
+                        "java_command",
+                        java.nio.file.Path.of(System.getProperty("java.home"), "bin/java")
+                            .toString()),
+                    "-jar",
+                    jar.toString(),
+                    "--spring.profiles.active=stdio");
+          }
+          String logName = container == null ? service : container;
+          var stdio =
+              new EofStdioTransport(
+                  command,
+                  settings.root,
+                  new JacksonMcpJsonMapper(new tools.jackson.databind.json.JsonMapper()),
+                  line -> {
+                    try {
+                      var log = docker.home().resolve("logs").resolve(logName + ".log");
+                      java.nio.file.Files.createDirectories(log.getParent());
+                      if (!java.nio.file.Files.exists(log)
+                          || java.nio.file.Files.size(log) < 1024 * 1024)
+                        java.nio.file.Files.writeString(
+                            log,
+                            line + "\n",
+                            java.nio.file.StandardOpenOption.CREATE,
+                            java.nio.file.StandardOpenOption.APPEND);
+                    } catch (Exception ignored) {
+                    }
+                  });
+          transport = stdio;
+        }
+        client =
+            McpClient.sync(transport)
+                .requestTimeout(Duration.ofSeconds(settings.timeout))
+                .initializationTimeout(Duration.ofSeconds(settings.timeout))
+                .build();
+        client.initialize();
+        session = UUID.randomUUID().toString();
+        identity = expectedIdentity;
+      } catch (Problem p) {
+        close();
+        throw p;
+      } catch (Exception e) {
+        close();
         throw new Problem(
-            "interlis_unavailable",
-            "Konfiguriertes INTERLIS-MCP-JAR fehlt.",
-            "path",
-            jar.toString());
-      var cmd =
-          ServerParameters.builder(
-                  Json.str(
-                      c,
-                      "java_command",
-                      java.nio.file.Path.of(System.getProperty("java.home"), "bin", "java")
-                          .toString()))
-              .args("-jar", jar.toString(), "--spring.profiles.active=stdio")
-              .build();
-      var stdio =
-          new StdioClientTransport(
-              cmd, new JacksonMcpJsonMapper(new tools.jackson.databind.json.JsonMapper()));
-      stdio.setStdErrorHandler(line -> {});
-      return call(stdio, name, args, s.timeout);
-    };
+            "mcp_unavailable", "Fach-MCP kann nicht initialisiert werden.", "service", service);
+      }
+    }
+
+    @Override
+    public synchronized String sessionKey() {
+      connect();
+      return session;
+    }
+
+    @Override
+    public synchronized Set<String> tools() {
+      connect();
+      try {
+        return client.listTools().tools().stream()
+            .map(McpSchema.Tool::name)
+            .collect(java.util.stream.Collectors.toSet());
+      } catch (Exception e) {
+        close();
+        throw new Problem(
+            "mcp_unavailable", "MCP-Werkzeugkatalog nicht erreichbar.", "service", service);
+      }
+    }
+
+    @Override
+    public synchronized Map<String, Object> call(String name, Map<String, Object> args) {
+      connect();
+      try {
+        return result(client.callTool(new McpSchema.CallToolRequest(name, args)));
+      } catch (Problem p) {
+        throw p;
+      } catch (Exception e) {
+        close();
+        throw new Problem(
+            "mcp_unavailable",
+            "Fach-MCP-Aufruf nicht bestätigt.",
+            "operation",
+            name,
+            "service",
+            service);
+      }
+    }
+
+    @Override
+    public synchronized void close() {
+      if (client != null) {
+        try {
+          client.closeGracefully();
+        } catch (Exception ignored) {
+        }
+        client = null;
+      }
+      if (container != null) {
+        docker.stopped(container);
+        container = null;
+      }
+      session = null;
+    }
   }
 
   private static McpClientTransport http(String url) {
@@ -63,38 +187,25 @@ public final class McpClients {
         .build();
   }
 
-  private static Map<String, Object> call(
-      McpClientTransport transport, String name, Map<String, Object> args, int timeout) {
-    try (var client =
-        McpClient.sync(transport)
-            .requestTimeout(Duration.ofSeconds(timeout))
-            .initializationTimeout(Duration.ofSeconds(timeout))
-            .build()) {
-      client.initialize();
-      var result = client.callTool(new McpSchema.CallToolRequest(name, args));
-      Object values = result.structuredContent();
-      if (values == null) {
-        String joined =
-            result.content().stream()
-                .filter(c -> c instanceof McpSchema.TextContent)
-                .map(c -> ((McpSchema.TextContent) c).text())
-                .reduce("", (a, b) -> a + b + "\n");
-        try {
-          values = Json.read(joined);
-        } catch (Problem ignored) {
-          values = Json.map("message", joined.substring(0, Math.min(4096, joined.length())));
-        }
+  private static Map<String, Object> result(McpSchema.CallToolResult result) {
+    Object values = result.structuredContent();
+    if (values == null) {
+      String joined =
+          result.content().stream()
+              .filter(c -> c instanceof McpSchema.TextContent)
+              .map(c -> ((McpSchema.TextContent) c).text())
+              .reduce("", (a, b) -> a + b + "\n");
+      try {
+        values = Json.read(joined);
+      } catch (Problem ignored) {
+        values = Json.map("message", joined.substring(0, Math.min(4096, joined.length())));
       }
-      var m = Json.obj(values);
-      if (Boolean.TRUE.equals(result.isError()))
-        throw new Problem(
-            Json.str(m, "code", "mcp_error"), "Fach-MCP meldet einen Fehler.", "response", m);
-      return m;
-    } catch (Problem e) {
-      throw e;
-    } catch (Exception e) {
-      throw new Problem("mcp_unavailable", "Fach-MCP-Aufruf nicht bestätigt.", "operation", name);
     }
+    var m = Json.obj(values);
+    if (Boolean.TRUE.equals(result.isError()))
+      throw new Problem(
+          Json.str(m, "code", "mcp_error"), "Fach-MCP meldet einen Fehler.", "response", m);
+    return m;
   }
 
   public static Map<String, Object> create(

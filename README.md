@@ -2,7 +2,7 @@
 
 Java-25-Workflow für Themenanlieferung, INTERLIS-Modellierung und die Anlage neuer Organisationen. CLI und stdio-MCP verwenden denselben ausführbaren JAR und speichern Prüfstände, menschliche Freigaben und externe Laufkennungen lokal.
 
-Der Integrator verwendet den bestehenden Datenblatt-MCP, `interlis-mcp`, GRETL, Jenkins und den Dev-Stack. Deren Quellen bleiben unverändert. Fachliche Änderungen im Themenrepo werden als Kandidaten geprüft und erst nach Freigabe übernommen.
+Der Integrator verwendet Datenblatt-MCP und `interlis-mcp` als veröffentlichte Docker-Images über stdio sowie GRETL, Jenkins und den Dev-Stack. Fach-MCP-Checkouts und lokale Fach-MCP-Builds sind nicht erforderlich. Deren Quellen bleiben unverändert. Fachliche Änderungen im Themenrepo werden als Kandidaten geprüft und erst nach Freigabe übernommen.
 
 ## Einstieg
 
@@ -14,6 +14,7 @@ cp config/local.example.toml config/local.toml
 # Pfade und Umgebungen in config/local.toml anpassen.
 java -jar build/libs/datenportal-integrator.jar setup-java
 java -jar build/libs/datenportal-integrator.jar setup-tools
+java -jar build/libs/datenportal-integrator.jar setup-mcps
 java -jar build/libs/datenportal-integrator.jar setup-gretl
 java -jar build/libs/datenportal-integrator.jar doctor
 ```

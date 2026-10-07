@@ -36,6 +36,7 @@ public final class Settings {
             "stack_repo",
             "state_dir",
             "datasheet_mcp_url",
+            "datasheet",
             "validator_command",
             "model_dirs",
             "compose_files",
@@ -56,12 +57,10 @@ public final class Settings {
     if (timeout < 1 || timeout > 7200)
       throw new Problem(
           "invalid_configuration", "timeout_seconds muss zwischen 1 und 7200 liegen.");
-    url(Json.str(values, "datasheet_mcp_url", "http://127.0.0.1:8000/mcp"));
-    var interlis = Json.obj(values.get("interlis"));
-    for (String field : interlis.keySet())
-      if (!Set.of("transport", "jar", "java_command", "url").contains(field))
-        throw new Problem(
-            "invalid_configuration", "Unbekannte INTERLIS-Einstellung.", "field", field);
+    if (values.containsKey("datasheet") && values.containsKey("datasheet_mcp_url"))
+      throw new Problem(
+          "invalid_configuration", "datasheet_mcp_url entfernen, wenn [datasheet] verwendet wird.");
+    for (String service : List.of("datasheet", "interlis")) validateMcp(service);
     for (Object profile : Json.obj(values.get("environments")).values()) {
       var environment = Json.obj(profile);
       for (String field : environment.keySet())
@@ -87,7 +86,64 @@ public final class Settings {
       for (String field : List.of("jenkins_url", "portal_url", "manifest_url"))
         url(Json.required(environment, field));
     }
-    if (interlis.containsKey("url")) url(Json.required(interlis, "url"));
+  }
+
+  public Map<String, Object> mcp(String service) {
+    if (service.equals("datasheet") && !values.containsKey("datasheet"))
+      return Json.map(
+          "transport",
+          "http",
+          "url",
+          Json.str(values, "datasheet_mcp_url", "http://127.0.0.1:8000/mcp"));
+    return Json.obj(values.get(service));
+  }
+
+  private void validateMcp(String service) {
+    var c = mcp(service);
+    if (c.isEmpty() && service.equals("interlis")) return;
+    for (String field : c.keySet())
+      if (!Set.of("transport", "image", "jar", "java_command", "url").contains(field))
+        throw new Problem(
+            "invalid_configuration", "Unbekannte MCP-Einstellung.", "field", service + "." + field);
+    String transport = Json.str(c, "transport", "stdio");
+    if (!Set.of("stdio", "http").contains(transport))
+      throw new Problem("invalid_configuration", "MCP-Transport muss stdio oder http sein.");
+    if (transport.equals("http")) {
+      url(Json.required(c, "url"));
+      if (c.containsKey("jar") || c.containsKey("java_command"))
+        throw new Problem(
+            "invalid_configuration", "HTTP und JAR-Konfiguration dürfen nicht gemischt werden.");
+    } else {
+      boolean image = c.containsKey("image"), jar = c.containsKey("jar");
+      if (image == jar
+          || (jar && service.equals("datasheet"))
+          || c.containsKey("url")
+          || (image && c.containsKey("java_command")))
+        throw new Problem(
+            "invalid_configuration",
+            "stdio benötigt genau ein Image oder das bestehende INTERLIS-JAR, ohne HTTP-Adresse.");
+    }
+    if (c.containsKey("image")
+        && !Json.required(c, "image").matches("[A-Za-z0-9][A-Za-z0-9._/:@-]*"))
+      throw new Problem("invalid_configuration", "Ungültige Docker-Image-Referenz.");
+  }
+
+  public List<String> modelDirectories() {
+    var dirs = new ArrayList<String>();
+    if (mcp("datasheet").containsKey("image")) {
+      var selected = new DockerMcps(this, new ProcessRunner()).selected("datasheet", false);
+      dirs.add(Json.required(selected, "model_directory"));
+      for (String dir : strings("model_dirs", List.of()))
+        if (!dir.startsWith("https://")
+            && DockerMcps.MODELS.stream().anyMatch(n -> Files.exists(path(dir).resolve(n))))
+          throw new Problem(
+              "invalid_configuration",
+              "Originalmodelle sind bereits im Image-Cache vorhanden; doppeltes model_dirs-Verzeichnis entfernen.",
+              "directory",
+              dir);
+    }
+    dirs.addAll(strings("model_dirs", List.of()));
+    return dirs;
   }
 
   private static Object convert(Object value) {
@@ -181,7 +237,11 @@ public final class Settings {
       } catch (java.io.IOException e) {
         throw new Problem("configuration_missing", "Regeln oder Validierungsdateien fehlen.");
       }
-    for (String directory : strings("model_dirs", List.of()))
+    for (String service : List.of("datasheet", "interlis"))
+      if (mcp(service).containsKey("image"))
+        files.put(
+            service + "_image", new DockerMcps(this, new ProcessRunner()).selected(service, false));
+    for (String directory : modelDirectories())
       if (!directory.startsWith("https://"))
         try (var paths = Files.list(path(directory))) {
           paths

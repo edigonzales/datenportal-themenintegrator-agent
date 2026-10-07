@@ -33,7 +33,7 @@ public final class Organizations {
   public Map<String, Object> officeRules() {
     var paths = new ArrayList<String>();
     var files = new ArrayList<String>();
-    for (String dir : w.settings.strings("model_dirs", List.of()))
+    for (String dir : w.settings.modelDirectories())
       if (!dir.startsWith("https://")) {
         paths.add(w.settings.path(dir).toString());
         Path p = w.settings.path(dir).resolve("SO_AGI_DataCatalog_Base_20260529.ili");

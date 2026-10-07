@@ -14,6 +14,18 @@ import org.junit.jupiter.api.io.TempDir;
 
 @Tag("integration")
 class IntegrationTest {
+  final List<McpClients.ToolClient> clients = new ArrayList<>();
+
+  McpClients.ToolClient own(McpClients.ToolClient client) {
+    clients.add(client);
+    return client;
+  }
+
+  @AfterEach
+  void closeClients() {
+    clients.forEach(McpClients.ToolClient::close);
+  }
+
   @TempDir(cleanup = org.junit.jupiter.api.io.CleanupMode.ON_SUCCESS)
   Path temp;
 
@@ -89,10 +101,10 @@ class IntegrationTest {
   @Test
   void bothRealMcpAdaptersAndGretlEarlyValidation() throws Exception {
     Settings s = Settings.load(Fixtures.ROOT.resolve("config/local.toml").toString());
-    var data = McpClients.datasheet(s);
+    var data = own(McpClients.datasheet(s));
     var schema = data.call("describe_schema", Json.map());
     assertFalse(schema.isEmpty());
-    var model = McpClients.interlis(s);
+    var model = own(McpClients.interlis(s));
     var f = new Fixtures(temp, new ProcessRunner(), data, model);
     Workspace.copy(s.topics, f.repo);
     f.settings.values.put("validator_command", s.strings("validator_command", List.of()));
@@ -294,7 +306,8 @@ class IntegrationTest {
   void realTypedCsvModel() throws Exception {
     Settings s = Settings.load(Fixtures.ROOT.resolve("config/local.toml").toString());
     var f =
-        new Fixtures(temp, new ProcessRunner(), McpClients.datasheet(s), McpClients.interlis(s));
+        new Fixtures(
+            temp, new ProcessRunner(), own(McpClients.datasheet(s)), own(McpClients.interlis(s)));
     Workspace.copy(s.topics, f.repo);
     f.settings.values.put("validator_command", s.strings("validator_command", List.of()));
     var doc = Xml.parse(Fixtures.FIXTURES.resolve("dataset.xtf"));

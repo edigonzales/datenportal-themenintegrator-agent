@@ -4,7 +4,7 @@ Der Integrator unterstützt drei Vorgänge: ein Thema integrieren (`topic`), ein
 
 ## Installation und Konfiguration
 
-Benötigt werden JDK 25, Git, die vorhandenen Checkouts und für den lokalen Gesamttest Docker. Für PRs ist `gh` mit Anmeldung erforderlich. Die vorhandenen GRETL-Skripte benötigen weiterhin Java 17. Dieser externe Laufzeitbedarf ist vom JDK 25 des Integrators getrennt.
+Benötigt werden JDK 25, Git, Docker sowie die Checkouts von Integrator, Themenrepo und Dev-Stack. Die beiden Fach-MCPs kommen als veröffentlichte Images; deren Quellcheckouts und lokale Builds sind nicht erforderlich. Für PRs ist `gh` mit Anmeldung erforderlich. Die vorhandenen GRETL-Skripte benötigen weiterhin Java 17. Dieser externe Laufzeitbedarf ist vom JDK 25 des Integrators getrennt.
 
 ```sh
 cd /pfad/datenportal-themenintegrator-agent
@@ -15,25 +15,29 @@ java -version
 cp config/local.example.toml config/local.toml
 ```
 
-`config/local.toml` ist ignoriert. Relative Pfade beziehen sich auf `root`; `root` selbst bezieht sich auf die Konfigurationsdatei. Werkzeugpfade, Checkout-Pfade und MCP-Adressen stehen hier. Die Auswahl erfolgt mit `--config`, alternativ `DATENPORTAL_INTEGRATOR_CONFIG`, sonst `config/local.toml` im aktuellen Arbeitsverzeichnis.
+`config/local.toml` ist ignoriert. Relative Pfade beziehen sich auf `root`; `root` selbst bezieht sich auf die Konfigurationsdatei. Werkzeugpfade, Checkout-Pfade sowie MCP-Images und optionale HTTP-Adressen stehen hier. Die Auswahl erfolgt mit `--config`, alternativ `DATENPORTAL_INTEGRATOR_CONFIG`, sonst `config/local.toml` im aktuellen Arbeitsverzeichnis.
 
 ```toml
 root = ".."
 topics_repo = "../datenportal-themenrepo"
 stack_repo = "../datenportal-dev-stack"
 state_dir = ".datenportal-integrator/runs"
-datasheet_mcp_url = "http://127.0.0.1:8000/mcp"
 validator_command = ["java", "-jar", ".datenportal-integrator/tools/ilivalidator/ilivalidator-1.15.0.jar"]
-model_dirs = ["../datenportal-datenblatt-editor/mcp-java/src/main/resources/models"]
+model_dirs = [] # Originalmodelle kommen automatisch aus dem Datenblatt-Image
 gretl_java_home = "/pfad/zum/jdk-17"
+
+[datasheet]
+transport = "stdio"
+image = "sogis/datenportal-datenblatt-mcp@sha256:b391421578f8c4652fb7a64465187746a3057ab4413d17cfc20a56025b470da1"
 
 [interlis]
 transport = "stdio"
-jar = "../interlis-mcp/build/libs/interlis-mcp.jar"
-java_command = "/pfad/zum/jdk-25/bin/java"
+image = "sogis/interlis-mcp@sha256:b3ed1e738ccfe670f92ecebcbb014cf67aade5f0609e15be1f75948e15e899ff"
 ```
 
-Das vollständige Beispiel enthält auch das lokale Jenkins-Profil. Optional kann eine vorhandene HTTP-Instanz von INTERLIS verwendet werden: `[interlis]`, `transport = "http"`, `url = "http://localhost:8080/mcp"`. Der Integrator startet bei stdio für den Fachaufruf das konfigurierte JAR und schliesst es anschliessend. Der Datenblatt-MCP läuft dagegen als vorhandener HTTP-Dienst; seine Entwürfe werden lokal gesichert, da der Dienst sie bei einem Neustart verliert.
+Das vollständige Beispiel enthält auch das lokale Jenkins-Profil. Beide Fach-MCPs starten bei Bedarf über `docker run --rm -i` mit dem Profil `stdio`, ohne TTY, Portfreigabe oder Dateimounts. Im CLI endet die Verbindung nach einer Operation; der Integrator-MCP verwendet sie während seiner Laufzeit wieder. Dateien werden vom Integrator gelesen und als Text übertragen.
+
+Für vorhandene HTTP-Dienste im jeweiligen Abschnitt `transport = "http"` und `url = "http://127.0.0.1:8000/mcp"` beziehungsweise Port 8080 setzen. Beim Datenblatt kann `image` als Quelle für die Originalmodelle stehen bleiben. Ohne Image müssen passende lokale `model_dirs` angegeben werden. Das alte `datasheet_mcp_url` bleibt kompatibel, darf aber nicht neben `[datasheet]` stehen. Die frühere INTERLIS-JAR-Konfiguration bleibt unterstützt; `image` und `jar` sind gegenseitig ausgeschlossen.
 
 Zugangsdatenwerte stehen weder in versionierter Konfiguration noch in Argumentdateien. Ein Umgebungsprofil nennt nur Variablennamen (`username_env`, `token_env`). Zum Setzen in einer Shell die Werte ohne Echo eingeben, beispielsweise unter zsh:
 
@@ -49,19 +53,21 @@ Ein aus dem Finder gestarteter Desktop erbt Shell-Variablen nicht automatisch. D
 java -jar build/libs/datenportal-integrator.jar setup-java
 java -jar build/libs/datenportal-integrator.jar setup-tools
 java -jar build/libs/datenportal-integrator.jar setup-gretl
-java -jar build/libs/datenportal-integrator.jar start-datasheet
+java -jar build/libs/datenportal-integrator.jar setup-mcps
 ```
 
-`setup-gretl` übernimmt das bestehende Jenkins-Offline-Bundle in den Integrator und verlangt eine passende lokale Stack-Zuordnung. Dafür muss der Stack verfügbar sein. `setup-tools` prüft den Download von ilivalidator 1.15.0 gegen eine feste SHA-256-Prüfsumme. `start-datasheet` kopiert den vorhandenen Datenblatt-MCP in das ignorierte Arbeitsverzeichnis, baut dort sein JAR und läuft im Vordergrund. Optional: `start-datasheet --source /pfad/editor/mcp-java`. Einen bereits laufenden Dienst weiterverwenden. Das INTERLIS-JAR muss nach dessen eigener Anleitung bereits gebaut sein; seine Quellen und Startskripte werden nicht angepasst.
+`setup-tools` prüft ilivalidator 1.15.0 gegen eine feste SHA-256-Prüfsumme. `setup-mcps` bezieht fehlende Images, sichert ihre konkrete Identität und kopiert die beiden Originalmodelle aus `/app/models` eines gestoppten Datenblatt-Containers. Die ignorierte Auswahl liegt unter `.datenportal-integrator/tools/mcps/runtime.json`, die Modelle im nach Image-Stand getrennten Unterordner `models/`. Keine Modelle aus einem Editor-Checkout in `model_dirs` doppelt hinzufügen. `setup-gretl` übernimmt das bestehende Jenkins-Offline-Bundle und benötigt dafür die passende lokale Stack-Instanz.
 
-In einer zweiten Shell:
+Normale Workflow-Aufrufe und wiederholtes `setup-mcps` wechseln keine Image-Version. Für ein bewusstes Update zuerst die Image-Referenz in der Konfiguration ändern oder bei einem Versionstag `setup-mcps --update` verwenden. Danach betroffene Dateien erneut prüfen und freigeben. `start-datasheet` ist ein veralteter Hinweisbefehl; er baut und startet keinen Server mehr. Docker muss auch im PATH des Desktop-MCP-Prozesses verfügbar sein.
+
+Prüfen:
 
 ```sh
 java -jar build/libs/datenportal-integrator.jar doctor
 java -jar build/libs/datenportal-integrator.jar schema start
 ```
 
-`doctor` liest die Konfiguration, prüft Pfade und die vorhandene Stack-Zuordnung und ruft das Datenblatt-Schema ab. Ein fehlender oder unpassender Dienst wird als Fehlerobjekt ausgewiesen. Eine konfigurierte INTERLIS-Adresse allein beweist noch keinen erfolgreichen Modellaufruf.
+`doctor` prüft Pfade, Stack-Zuordnung, Image-/Modellcache und beide echten MCP-Werkzeugkataloge. Fehler stehen im JSON-Ergebnis. Ein erfolgreicher Katalogtest ersetzt noch keine fachliche Modell- oder Publikationsabnahme.
 
 ## Codex Desktop, Codex CLI und OpenCode
 
@@ -266,7 +272,9 @@ java -jar build/libs/datenportal-integrator.jar call status --json '{"run_id":"A
 
 Die erste Migration ist nur Vorschau. Die zweite schreibt eine Sicherung und übernimmt Schema 1 nach Schema 2. Originale, Exporte, Java-Snapshots, unbestätigte Metadatenoperationen und externe Laufkennungen bleiben erhalten. Alte Freigaben sind historisch; vor neuen Lieferungen erneut prüfen. Bereits gestartete Lieferungen werden abgefragt. Python-Rezepte müssen nach Java portiert werden und werden nicht ausgeführt.
 
-Nach einem Datenblatt-MCP-Neustart `metadata` mit `operation: restore` verwenden. Der gesicherte Snapshot wird über öffentliche Fachwerkzeuge rekonstruiert; interne IDs können sich ändern. Neue IDs aus der Antwort verwenden. Eine unbestätigte letzte Operation wird separat gezeigt und nach Prüfung erneut beauftragt.
+Bei einer neuen CLI-Verbindung oder einem eindeutig fehlenden Entwurf rekonstruiert der Integrator automatisch den letzten bestätigten Snapshot. Frühere Attribut-/Ausgabe-IDs werden eindeutig übersetzt. Die Transferidentität, vorhandene Exportdatei und deren Freigaben bleiben bei unverändertem Inhalt und Prüfstand erhalten. Tatsächliche Änderungen benötigen wieder Export, Validierung und Freigabe.
+
+Eine unbestätigte letzte Änderung blockiert weitere Bearbeitung mit `metadata_uncertain`. `metadata` mit `operation: restore` stellt ausdrücklich den bestätigten Stand her und zeigt den unbestätigten Auftrag. Erst nach Prüfung erneut beauftragen; der Integrator wiederholt ihn nicht automatisch.
 
 | Meldung | Vorgehen |
 |---|---|
@@ -285,3 +293,16 @@ Nach einem Datenblatt-MCP-Neustart `metadata` mit `operation: restore` verwenden
 | `converter_migration_required` | Python-Rezept nach Java mit JUnit portieren. |
 
 `retry_delivery` ist nur für eindeutig fehlgeschlagene, nicht publizierte Versuche vorgesehen. Bei unklarer Publikation wird es abgewiesen. Freigaben sichern den Arbeitsablauf ab; sie sind keine unabhängige menschliche Authentisierung gegenüber einem Agenten mit vollständigem Dateizugriff.
+
+### Docker-MCP-Fehler
+
+| Fehler | Vorgehen |
+|---|---|
+| `mcp_setup_required` | Konfigurierte Images mit `setup-mcps` vorbereiten. |
+| `mcp_image_missing` / `mcp_pull_failed` | Docker, Image-Referenz und gegebenenfalls `docker login` prüfen; anschliessend `setup-mcps`. Kein lokaler Build-Fallback. |
+| `mcp_models_changed` | Modellcache wurde verändert oder fehlt; `setup-mcps` kopiert ihn erneut aus dem festgelegten Image. Danach erneut prüfen. |
+| `invalid_configuration` bei `model_dirs` | Doppelte Originalmodelle entfernen; der Docker-Betrieb verwendet den Image-Cache. |
+| `draft_restore_mismatch` | Rekonstruktion weicht ab; Vorgang erhalten und Ursache klären. Keine Änderung oder Lieferung fortsetzen. |
+| `mcp_unavailable` | Docker und den lokalen Fehlerlog unter `.datenportal-integrator/tools/mcps/logs/` prüfen. Unbestätigte Änderungen separat aufklären. |
+
+Der stdio-Export liefert keine Browser-Downloadadresse. Der Integrator speichert das validierte XML lokal und zeigt seine Vorschau. HTTP bleibt für Browser-Downloads verfügbar. Eigene Container werden beim Beenden entfernt; bei einem abgebrochenen Integratorprozess räumt die nächste Docker-MCP-Verbindung seine gespeicherten, nicht mehr zu einem lebenden Prozess gehörenden Containerkennungen auf. Fremde Container werden nicht entfernt.

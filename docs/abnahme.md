@@ -17,6 +17,21 @@ Stand: 6. Oktober 2026. Aktueller Durchlauf: 94 Unit-/Funktionstests und sechs e
 - Quellstandsprüfung: Git-Index und Arbeitsbaumstatus von Dev-Stack, Datenblatt-Editor, interlis-mcp und Themenrepo entsprechen dem Ausgangsstand. Keine fachlichen Änderungen im echten Themenrepo übernommen.
 - Codex-MCP-Eintrag auf Java umgestellt; Zugangsdatenumgebung erhalten. OpenCode hat die Java-stdio-Verbindung tatsächlich als verbunden angezeigt.
 
+## Docker-MCP-Abnahme vom 7. Oktober 2026
+
+Die folgenden Nachweise ergänzen die ursprüngliche Java-Abnahme; die dort verwendeten lokalen Fach-JARs sind kein Bestandteil der neuen Standardeinrichtung.
+
+- Veröffentlichtes Datenblatt-Image: `sogis/datenportal-datenblatt-mcp@sha256:b391421578f8c4652fb7a64465187746a3057ab4413d17cfc20a56025b470da1`, Server 0.2.0. Veröffentlichtes INTERLIS-Image: `sogis/interlis-mcp@sha256:b3ed1e738ccfe670f92ecebcbb014cf67aade5f0609e15be1f75948e15e899ff`, Server 0.0.570-1. Tatsächlich lokal auf linux/arm64 verwendet. Keine lokalen Fach-MCP-Builds.
+- `setup-mcps` kopierte beide Originalmodelle aus `/app/models` des festgelegten Images, kompilierte sie und speicherte Image-Identitäten sowie Prüfsummen im ignorierten Cache. `doctor` initialisierte beide echten stdio-Verbindungen und bestätigte die benötigten Werkzeugkataloge.
+- Echte Datenblatt-Tests: Bearbeitung über getrennte CLI-Prozesse und den Integrator-MCP, automatische Snapshot-Rekonstruktion, unvollständige Entwürfe, historische Attribut-/Ausgabe-IDs über mehrere Neustarts, Änderung und Löschung, kompatible Schema-2-Exportnachweise und unveränderte Exportbytes/Freigaben. Unbestätigte Aufträge bleiben bis zur ausdrücklichen Wiederherstellung blockiert.
+- Der neue SDK-Transport prüfte 16 parallele Antworten mit jeweils über 64 KiB und beendete den veröffentlichten Datenblatt-Container regulär bei EOF mit Exit-Code 0. HTTP-Regression verwendete das veröffentlichte Image mit Streamable-Sitzung und XML-/Linkexport.
+- Die vorhandenen echten Office-/XTF-, Modell- und GRETL-Prüfungen liefen ebenfalls mit den Docker-Fachadaptern. Der Dev-Stack wurde über sein vorhandenes Startskript gestartet; die gleiche CSV-Task wurde früh lokal und im bestehenden Jenkins-Runtime geprüft, ohne Seed, Upload oder neue Publikation.
+- 105 Unit-/Funktionstests und 11 echte Integrationstests bestanden mit `./gradlew test jar integrationTest spotlessCheck`, JDK 25 und bestehender Java-17-GRETL-Umgebung. Unit-Tests simulieren unter anderem Registryfehler, explizite Image-Updates, Modellcache-Manipulationen, Konfigurationskonflikte, fremde/live Container und einen nicht erreichbaren Docker-Daemon. Die simulierten Docker-Fehler sind keine tatsächlichen Registry-Ausfälle.
+- OpenCode meldete den Integrator-MCP tatsächlich als verbunden. Der echte SDK-Test prüfte den neuen Integrator-stdio-Prozess samt Datenblattaufrufen; ein vollständiger menschlicher Dialog in Codex Desktop/CLI und OpenCode bleibt separat offen. Laufende Harness-Verbindungen müssen nach dem JAR-Wechsel neu gestartet werden.
+- Quellstände und Git-Arbeitsbäume von Themenrepo, Dev-Stack, Datenblatt-Editor und interlis-mcp entsprechen vor und nach den Tests exakt dem Ausgangsstand. Fachliche Übernahmen und Testfreigaben fanden ausschliesslich in isolierten Testrepositories statt.
+
+Prüfberichte: `build/reports/tests/test/` und `build/reports/tests/integrationTest/`. Lokales Ausführungsprotokoll: `.datenportal-integrator/docker-verification.log`. Die lokale Konfiguration wurde auf die oben genannten Digests umgestellt; die vorherige Konfiguration ist ignoriert gesichert. Es wurde keine fachliche menschliche Freigabe ergänzt und keine INT-/PROD-Lieferung ausgeführt.
+
 ## Automatisiert mit Simulationen geprüft
 
 JUnit prüft zusätzlich fehlerhafte CSV, vollständige Scans und begrenzte Fehlerlisten, Datentypen/Pflichtwerte, Freigaben nach Änderungen, Dateimanipulationen, Serien, Teillieferungen, Konverter/JUnit-Fehler, XLSX-Formelcache, XML-/HTML-Behandlung, Kandidaten und unvollständige Proofs, Office-/Teamfehler und Repository-Konflikte.

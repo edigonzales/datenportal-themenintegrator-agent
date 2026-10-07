@@ -3,46 +3,313 @@
   "title": "Datenportal-Integrator lokale Konfiguration",
   "type": "object",
   "additionalProperties": false,
-  "required": ["topics_repo", "stack_repo"],
+  "required": [
+    "topics_repo",
+    "stack_repo"
+  ],
   "properties": {
-    "root": {"type":"string","default":".."},
-    "topics_repo": {"type":"string"},
-    "stack_repo": {"type":"string"},
-    "state_dir": {"type":"string","default":".datenportal-integrator/runs"},
-    "datasheet_mcp_url": {"type":"string","format":"uri","default":"http://127.0.0.1:8000/mcp"},
-    "validator_command": {"type":"array","items":{"type":"string"},"minItems":1},
-    "model_dirs": {"type":"array","items":{"type":"string"}},
-    "compose_files": {"type":"array","items":{"type":"string"}},
-    "stack_start_args": {"type":"array","items":{"type":"string"}},
-    "timeout_seconds": {"type":"integer","minimum":1,"maximum":7200,"default":300},
-    "gretl_java_home": {"type":"string","description":"Lokales Java-17-Home; alternativ GRADLE_JAVA_HOME_17."},
-    "gretl_offline_jars": {"type":"string","default":".datenportal-integrator/tools/gretl-runtime/jars"},
-    "interlis": {
-      "type":"object","additionalProperties":false,
-      "properties": {
-        "transport":{"enum":["stdio","http"],"default":"stdio"},
-        "jar":{"type":"string"},"java_command":{"type":"string"},"url":{"type":"string","format":"uri"}
+    "root": {
+      "type": "string",
+      "default": ".."
+    },
+    "topics_repo": {
+      "type": "string"
+    },
+    "stack_repo": {
+      "type": "string"
+    },
+    "state_dir": {
+      "type": "string",
+      "default": ".datenportal-integrator/runs"
+    },
+    "datasheet_mcp_url": {
+      "type": "string",
+      "format": "uri",
+      "default": "http://127.0.0.1:8000/mcp"
+    },
+    "validator_command": {
+      "type": "array",
+      "items": {
+        "type": "string"
       },
-      "allOf":[
-        {"if":{"properties":{"transport":{"const":"http"}},"required":["transport"]},"then":{"required":["url"]},"else":{"required":["jar"]}}
+      "minItems": 1
+    },
+    "model_dirs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "compose_files": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "stack_start_args": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "timeout_seconds": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 7200,
+      "default": 300
+    },
+    "gretl_java_home": {
+      "type": "string",
+      "description": "Lokales Java-17-Home; alternativ GRADLE_JAVA_HOME_17."
+    },
+    "gretl_offline_jars": {
+      "type": "string",
+      "default": ".datenportal-integrator/tools/gretl-runtime/jars"
+    },
+    "interlis": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "transport": {
+          "enum": [
+            "stdio",
+            "http"
+          ],
+          "default": "stdio"
+        },
+        "jar": {
+          "type": "string"
+        },
+        "java_command": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "image": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/:@-]*$"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "transport": {
+                "const": "http"
+              }
+            },
+            "required": [
+              "transport"
+            ]
+          },
+          "then": {
+            "required": [
+              "url"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "jar"
+                  ]
+                },
+                {
+                  "required": [
+                    "java_command"
+                  ]
+                }
+              ]
+            }
+          },
+          "else": {
+            "oneOf": [
+              {
+                "required": [
+                  "image"
+                ],
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "jar"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "java_command"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "url"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "required": [
+                  "jar"
+                ],
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "image"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "url"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
       ]
     },
-    "environments": {"type":"object","additionalProperties":{"$ref":"#/$defs/environment"}}
+    "environments": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/environment"
+      }
+    },
+    "datasheet": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "transport": {
+          "enum": [
+            "stdio",
+            "http"
+          ],
+          "default": "stdio"
+        },
+        "image": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/:@-]*$"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "transport": {
+                "const": "http"
+              }
+            },
+            "required": [
+              "transport"
+            ]
+          },
+          "then": {
+            "required": [
+              "url"
+            ]
+          },
+          "else": {
+            "required": [
+              "image"
+            ],
+            "not": {
+              "required": [
+                "url"
+              ]
+            }
+          }
+        }
+      ]
+    }
   },
   "$defs": {
     "environment": {
-      "type":"object","additionalProperties":false,
-      "required":["kind","jenkins_url","portal_url","manifest_url"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "jenkins_url",
+        "portal_url",
+        "manifest_url"
+      ],
       "properties": {
-        "kind":{"enum":["local","int","prod"]},
-        "jenkins_url":{"type":"string","format":"uri"},"portal_url":{"type":"string","format":"uri"},"manifest_url":{"type":"string","format":"uri"},
-        "seed_job":{"type":"string","default":"gretl-datenportal-seed"},
-        "username_env":{"type":"string","default":"DATENPORTAL_JENKINS_USER"},"token_env":{"type":"string","default":"DATENPORTAL_JENKINS_TOKEN"},
-        "git_remote":{"type":"string","default":"origin"},"git_branch":{"type":"string","default":"main"},
-        "enabled":{"type":"boolean","default":false},
-        "repository_mode":{"enum":["working-tree","managed-git"],"default":"managed-git"},
-        "git_write_back":{"type":"boolean","default":false},"reload_portal":{"type":"boolean","default":true}
+        "kind": {
+          "enum": [
+            "local",
+            "int",
+            "prod"
+          ]
+        },
+        "jenkins_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "portal_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "manifest_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "seed_job": {
+          "type": "string",
+          "default": "gretl-datenportal-seed"
+        },
+        "username_env": {
+          "type": "string",
+          "default": "DATENPORTAL_JENKINS_USER"
+        },
+        "token_env": {
+          "type": "string",
+          "default": "DATENPORTAL_JENKINS_TOKEN"
+        },
+        "git_remote": {
+          "type": "string",
+          "default": "origin"
+        },
+        "git_branch": {
+          "type": "string",
+          "default": "main"
+        },
+        "enabled": {
+          "type": "boolean",
+          "default": false
+        },
+        "repository_mode": {
+          "enum": [
+            "working-tree",
+            "managed-git"
+          ],
+          "default": "managed-git"
+        },
+        "git_write_back": {
+          "type": "boolean",
+          "default": false
+        },
+        "reload_portal": {
+          "type": "boolean",
+          "default": true
+        }
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "not": {
+        "required": [
+          "datasheet",
+          "datasheet_mcp_url"
+        ]
+      }
+    }
+  ]
 }

@@ -3,7 +3,7 @@ package ch.so.agi.integrator;
 import java.nio.file.*;
 import java.util.*;
 
-public final class Workflow {
+public final class Workflow implements AutoCloseable {
   final Settings settings;
   final Store store;
   final ProcessRunner process;
@@ -22,6 +22,15 @@ public final class Workflow {
     datasheets = d;
     interlis = i;
     validator = new Validator(s, p);
+  }
+
+  @Override
+  public void close() {
+    try {
+      datasheets.close();
+    } finally {
+      interlis.close();
+    }
   }
 
   public Object call(String operation, Map<String, Object> args) {
@@ -274,12 +283,94 @@ public final class Workflow {
   }
 
   public void exportRequired(Map<String, Object> r) {
+    inheritExport(r);
     if (r.containsKey("pending_metadata")
         || (r.containsKey("draft")
-            && !Objects.equals(
-                r.get("exported_revision"), Json.obj(r.get("draft")).get("revision"))))
+            && (!Objects.equals(
+                    r.get("exported_content_sha256"), contentHash(Json.obj(r.get("draft"))))
+                || store.file(r, "metadata") == null
+                || !Objects.equals(
+                    r.get("exported_artifact_sha256"), Json.sha(store.file(r, "metadata"))))))
       throw new Problem(
           "draft_not_exported", "Aktuellen Entwurf zuerst exportieren, prüfen und freigeben.");
+  }
+
+  static Object semantic(Object value) {
+    if (value instanceof Map<?, ?> map) {
+      var result = Json.map();
+      map.forEach(
+          (k, v) -> {
+            if (!Set.of("attribute_id", "issue_id").contains(k.toString())
+                && !(Set.of("attributes", "issues").contains(k.toString())
+                    && v instanceof List<?> l
+                    && l.isEmpty())) result.put(k.toString(), semantic(v));
+          });
+      return result;
+    }
+    if (value instanceof List<?> list) return list.stream().map(Workflow::semantic).toList();
+    return value;
+  }
+
+  static String contentHash(Map<String, Object> draft) {
+    return Json.digest(
+        Json.map(
+            "kind",
+            draft.get("kind"),
+            "basket_id",
+            draft.get("basket_id"),
+            "object_id",
+            draft.get("object_id"),
+            "data",
+            semantic(draft.get("data"))));
+  }
+
+  void inheritExport(Map<String, Object> r) {
+    if (!r.containsKey("exported_content_sha256")
+        && r.containsKey("draft")
+        && !r.containsKey("pending_metadata")
+        && Objects.equals(r.get("exported_revision"), Json.obj(r.get("draft")).get("revision"))
+        && store.file(r, "metadata") != null) {
+      r.put("exported_content_sha256", contentHash(Json.obj(r.get("draft"))));
+      r.put("exported_artifact_sha256", Json.sha(store.file(r, "metadata")));
+    }
+  }
+
+  void restoreDraft(Map<String, Object> r) {
+    inheritExport(r);
+    var old = Json.obj(r.get("draft"));
+    var restored = McpClients.restore(datasheets, r);
+    if (!contentHash(old).equals(contentHash(restored)))
+      throw new Problem(
+          "draft_restore_mismatch",
+          "Wiederhergestellter Entwurf weicht vom bestätigten Snapshot ab.");
+    var aliases = new LinkedHashMap<>(Json.obj(r.get("draft_id_aliases")));
+    var translations = Json.map();
+    mapIds(Json.obj(old.get("data")), Json.obj(restored.get("data")), translations);
+    aliases.replaceAll((k, v) -> translations.getOrDefault(v.toString(), v));
+    translations.forEach(aliases::put);
+    r.put("draft_id_aliases", aliases);
+    r.put("draft", restored);
+    r.put("draft_session", datasheets.sessionKey());
+    Store.event(r, "restore_draft", Json.map("content_sha256", contentHash(restored)));
+  }
+
+  static void mapIds(
+      Map<String, Object> old, Map<String, Object> restored, Map<String, Object> mappings) {
+    for (String list : List.of("attributes", "issues")) {
+      var before = Json.list(old.get(list));
+      var after = Json.list(restored.get(list));
+      if (before.size() != after.size())
+        throw new Problem(
+            "draft_restore_mismatch", "Entwurfsstruktur nach Wiederaufnahme abweichend.");
+      for (int n = 0; n < before.size(); n++) {
+        var a = Json.obj(before.get(n));
+        var b = Json.obj(after.get(n));
+        String key = list.equals("attributes") ? "attribute_id" : "issue_id";
+        if (a.containsKey(key) && b.containsKey(key))
+          mappings.put(a.get(key).toString(), b.get(key));
+        mapIds(a, b, mappings);
+      }
+    }
   }
 
   public void require(Map<String, Object> r, String gate) {
@@ -323,6 +414,10 @@ public final class Workflow {
       r.remove("draft");
       r.remove("draft_base");
       r.remove("exported_revision");
+      r.remove("exported_content_sha256");
+      r.remove("exported_artifact_sha256");
+      r.remove("draft_session");
+      r.remove("draft_id_aliases");
     }
     return result;
   }
@@ -649,10 +744,9 @@ public final class Workflow {
             "note",
             "Noch kein bestätigter Entwurf. Der dokumentierte Auftrag kann nach Prüfung bewusst erneut ausgeführt werden; keine Lieferung wurde gestartet.");
       }
-      var result = McpClients.restore(datasheets, r);
+      restoreDraft(r);
+      var result = new LinkedHashMap<>(Json.obj(r.get("draft")));
       Object pending = r.remove("pending_metadata");
-      r.put("draft", result);
-      r.put("exported_revision", null);
       result.put("unconfirmed_operation", pending);
       result.put(
           "note",
@@ -676,6 +770,10 @@ public final class Workflow {
         r.put("draft_base", xml);
       }
       r.put("draft", result);
+      r.put("draft_session", datasheets.sessionKey());
+      r.remove("draft_id_aliases");
+      r.remove("exported_content_sha256");
+      r.remove("exported_artifact_sha256");
       r.put("exported_revision", op.equals("import_xtf") ? result.get("revision") : null);
       r.remove("pending_metadata");
       return result;
@@ -683,10 +781,31 @@ public final class Workflow {
     var draft = Json.obj(r.get("draft"));
     if (draft.isEmpty())
       throw new Problem("draft_missing", "Zuerst Datenblatt importieren oder erstellen.");
-    var current = datasheets.call("read_datasheet", Json.map("draft_id", draft.get("draft_id")));
+    String session = datasheets.sessionKey();
+    if (session != null
+        && !session.equals(r.get("draft_session"))
+        && Json.str(settings.mcp("datasheet"), "transport", "http").equals("stdio")) {
+      restoreDraft(r);
+      draft = Json.obj(r.get("draft"));
+    }
+    Map<String, Object> current;
+    try {
+      current = datasheets.call("read_datasheet", Json.map("draft_id", draft.get("draft_id")));
+    } catch (Problem p) {
+      if (!p.code.equals("not_found")) throw p;
+      restoreDraft(r);
+      draft = Json.obj(r.get("draft"));
+      current = datasheets.call("read_datasheet", Json.map("draft_id", draft.get("draft_id")));
+    }
     if (!Objects.equals(current.get("revision"), draft.get("revision")))
       throw new Problem("draft_conflict", "Entwurf ausserhalb des Vorgangs bearbeitet.");
     var args = new LinkedHashMap<>(input);
+    for (String key : List.of("attribute_id", "issue_id"))
+      if (args.containsKey(key))
+        args.put(
+            key,
+            Json.obj(r.get("draft_id_aliases"))
+                .getOrDefault(args.get(key).toString(), args.get(key)));
     args.put("draft_id", current.get("draft_id"));
     if (!op.equals("read_datasheet")) args.put("expected_revision", current.get("revision"));
     if (op.equals("export_xtf")) args.put("include_xml", true);
@@ -695,12 +814,23 @@ public final class Workflow {
       r.put("pending_metadata", Json.map("operation", op, "arguments", input, "at", Json.now()));
       persist(r);
     }
-    var result = datasheets.call(op, args);
+    Map<String, Object> result;
+    try {
+      result = datasheets.call(op, args);
+    } catch (Problem p) {
+      if (mutation && p.details.containsKey("response")) {
+        r.remove("pending_metadata");
+        Store.event(r, "metadata_rejected", Json.map("operation", op, "code", p.code));
+      }
+      throw p;
+    }
     if (mutation) {
       r.put("draft", result);
       r.remove("pending_metadata");
       Json.obj(r.get("files")).remove("metadata");
       Json.obj(r.get("checks")).remove("metadata");
+      r.remove("exported_content_sha256");
+      r.remove("exported_artifact_sha256");
     }
     if (op.equals("export_xtf")) {
       Path out = directory(r).resolve("export.xtf");
@@ -708,6 +838,8 @@ public final class Workflow {
       r.put("draft_base", result.remove("xml"));
       result.put("artifact", store.attach(r, out, "metadata"));
       r.put("exported_revision", current.get("revision"));
+      r.put("exported_content_sha256", contentHash(Json.obj(r.get("draft"))));
+      r.put("exported_artifact_sha256", Json.sha(store.file(r, "metadata")));
     }
     return result;
   }

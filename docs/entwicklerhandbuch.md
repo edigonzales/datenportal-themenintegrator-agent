@@ -10,13 +10,13 @@ JDK 25, Gradle-Wrapper und ein ausführbares JAR bilden die Implementierung. `Ma
 | `Store` | Vorgänge, Dateiartefakte, Sperren, Ereignisse und explizite Migration |
 | `Workflow` | Operationen, Prüfstände, Freigabeabhängigkeiten, Kandidaten und lokale Übernahme |
 | `Csv`, `Xml`, `Validator`, `Reports` | Vollständige technische CSV-Prüfung, sicherer XML-Leser, externe ilivalidator-Aufrufe, XLSX/HTML |
-| `McpClients` | Getrennte Adapter für Datenblatt-HTTP-MCP und INTERLIS-stdio/HTTP-MCP über das offizielle Java-MCP-SDK |
+| `McpClients` | Verzögert initialisierte, wiederverwendete SDK-Clients für beide Fach-MCPs über Docker-stdio oder HTTP |
 | `Models` | Typisierte flache Ableitung, Herkunft, High-Level-Nachweise, Modellreferenz und GRETL-Themenhook |
 | `Organizations` | Office-Regeln aus kompiliertem Modell, Org-/Teamkandidaten und Gradle-Prüfung |
 | `Converters`, `CsvConverter`, `ConverterMain` | Java-Konvertervertrag, Kompilierung, JUnit und separate Ausführungs-JVM |
 | `Workspace`, `GretlRuntime` | Isolierte Arbeitskopie und Übernahme des vorhandenen Jenkins-Offline-Bundles |
 | `Stack`, `Jenkins`, `Deliveries`, `Repository` | Vorhandene Runtime-Schnittstellen, persistierte Lieferphasen, Sichtbarkeitsprüfung und menschliches PR-Verfahren |
-| `Setup` | Werkzeuginstallation, isolierter Datenblatt-MCP-Start und Harness-Konfiguration |
+| `DockerMcps`, `Setup` | Festgelegte Image-Auswahl, Originalmodellcache, eigene Container, Werkzeuge und Harness-Konfiguration |
 
 Alle Quellen liegen unter `src/main/java/ch/so/agi/integrator/`, JUnit unter `src/test/java/`. Fachliche Konverter liegen optional unter `topics/<organisation>/<identifier>/`. Regeln, Zusatzmodell und HTML-Vorlage bleiben im Integrator-Repo. Das Themenrepo ist die verbindliche Quelle für Organisationen, Dienststellen, Teams und Datenblätter; der Integrator pflegt keine zweite Kopie.
 
@@ -24,8 +24,8 @@ Alle Quellen liegen unter `src/main/java/ch/so/agi/integrator/`, JUnit unter `sr
 
 Keine Quellen von Dev-Stack, Fachdiensten, Jenkins-Plugin, GRETL oder Portal werden geändert. Änderungen an diesen Komponenten sind separate Aufträge. Relevante Grenzen werden als konkrete Fehler gemeldet.
 
-- Datenblatt-MCP: bestehendes HTTP-MCP, `describe_schema`, `import_xtf`, `read_datasheet`, `update_metadata`, Attribut-/Ausgabenwerkzeuge, Validierung und Export. Der Integrator erzeugt nur die Transferidentität eines leeren Imports mit gültigem OID-Präfix; fachliche Datenblätter und ihre Exporte verantwortet der Fach-MCP.
-- INTERLIS-MCP: eigenes SDK-Client/Transport-Paar; standardmässig konfiguriertes JAR über stdio, optional Streamable HTTP. `authorIliModel` und `applyIliModelChanges` liefern Compiler-/Regel-/Constraint-Nachweise. Bei separat geändertem Quellstand `reviewIliModel`; unvollständige Constraint-Beweise verlangen weiterhin High-Level-Änderung/Prüfung.
+- Datenblatt-MCP: Docker-stdio oder Streamable HTTP, `describe_schema`, `import_xtf`, `read_datasheet`, `update_metadata`, Attribut-/Ausgabenwerkzeuge, Validierung und Export. Der Integrator erzeugt nur die Transferidentität eines leeren Imports mit gültigem OID-Präfix; fachliche Datenblätter und ihre Exporte verantwortet der Fach-MCP.
+- INTERLIS-MCP: eigenes SDK-Client/Transport-Paar; standardmässig veröffentlichtes Docker-Image über stdio, optional Streamable HTTP oder vorhandenes lokales JAR. `authorIliModel` und `applyIliModelChanges` liefern Compiler-/Regel-/Constraint-Nachweise. Bei separat geändertem Quellstand `reviewIliModel`; unvollständige Constraint-Beweise verlangen weiterhin High-Level-Änderung/Prüfung.
 - GRETL: vorhandenes Java-17-Skript, Repository-Wrapper und `shared/gradle/init.gradle`; Versionen aus `shared/gradle/gradle-build.properties`. `setup-gretl` kopiert das vorhandene Jenkins-Offline-JAR-Bundle in ignorierte Integrator-Dateien. Es wird nicht neu gebaut oder aktualisiert.
 - Stack: Docker-/Compose-Status, Mount und `THEMEN_REPO_MODE`, vorhandenes `scripts/up.sh`, normale Starts vorhandener Services. Bei passender laufender Instanz keine neue Instanz. Unpassender Checkout/Modus stoppt.
 - Jenkins: CSRF-Crumb, vorhandener Seed-Job, `gretl-datenportal/build` als Multipart, `gretl-datenportal/runStatus`, Queue-/Build-API und `report.json`. Authentisierung nur an die konfigurierte Jenkins-Basis; Redirects werden nicht verfolgt.
@@ -42,7 +42,8 @@ Der [GRETL-`CsvValidator`](https://github.com/edigonzales/gretl-next/blob/main/g
 |---|---|
 | `files` | Inhaltsadressierte Original-/Bearbeitungsartefakte mit Pfad, SHA-256 und Originalname |
 | `changes` | Kandidatenpfad, erwartete Ausgangs-SHA, Kandidaten-SHA und Vorher/Nachher-Inhalt |
-| `draft`, `draft_base`, `exported_revision` | Letzter bestätigter Datenblatt-Snapshot, XML-Identität und exportierte Revision |
+| `draft`, `draft_base`, `exported_revision` | Bestätigter Snapshot, XML-Identität und historischer Revisionsnachweis |
+| `draft_session`, `draft_id_aliases`, `exported_content_sha256`, `exported_artifact_sha256` | Flüchtige Sitzung, transitive ID-Zuordnung und Exportbindung an Fachinhalt/Bytes |
 | `pending_metadata`, `pending_model` | Vor dem externen Aufruf persistierter, noch unbestätigter Auftrag |
 | `checks`, `approvals` | Ergebnisse und menschliche Freigaben für konkrete Fingerprints |
 | `baseline`, `provenance` | Angenommener Ausgangsstand und Herkunft fachlicher Angaben |
@@ -114,7 +115,7 @@ Das verbindliche Schema wird in `Operations.ALL` definiert; unbekannte Felder un
 | `retry_delivery` | `environment*` | `ready_for_new_attempt`; `retry_unsafe` |
 | `migrate_run` | `apply=false` | Vorschau/Sicherung, Historie; `unsupported_state_version` |
 
-Werkzeughelfer: `setup-java`, `setup-tools`, `setup-gretl`, `start-datasheet [--source PATH]`, `harness-config`, `codex [harness-argumente]`. Diese sind CLI-Helfer, keine zusätzlichen MCP-Fachoperationen.
+Werkzeughelfer: `setup-java`, `setup-tools`, `setup-mcps [--update]`, `setup-gretl`, `harness-config`, `codex [harness-argumente]`. Diese sind CLI-Helfer, keine zusätzlichen MCP-Fachoperationen.
 
 ## Modellierung und GRETL-Hook
 
@@ -161,8 +162,9 @@ Unit-/Funktionsprüfungen verwenden isolierte Repositories und deutlich bezeichn
 
 ```sh
 java -jar build/libs/datenportal-integrator.jar setup-tools
+java -jar build/libs/datenportal-integrator.jar setup-mcps
 java -jar build/libs/datenportal-integrator.jar setup-gretl
-# Datenblatt-MCP muss laufen, INTERLIS-JAR muss vorhanden sein.
+# Fach-MCP-Images müssen mit setup-mcps vorbereitet sein.
 export GRADLE_JAVA_HOME_17="/pfad/zum/jdk-17"
 ./gradlew integrationTest
 ```
@@ -173,6 +175,18 @@ Vor/nach der Abnahme Quellstände der externen Komponenten und erlaubte Themenre
 
 ## Bekannte Grenzen
 
-V1 modelliert eine flache CSV. Geometrien, Beziehungen und zusätzliche Constraints benötigen bestätigte Semantik und explizite Fach-MCP-Aufträge; sie werden nicht automatisch aus Datenmustern erfunden. Serien mit unterschiedlichen Verträgen verlangen Klärung. Entwürfe des HTTP-Datenblatt-MCP sind nach Neustart zu restaurieren. Unklare Uploads und fehlende Berichte verlangen Aufklärung über vorhandene Laufkennungen.
+V1 modelliert eine flache CSV. Geometrien, Beziehungen und zusätzliche Constraints benötigen bestätigte Semantik und explizite Fach-MCP-Aufträge; sie werden nicht automatisch aus Datenmustern erfunden. Serien mit unterschiedlichen Verträgen verlangen Klärung. Entwürfe werden nach Prozesswechsel oder eindeutigem Verlust aus bestätigten Snapshots restauriert; unbestätigte Änderungen bleiben ein ausdrücklicher Klärungsschritt. Unklare Uploads und fehlende Berichte verlangen Aufklärung über vorhandene Laufkennungen.
 
 Ein Agent mit vollem Dateizugriff kann lokale State-Dateien ändern; Freigaben stellen daher keine separate menschliche Identität sicher. HTML wird lokal mit escaped Werten und restriktiver CSP ohne JavaScript erzeugt. Noch offene externe Abnahmen dürfen nicht aus Unit-Test-Erfolgen abgeleitet werden.
+
+## Docker-Runtime und Wiederaufnahme
+
+`setup-mcps` speichert unter `.datenportal-integrator/tools/mcps/runtime.json` Referenz, Registry-Digest, lokale Image-ID und Plattform je Dienst sowie Pfad/SHA-256 der Originalmodelle. Es kopiert ausschliesslich die beiden erwarteten `.ili` aus `/app/models`, kompiliert sie und stellt den Cache atomar bereit. Der gleiche Image-Stand wird mit `--pull=never` gestartet. Ein gewöhnlicher Aufruf zieht keine neuere Version. `--update` erlaubt ausdrücklich Pull und eine neue Auswahl. Der Konfigurationsfingerprint bindet diese Identitäten und die verifizierten Modelle.
+
+`EofStdioTransport` implementiert den Transportvertrag des offiziellen SDK: UTF-8-JSON-RPC-Zeilen, serialisiertes Schreiben, begrenztes Lesen und Schliessen von stdin vor einem eventuellen TERM. Die SDK-Clients bleiben für Protokoll und Sitzungen zuständig. `ToolClient` besitzt zusätzlich `sessionKey`, `tools` und `close`; Test-Lambdas behalten ihre Standardimplementierungen. `Workflow` ist `AutoCloseable`. CLI, `doctor` und MCP-Shutdown schliessen die Clients. Docker-Kennungen mit Besitzerlabel und Prozess-ID werden ignoriert gespeichert. EOF erhält Gelegenheit zum regulären Shutdown; erst danach folgt eine auf den Besitzer begrenzte Bereinigung. stderr wird begrenzt in lokale Logs geschrieben. Es werden keine vollständigen Container-Inspektionen oder Credential-Umgebungen ausgegeben.
+
+Vor einer Bearbeitung wird ein vorhandener Entwurf gelesen. Eine neue stdio-Sitzung oder ein eindeutiges `not_found` beim Entwurfslesen löst Rekonstruktion aus; Revisionskonflikte tun das nicht. Die Rekonstruktion prüft den fachlichen Inhaltsfingerprint inklusive Basket-/Objektidentität, ohne interne Attribut-/Ausgabe-IDs; fehlende und leere Attribut-/Ausgabenlisten sind fachlich gleichwertig. Alte IDs werden transitiv auf neue IDs abgebildet. Der Exportnachweis bindet Inhalt und gespeicherte Bytes statt der flüchtigen Serverrevision. Schema-2-Vorgänge erhalten die optionalen Felder ohne Versionswechsel; ein alter Export wird nur bei passendem Revisionsmarker und unverändertem Artefakt übernommen. `pending_metadata` verhindert jede automatische Wiederholung einer nicht bestätigten Mutation.
+
+HTTP verwendet den SDK-Streamable-Transport mit Initialisierung, Sitzungsverwaltung und Sitzungsschluss. Der neue Datenblatt-MCP ist im HTTP-Profil nicht mehr STATELESS. Beide Transporte exportieren für den Integrator mit `include_xml=true`; der stdio-Vertrag benötigt keinen Download-Link.
+
+JUnit simuliert Pull-/Cache-/Konfigurationsfehler und fremde Container. Die echten Integrationstests benutzen die konfigurierten veröffentlichten Images, nicht lokale Fach-JAR-Builds: getrennte CLI-Prozesse, Integrator-MCP, HTTP-Regression, unvollständige Entwürfe, Neustarts, historische IDs, Export/Freigabe und die vorhandenen Modell-/GRETL-Prüfungen. Testfreigaben bleiben auf isolierte Fixtures beschränkt. Aktuelle tatsächliche Ergebnisse stehen in [abnahme.md](abnahme.md).
