@@ -8,7 +8,7 @@ changes belong in datenportal-themenrepo.
 
 Development uses JDK 25 and Gradle: `./gradlew test jar spotlessCheck`.
 Run `./gradlew integrationTest` with the actual configured tools for integration
-verification. GRETL uses the existing Java-17 wrapper and existing versions.
+verification. GRETL uses the existing Java-17 wrapper and versions inside its pinned Jenkins image. Never add a host GRETL/JDK-17 fallback or copy its JAR bundle to the host.
 The local configuration is the ignored `config/local.toml`; secrets remain in
 environment variables or a credential store. Never print credential-bearing
 configuration or runtime Docker inspection output.

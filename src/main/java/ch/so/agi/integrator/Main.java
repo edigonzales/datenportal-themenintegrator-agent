@@ -159,6 +159,13 @@ public final class Main {
       }
     }
     checks.put("interlis_configured", !s.mcp("interlis").isEmpty());
+    try {
+      var runtime = new GretlRuntime(s, new ProcessRunner());
+      checks.put("gretl_runtime", runtime.doctor());
+    } catch (Problem p) {
+      checks.put("gretl_runtime", p.result());
+    }
+    checks.put("deprecated_settings", GretlRuntime.deprecated(s));
     return checks;
   }
 

@@ -32,6 +32,21 @@ Die folgenden Nachweise ergänzen die ursprüngliche Java-Abnahme; die dort verw
 
 Prüfberichte: `build/reports/tests/test/` und `build/reports/tests/integrationTest/`. Lokales Ausführungsprotokoll: `.datenportal-integrator/docker-verification.log`. Die lokale Konfiguration wurde auf die oben genannten Digests umgestellt; die vorherige Konfiguration ist ignoriert gesichert. Es wurde keine fachliche menschliche Freigabe ergänzt und keine INT-/PROD-Lieferung ausgeführt.
 
+## GRETL-Container-Abnahme vom 7. Oktober 2026
+
+Dieser Stand ersetzt die Host-Ausführung der GRETL-Vorprüfungen aus den oben dokumentierten früheren Abnahmen.
+
+- Verwendetes Prüfimage: `sogis/datenportal-jenkins:0.1.0-3`, festgelegt auf `sha256:ecb915bf07fc87b47c8abf37d5e18a89be0c49f79be59a38c1ea5a47c7e75b56`, linux/arm64. Die im Image ermittelte Bundle-Prüfsumme bleibt `dd585744c3fd3909103086a48af5204f32ab53491ab887a9680cddf63cbf0fc7` und entspricht der tatsächlichen lokalen Jenkins-Runtime.
+- `setup-gretl` ermittelte Java 17, Gradle-Cache und Bundle ausschliesslich in einem separaten Container. Der normale Image-Einstiegspunkt wurde überschrieben; es wurde kein Jenkins-Controller gestartet und kein JAR-Bundle auf den Rechner kopiert. Der vorherige Runtime-Nachweis wurde ignoriert gesichert.
+- Echte CSV-/Modellprüfungen und Organisationsprüfungen liefen im separaten Container. Gültige CSV wurde akzeptiert; ungültige CSV stoppte vor `preparePublicationWorkspace`. Dieselbe Task wurde im laufenden lokalen Jenkins ausgeführt; Image- und Bundle-Identität wurden verglichen. Keine neue Lieferung, kein Seed und keine INT-/PROD-Aktion.
+- Der zusätzliche echte Test verwendete einen nicht vorhandenen Stack-Pfad, nicht vorhandene Host-Java-17-/JAR-Pfade und ein frisches lokales Runtime-Verzeichnis. Einrichtung und Gradle-Prüfung bestanden ohne Stack-Zugriff und ohne lokalen JAR-Cache. Der tatsächlich vorhandene Dev-Stack wurde für diesen Nachweis nicht gestoppt.
+- 111 Unit-/Funktionstests und 12 echte Integrationstests bestanden ohne übersprungene Tests mit `./gradlew test jar integrationTest spotlessCheck`. Der Prozess verwendete JDK 25 und `GRADLE_JAVA_HOME_17=/no-host-java17`; die GRETL-Laufzeit kam aus dem Image.
+- Unit-Tests simulierten Image-Updates, Bundle-/Image-Abweichungen, explizite Pfadübersetzung mit Leerzeichen, ungültige Runtime-Nachweise, Taskfehler und Timeout-Aufräumen einschliesslich Berichtserfassung. Simulierte Abweichungen sind keine tatsächlich geänderte Jenkins-Installation.
+- Beide MCP-Adapter, XTF-/Office-Validierung, Wiederaufnahme, Freigaben und die bestehenden GRETL-Typprüfungen blieben Bestandteil der echten Tests. Laufprotokoll: `.datenportal-integrator/gretl-verification.log`; Berichte unter `build/reports/tests/`.
+- Quellstände, Arbeitsbaumstatus und Diff-Prüfsummen von Themenrepo, Dev-Stack, Fach-MCP-Repos und Jenkins-Quellrepo entsprechen dem Ausgangsstand. Die bereits vorhandene Änderung an `datenportal-jenkins-dev/bin/test-image-duckdb.sh` wurde nicht verändert.
+
+README, beide Handbücher und Skill beschreiben den Containerbetrieb. Die lokale Konfiguration wurde auf `[gretl].image` umgestellt; alte Host-Einstellungen sind nicht mehr aktiv. Neue technische Prüfungen erteilen keine menschlichen Freigaben. Die unten dokumentierten Dialog-/Publikationsabnahmen bleiben offen.
+
 ## Automatisiert mit Simulationen geprüft
 
 JUnit prüft zusätzlich fehlerhafte CSV, vollständige Scans und begrenzte Fehlerlisten, Datentypen/Pflichtwerte, Freigaben nach Änderungen, Dateimanipulationen, Serien, Teillieferungen, Konverter/JUnit-Fehler, XLSX-Formelcache, XML-/HTML-Behandlung, Kandidaten und unvollständige Proofs, Office-/Teamfehler und Repository-Konflikte.

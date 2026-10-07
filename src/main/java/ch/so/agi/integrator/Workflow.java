@@ -9,6 +9,7 @@ public final class Workflow implements AutoCloseable {
   final ProcessRunner process;
   final McpClients.ToolClient datasheets, interlis;
   final Validator validator;
+  GretlRuntime gretl;
   java.util.function.Function<Map<String, Object>, Jenkins> jenkins = Jenkins::new;
 
   public Workflow(Settings s) {
@@ -22,6 +23,7 @@ public final class Workflow implements AutoCloseable {
     datasheets = d;
     interlis = i;
     validator = new Validator(s, p);
+    gretl = new GretlRuntime(s, p);
   }
 
   @Override

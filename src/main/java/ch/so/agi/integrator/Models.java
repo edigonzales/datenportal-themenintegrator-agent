@@ -307,8 +307,9 @@ public final class Models {
         Path taskExisting = w.repoFile(r, taskRelative);
         String original = Files.exists(taskExisting) ? Json.contents(taskExisting) : "";
         Path task = w.directory(r).resolve("model/dataset.gradle");
-        Path bundle = GretlRuntime.directory(w.settings);
-        String bundleSha = Files.isDirectory(bundle) ? GretlRuntime.fingerprint(bundle) : "";
+        var runtime = w.gretl.selected(false);
+        String bundleSha = Json.required(runtime, "sha256");
+        model.put("gretl_runtime", runtime);
         model.put("gretl_bundle_sha256", bundleSha);
         Json.write(
             task,

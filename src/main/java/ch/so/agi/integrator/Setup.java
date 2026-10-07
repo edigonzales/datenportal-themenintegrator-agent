@@ -18,7 +18,11 @@ public final class Setup {
     return switch (command) {
       case "setup-tools" -> tools();
       case "setup-java" -> javaLauncher();
-      case "setup-gretl" -> GretlRuntime.setup(s, new ProcessRunner());
+      case "setup-gretl" -> {
+        if (!args.isEmpty() && !args.equals(List.of("--update")))
+          throw new Problem("invalid_arguments", "setup-gretl [--update]");
+        yield new GretlRuntime(s, new ProcessRunner()).setup(!args.isEmpty());
+      }
       case "setup-mcps" -> {
         if (!args.isEmpty() && !args.equals(List.of("--update")))
           throw new Problem("invalid_arguments", "setup-mcps [--update]");

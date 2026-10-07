@@ -68,40 +68,7 @@ public final class DockerMcps {
             if (!config.containsKey("image")) continue;
             String reference = Json.required(config, "image");
             var previous = Json.obj(old.get(service));
-            Map<String, Object> selected;
-            if (!update && reference.equals(previous.get("reference"))) {
-              try {
-                selected = inspect(Json.required(previous, "image_id"));
-              } catch (Problem missing) {
-                if (!missing.code.equals("mcp_image_missing")) throw missing;
-                pull(Json.required(previous, "digest"));
-                selected = inspect(Json.required(previous, "image_id"));
-              }
-            } else {
-              if (update) pull(reference);
-              try {
-                selected = inspect(reference);
-              } catch (Problem missing) {
-                if (!missing.code.equals("mcp_image_missing")) throw missing;
-                pull(reference);
-                selected = inspect(reference);
-              }
-            }
-            var digests = Json.strings(selected.get("digests"));
-            if (digests.isEmpty())
-              throw new Problem(
-                  "mcp_image_unpublished",
-                  "MCP-Image hat keinen Registry-Digest.",
-                  "image",
-                  reference);
-            selected.put("reference", reference);
-            selected.put(
-                "digest",
-                digests.stream()
-                    .filter(d -> d.startsWith(reference.split("[@:]", 2)[0] + "@"))
-                    .findFirst()
-                    .orElse(digests.getFirst()));
-            selected.remove("digests");
+            Map<String, Object> selected = pin(reference, previous, update);
             if (service.equals("datasheet")) {
               Path models =
                   home()
@@ -130,6 +97,41 @@ public final class DockerMcps {
           "exception",
           e.getClass().getSimpleName());
     }
+  }
+
+  public Map<String, Object> pin(String reference, Map<String, Object> previous, boolean update) {
+    Map<String, Object> selected;
+    if (!update && reference.equals(previous.get("reference"))) {
+      try {
+        selected = inspect(Json.required(previous, "image_id"));
+      } catch (Problem missing) {
+        if (!missing.code.equals("mcp_image_missing")) throw missing;
+        pull(Json.required(previous, "digest"));
+        selected = inspect(Json.required(previous, "image_id"));
+      }
+    } else {
+      if (update) pull(reference);
+      try {
+        selected = inspect(reference);
+      } catch (Problem missing) {
+        if (!missing.code.equals("mcp_image_missing")) throw missing;
+        pull(reference);
+        selected = inspect(reference);
+      }
+    }
+    var digests = Json.strings(selected.get("digests"));
+    if (digests.isEmpty())
+      throw new Problem(
+          "mcp_image_unpublished", "Image hat keinen Registry-Digest.", "image", reference);
+    selected.put("reference", reference);
+    selected.put(
+        "digest",
+        digests.stream()
+            .filter(d -> d.startsWith(reference.split("[@:]", 2)[0] + "@"))
+            .findFirst()
+            .orElse(digests.getFirst()));
+    selected.remove("digests");
+    return selected;
   }
 
   private void pull(String reference) {

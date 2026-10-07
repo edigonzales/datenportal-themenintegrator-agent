@@ -14,7 +14,7 @@ JDK 25, Gradle-Wrapper und ein ausführbares JAR bilden die Implementierung. `Ma
 | `Models` | Typisierte flache Ableitung, Herkunft, High-Level-Nachweise, Modellreferenz und GRETL-Themenhook |
 | `Organizations` | Office-Regeln aus kompiliertem Modell, Org-/Teamkandidaten und Gradle-Prüfung |
 | `Converters`, `CsvConverter`, `ConverterMain` | Java-Konvertervertrag, Kompilierung, JUnit und separate Ausführungs-JVM |
-| `Workspace`, `GretlRuntime` | Isolierte Arbeitskopie und Übernahme des vorhandenen Jenkins-Offline-Bundles |
+| `Workspace`, `GretlRuntime` | Isolierte Arbeitskopie, festgelegtes GRETL-Image und separate Prüfcontainer |
 | `Stack`, `Jenkins`, `Deliveries`, `Repository` | Vorhandene Runtime-Schnittstellen, persistierte Lieferphasen, Sichtbarkeitsprüfung und menschliches PR-Verfahren |
 | `DockerMcps`, `Setup` | Festgelegte Image-Auswahl, Originalmodellcache, eigene Container, Werkzeuge und Harness-Konfiguration |
 
@@ -26,7 +26,7 @@ Keine Quellen von Dev-Stack, Fachdiensten, Jenkins-Plugin, GRETL oder Portal wer
 
 - Datenblatt-MCP: Docker-stdio oder Streamable HTTP, `describe_schema`, `import_xtf`, `read_datasheet`, `update_metadata`, Attribut-/Ausgabenwerkzeuge, Validierung und Export. Der Integrator erzeugt nur die Transferidentität eines leeren Imports mit gültigem OID-Präfix; fachliche Datenblätter und ihre Exporte verantwortet der Fach-MCP.
 - INTERLIS-MCP: eigenes SDK-Client/Transport-Paar; standardmässig veröffentlichtes Docker-Image über stdio, optional Streamable HTTP oder vorhandenes lokales JAR. `authorIliModel` und `applyIliModelChanges` liefern Compiler-/Regel-/Constraint-Nachweise. Bei separat geändertem Quellstand `reviewIliModel`; unvollständige Constraint-Beweise verlangen weiterhin High-Level-Änderung/Prüfung.
-- GRETL: vorhandenes Java-17-Skript, Repository-Wrapper und `shared/gradle/init.gradle`; Versionen aus `shared/gradle/gradle-build.properties`. `setup-gretl` kopiert das vorhandene Jenkins-Offline-JAR-Bundle in ignorierte Integrator-Dateien. Es wird nicht neu gebaut oder aktualisiert.
+- GRETL: vorhandenes Java-17-Skript, Repository-Wrapper und `shared/gradle/init.gradle`; Versionen aus `shared/gradle/gradle-build.properties`. `setup-gretl [--update]` sichert ein veröffentlichtes Jenkins-Image und den darin vorhandenen Bundle-Stand. Java 17 und JARs werden ausschliesslich im Container verwendet.
 - Stack: Docker-/Compose-Status, Mount und `THEMEN_REPO_MODE`, vorhandenes `scripts/up.sh`, normale Starts vorhandener Services. Bei passender laufender Instanz keine neue Instanz. Unpassender Checkout/Modus stoppt.
 - Jenkins: CSRF-Crumb, vorhandener Seed-Job, `gretl-datenportal/build` als Multipart, `gretl-datenportal/runStatus`, Queue-/Build-API und `report.json`. Authentisierung nur an die konfigurierte Jenkins-Basis; Redirects werden nicht verfolgt.
 - Portal/Manifest: HTTP-Lesen von `current.json`, referenzierten Katalogen und Datenblättern, `catalog/published-catalog.xtf`, Themenseiten und Downloads. Nur HTTP 404 bezeichnet einen fehlenden Erstbestand. Die Metadatenprüfung ignoriert ausschliesslich die von GRETL verwalteten `issued`/`modified`-Werte und normalisiert Collections ohne die Reihenfolge der Attribute zu ändern.
@@ -115,7 +115,7 @@ Das verbindliche Schema wird in `Operations.ALL` definiert; unbekannte Felder un
 | `retry_delivery` | `environment*` | `ready_for_new_attempt`; `retry_unsafe` |
 | `migrate_run` | `apply=false` | Vorschau/Sicherung, Historie; `unsupported_state_version` |
 
-Werkzeughelfer: `setup-java`, `setup-tools`, `setup-mcps [--update]`, `setup-gretl`, `harness-config`, `codex [harness-argumente]`. Diese sind CLI-Helfer, keine zusätzlichen MCP-Fachoperationen.
+Werkzeughelfer: `setup-java`, `setup-tools`, `setup-mcps [--update]`, `setup-gretl [--update]`, `harness-config`, `codex [harness-argumente]`. Diese sind CLI-Helfer, keine zusätzlichen MCP-Fachoperationen.
 
 ## Modellierung und GRETL-Hook
 
@@ -165,7 +165,8 @@ java -jar build/libs/datenportal-integrator.jar setup-tools
 java -jar build/libs/datenportal-integrator.jar setup-mcps
 java -jar build/libs/datenportal-integrator.jar setup-gretl
 # Fach-MCP-Images müssen mit setup-mcps vorbereitet sein.
-export GRADLE_JAVA_HOME_17="/pfad/zum/jdk-17"
+# Kein Host-Java-17 erforderlich; optional den Nichtgebrauch nachweisen:
+export GRADLE_JAVA_HOME_17="/unavailable-java17"
 ./gradlew integrationTest
 ```
 
@@ -190,3 +191,13 @@ Vor einer Bearbeitung wird ein vorhandener Entwurf gelesen. Eine neue stdio-Sitz
 HTTP verwendet den SDK-Streamable-Transport mit Initialisierung, Sitzungsverwaltung und Sitzungsschluss. Der neue Datenblatt-MCP ist im HTTP-Profil nicht mehr STATELESS. Beide Transporte exportieren für den Integrator mit `include_xml=true`; der stdio-Vertrag benötigt keinen Download-Link.
 
 JUnit simuliert Pull-/Cache-/Konfigurationsfehler und fremde Container. Die echten Integrationstests benutzen die konfigurierten veröffentlichten Images, nicht lokale Fach-JAR-Builds: getrennte CLI-Prozesse, Integrator-MCP, HTTP-Regression, unvollständige Entwürfe, Neustarts, historische IDs, Export/Freigabe und die vorhandenen Modell-/GRETL-Prüfungen. Testfreigaben bleiben auf isolierte Fixtures beschränkt. Aktuelle tatsächliche Ergebnisse stehen in [abnahme.md](abnahme.md).
+
+## GRETL-Containeradapter
+
+`[gretl].image` ist die einzige neue GRETL-Einstellung; ohne Abschnitt gilt `sogis/datenportal-jenkins:0.1.0-3`. `GretlRuntime` ersetzt den Host-Aufruf in `Workspace.gradle`. Image-Pinning und Besitzerkennungen verwenden die bestehende Docker-Mechanik. Die lokale Runtime-Datei hat Schema-Version 2: Referenz, Digest, Image-ID, Plattform, Java-17-/Bundle-/Cachepfade im Container und Bundle-SHA-256. Die Inventarliste wird wie im Themen-Task aus sortierten `Dateiname=SHA256`-Zeilen mit abschliessendem LF gebildet. Alte Runtime-Dateien werden gesichert; aktive lokale JDK-/JAR-Pfade werden nicht mehr ausgewertet oder an Container weitergereicht.
+
+Der Prüfcontainer überschreibt den Image-Einstiegspunkt mit einem Warteprozess. Es gibt keinen Jenkins-Controller, keine Hostmounts und keine übernommenen Jenkins-Zugangsdaten. Arbeitskopie und Zusatzdateien werden nach `/tmp` kopiert und für `jenkins` vorbereitet. Der vorhandene Wrapper und das Init-Script laufen als dieser Benutzer. `-PdataFile` und zusätzliche `-I`/`--init-script`-Argumente werden ausdrücklich übersetzt; andere Argumente werden nicht pauschal ersetzt. Die Host-Arbeitskopie bleibt im Bericht erhalten.
+
+Prüfergebnisse behalten `valid`, `returncode`, `diagnostics`, `log`, `log_sha256`, `workspace` und `messages`; Runtime-Identität, Prüfartefaktpfad und `reports_copied` kommen hinzu. Fehlende Gradle-Artefakte werden ausgewiesen; nach Fehler/Timeout wird vorhandenes Material vor dem Entfernen des Containers eingesammelt. Timeout-Protokolle bleiben lokal. Die Aufräumlogik entfernt nur eigene Container. Der lokale Lieferablauf vergleicht vor Bootstrap/Seed Image-ID und Bundle mit Jenkins; abweichende Stände ergeben `gretl_runtime_mismatch`. INT/PROD behalten ihre bestehenden Schnittstellen und die Bundle-Prüfung im Themen-Task.
+
+Konfigurationsfingerprints binden den vorbereiteten GRETL-Stand. Die veralteten Felder `gretl_java_home` und `gretl_offline_jars` werden lediglich kompatibel gelesen und als Hinweise angezeigt; Änderungen an diesen unbenutzten Pfaden ändern den effektiven Prüfstand nicht. Schema-2-Vorgänge, externe Lieferkennungen und unbestätigte Operationen bleiben erhalten. Runtime-Wechsel verlangen neue Prüfungen/Freigaben und starten keine Lieferung.

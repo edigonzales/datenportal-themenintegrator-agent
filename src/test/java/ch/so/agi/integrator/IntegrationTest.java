@@ -215,6 +215,10 @@ class IntegrationTest {
             s.stack,
             30);
     assertEquals(1, container.lines().count());
+    assertTrue(Json.bool(new GretlRuntime(s, process).matchJenkins(), "valid", false));
+    assertEquals(
+        GretlRuntime.recorded(s).get("sha256"),
+        Json.obj(Json.obj(report.get("gretl")).get("runtime")).get("sha256"));
     String work = "/var/jenkins_home/datenportal-integrator-tests/" + id;
     process.checked(List.of("docker", "exec", container, "mkdir", "-p", work), s.stack, 30);
     process.checked(

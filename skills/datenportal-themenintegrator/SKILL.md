@@ -6,6 +6,7 @@ description: Integriere Datenportal-Themen aus CSV/XTF/XLSX, leite ausdrücklich
 Verwende die Werkzeuge des `datenportal_integrator`-MCP. CLI-Fallback im Integrator-Repo:
 `java -jar build/libs/datenportal-integrator.jar call <operation> --args-file <datei.json>`.
 `schema <operation>` zeigt verbindliche Argumente. `setup-mcps` bereitet konfigurierte Docker-Images und deren Originalmodelle vor; `doctor` prüft beide echten MCP-Verbindungen. Keine Fach-MCP-Quellbuilds ausführen. Image-Versionen nur bewusst mit `setup-mcps --update` wechseln und anschliessend betroffene Prüfungen/Freigaben erneuern.
+`setup-gretl` bereitet das festgelegte Jenkins-Image für separate GRETL-Prüfcontainer vor, ohne Stack-Start oder Host-Java-17. Änderungen am Image nur bewusst vorbereiten und erneut prüfen/freigeben. Bei `gretl_runtime_mismatch` die gemeldete Grenze klären, keinen Host-Fallback und keine stille Stack-Umkonfiguration verwenden.
 Einrichtung und Beispiele stehen im [Anwenderhandbuch](../../docs/anwenderhandbuch.md).
 
 ## Grenzen und Entscheidungen
@@ -37,7 +38,7 @@ CSV und konkrete Datenblatt-XTF benötigen denselben Vertrag. Identität erfrage
 
 Der Adapter nutzt `authorIliModel` beziehungsweise `applyIliModelChanges`. Mitgelieferte Reviews/Compiler-/Constraint-Nachweise verwenden; nicht reflexartig weitere Low-Level-Prüfungen starten. Kandidaten mit Fehlern oder unvollständigen Proofs nicht übernehmen. Manuelle Reviewpunkte zeigen. Separat veränderte Quellen müssen neu geprüft werden.
 
-Der Integrator setzt die Modellreferenz vor dem finalen Export über den Datenblatt-MCP und bereitet `.ili` und `dataset.gradle` im Themenordner vor. `validate_model` verwendet den vorhandenen GRETL-CsvValidator in einer isolierten Kopie; derselbe Task stoppt Jenkins vor `preparePublicationWorkspace`. Metadatenlieferungen überspringen die CSV-Task. Kein eigener CSV-zu-XTF-Umbau für diese Prüfung.
+Der Integrator setzt die Modellreferenz vor dem finalen Export über den Datenblatt-MCP und bereitet `.ili` und `dataset.gradle` im Themenordner vor. `validate_model` verwendet den vorhandenen GRETL-CsvValidator in einer isolierten Kopie im eigenen Jenkins-Image-Container; derselbe Task stoppt Jenkins vor `preparePublicationWorkspace`. Metadatenlieferungen überspringen die CSV-Task. Kein eigener CSV-zu-XTF-Umbau für diese Prüfung.
 
 Eigenständiger `model`-Vorgang: HTML zeigen, tatsächliches Modell-OK mit `gate=model`, danach lokale Übernahme oder fachlicher PR. Keine Datenpublikation erfinden.
 

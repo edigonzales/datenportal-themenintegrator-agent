@@ -60,11 +60,14 @@
     },
     "gretl_java_home": {
       "type": "string",
-      "description": "Lokales Java-17-Home; alternativ GRADLE_JAVA_HOME_17."
+      "description": "Veraltet; wird im Dockerbetrieb ignoriert. [gretl].image verwenden.",
+      "deprecated": true
     },
     "gretl_offline_jars": {
       "type": "string",
-      "default": ".datenportal-integrator/tools/gretl-runtime/jars"
+      "default": ".datenportal-integrator/tools/gretl-runtime/jars",
+      "deprecated": true,
+      "description": "Veraltet; wird im Dockerbetrieb ignoriert. [gretl].image verwenden."
     },
     "interlis": {
       "type": "object",
@@ -228,6 +231,17 @@
           }
         }
       ]
+    },
+    "gretl": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "image": {
+          "type": "string",
+          "default": "sogis/datenportal-jenkins:0.1.0-3",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/:@-]*$"
+        }
+      }
     }
   },
   "$defs": {

@@ -49,6 +49,7 @@ public final class Deliveries {
       }
       var stack = new Stack(w.settings, w.process);
       stack.ensure();
+      w.gretl.matchJenkins();
       if (publication) stack.bootstrap(env);
     } else {
       w.require(r, "publish:" + name);

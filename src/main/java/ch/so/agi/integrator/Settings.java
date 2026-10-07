@@ -44,6 +44,7 @@ public final class Settings {
             "environments",
             "timeout_seconds",
             "interlis",
+            "gretl",
             "gretl_java_home",
             "gretl_offline_jars");
     for (String key : values.keySet())
@@ -61,6 +62,11 @@ public final class Settings {
       throw new Problem(
           "invalid_configuration", "datasheet_mcp_url entfernen, wenn [datasheet] verwendet wird.");
     for (String service : List.of("datasheet", "interlis")) validateMcp(service);
+    var gretl = Json.obj(values.get("gretl"));
+    if (gretl.keySet().stream().anyMatch(k -> !k.equals("image"))
+        || !GretlRuntime.reference(this).matches("[A-Za-z0-9][A-Za-z0-9._/:@-]*"))
+      throw new Problem(
+          "invalid_configuration", "[gretl] unterstützt nur eine gültige Image-Referenz.");
     for (Object profile : Json.obj(values.get("environments")).values()) {
       var environment = Json.obj(profile);
       for (String field : environment.keySet())
@@ -225,8 +231,13 @@ public final class Settings {
 
   public String fingerprint() {
     var files = Json.map();
-    Path bundle = GretlRuntime.directory(this);
-    if (Files.isDirectory(bundle)) files.put("gretl_bundle", GretlRuntime.fingerprint(bundle));
+    try {
+      files.put("gretl_runtime", GretlRuntime.recorded(this));
+    } catch (Problem p) {
+      if (values.containsKey("gretl")) throw p;
+      files.put(
+          "gretl_runtime", Json.map("reference", GretlRuntime.reference(this), "prepared", false));
+    }
     for (var directory : List.of(root.resolve("config"), root.resolve("validation")))
       try (var paths = Files.list(directory)) {
         paths
@@ -261,6 +272,9 @@ public final class Settings {
       files.put("interlis_jar", Json.sha(path(jar)));
     Path own = root.resolve("build/libs/datenportal-integrator.jar");
     if (Files.isRegularFile(own)) files.put("integrator_jar", Json.sha(own));
-    return Json.digest(Json.map("settings", values, "dependencies", files));
+    var effective = new LinkedHashMap<>(values);
+    effective.remove("gretl_java_home");
+    effective.remove("gretl_offline_jars");
+    return Json.digest(Json.map("settings", effective, "dependencies", files));
   }
 }

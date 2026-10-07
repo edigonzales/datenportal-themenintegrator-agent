@@ -4,7 +4,7 @@ Der Integrator unterstützt drei Vorgänge: ein Thema integrieren (`topic`), ein
 
 ## Installation und Konfiguration
 
-Benötigt werden JDK 25, Git, Docker sowie die Checkouts von Integrator, Themenrepo und Dev-Stack. Die beiden Fach-MCPs kommen als veröffentlichte Images; deren Quellcheckouts und lokale Builds sind nicht erforderlich. Für PRs ist `gh` mit Anmeldung erforderlich. Die vorhandenen GRETL-Skripte benötigen weiterhin Java 17. Dieser externe Laufzeitbedarf ist vom JDK 25 des Integrators getrennt.
+Benötigt werden JDK 25, Git, Docker sowie die Checkouts von Integrator, Themenrepo und Dev-Stack. Die beiden Fach-MCPs kommen als veröffentlichte Images; deren Quellcheckouts und lokale Builds sind nicht erforderlich. Für PRs ist `gh` mit Anmeldung erforderlich. GRETL-Vorprüfungen verwenden Java 17 aus dem Jenkins-Image. Eine lokale Java-17-Installation und ein lokales GRETL-JAR-Bundle sind nicht erforderlich.
 
 ```sh
 cd /pfad/datenportal-themenintegrator-agent
@@ -24,7 +24,9 @@ stack_repo = "../datenportal-dev-stack"
 state_dir = ".datenportal-integrator/runs"
 validator_command = ["java", "-jar", ".datenportal-integrator/tools/ilivalidator/ilivalidator-1.15.0.jar"]
 model_dirs = [] # Originalmodelle kommen automatisch aus dem Datenblatt-Image
-gretl_java_home = "/pfad/zum/jdk-17"
+
+[gretl]
+image = "sogis/datenportal-jenkins:0.1.0-3"
 
 [datasheet]
 transport = "stdio"
@@ -56,7 +58,7 @@ java -jar build/libs/datenportal-integrator.jar setup-gretl
 java -jar build/libs/datenportal-integrator.jar setup-mcps
 ```
 
-`setup-tools` prüft ilivalidator 1.15.0 gegen eine feste SHA-256-Prüfsumme. `setup-mcps` bezieht fehlende Images, sichert ihre konkrete Identität und kopiert die beiden Originalmodelle aus `/app/models` eines gestoppten Datenblatt-Containers. Die ignorierte Auswahl liegt unter `.datenportal-integrator/tools/mcps/runtime.json`, die Modelle im nach Image-Stand getrennten Unterordner `models/`. Keine Modelle aus einem Editor-Checkout in `model_dirs` doppelt hinzufügen. `setup-gretl` übernimmt das bestehende Jenkins-Offline-Bundle und benötigt dafür die passende lokale Stack-Instanz.
+`setup-tools` prüft ilivalidator 1.15.0 gegen eine feste SHA-256-Prüfsumme. `setup-mcps` bezieht fehlende Images, sichert ihre konkrete Identität und kopiert die beiden Originalmodelle aus `/app/models` eines gestoppten Datenblatt-Containers. Die ignorierte Auswahl liegt unter `.datenportal-integrator/tools/mcps/runtime.json`, die Modelle im nach Image-Stand getrennten Unterordner `models/`. Keine Modelle aus einem Editor-Checkout in `model_dirs` doppelt hinzufügen. `setup-gretl` sichert das GRETL-Image und dessen Bundle-Prüfsumme unter `.datenportal-integrator/tools/gretl-runtime/runtime.json`. Es startet einen kurzlebigen Prüfcontainer mit überschriebenem Einstiegspunkt, ohne Jenkins-Server oder laufenden Dev-Stack. JARs bleiben im Image.
 
 Normale Workflow-Aufrufe und wiederholtes `setup-mcps` wechseln keine Image-Version. Für ein bewusstes Update zuerst die Image-Referenz in der Konfiguration ändern oder bei einem Versionstag `setup-mcps --update` verwenden. Danach betroffene Dateien erneut prüfen und freigeben. `start-datasheet` ist ein veralteter Hinweisbefehl; er baut und startet keinen Server mehr. Docker muss auch im PATH des Desktop-MCP-Prozesses verfügbar sein.
 
@@ -67,7 +69,7 @@ java -jar build/libs/datenportal-integrator.jar doctor
 java -jar build/libs/datenportal-integrator.jar schema start
 ```
 
-`doctor` prüft Pfade, Stack-Zuordnung, Image-/Modellcache und beide echten MCP-Werkzeugkataloge. Fehler stehen im JSON-Ergebnis. Ein erfolgreicher Katalogtest ersetzt noch keine fachliche Modell- oder Publikationsabnahme.
+`doctor` prüft Pfade, Stack-Zuordnung, Image-/Modellcache, beide echten MCP-Werkzeugkataloge und die Java-17-/GRETL-Laufzeit im Prüfimage. Fehler stehen im JSON-Ergebnis. Ein erfolgreicher Katalogtest ersetzt noch keine fachliche Modell- oder Publikationsabnahme.
 
 ## Codex Desktop, Codex CLI und OpenCode
 
@@ -306,3 +308,13 @@ Eine unbestätigte letzte Änderung blockiert weitere Bearbeitung mit `metadata_
 | `mcp_unavailable` | Docker und den lokalen Fehlerlog unter `.datenportal-integrator/tools/mcps/logs/` prüfen. Unbestätigte Änderungen separat aufklären. |
 
 Der stdio-Export liefert keine Browser-Downloadadresse. Der Integrator speichert das validierte XML lokal und zeigt seine Vorschau. HTTP bleibt für Browser-Downloads verfügbar. Eigene Container werden beim Beenden entfernt; bei einem abgebrochenen Integratorprozess räumt die nächste Docker-MCP-Verbindung seine gespeicherten, nicht mehr zu einem lebenden Prozess gehörenden Containerkennungen auf. Fremde Container werden nicht entfernt.
+
+## GRETL-Vorprüfungen im Container
+
+Die CSV-Modellprüfung und die Gradle-Prüfung neuer Organisationen starten pro Prüfung einen eigenen Container aus dem festgelegten Jenkins-Image. Die Themenkopie, Kandidaten, CSV und zusätzliche Init-Scripte werden hineinkopiert. Gradle läuft als `jenkins` mit dem vorhandenen Java-17-Wrapper und dem Bundle/Gradle-Cache des Images. Die aktuelle Jenkins-Instanz und ihr Home werden für diese Vorprüfung nicht verwendet. Die eigentliche Anlieferung bleibt ein Jenkins-Job.
+
+`setup-gretl` behält die ausgewählte Image-Version bei. Nach einer bewusst geänderten Image-Referenz oder mit `setup-gretl --update` wird ein neuer Stand aufgenommen; anschliessend betroffene Prüfungen und Freigaben erneuern. Vor dem lokalen Gesamttest vergleicht der Integrator Image und Bundle mit dem tatsächlich laufenden Jenkins. Bei `gretl_runtime_mismatch` anhalten, die Konfiguration abstimmen und erneut vorbereiten/prüfen; der Integrator ändert den Stack nicht automatisch.
+
+Alte Felder `gretl_java_home` und `gretl_offline_jars` werden noch gelesen, aber ignoriert und von `doctor` als veraltet gemeldet. Alte Runtime-Nachweise verlangen `setup-gretl`; sie werden vor der Übernahme gesichert. Ein vorhandener alter JAR-Cache wird nicht mehr benutzt und kann nach erfolgreicher Umstellung entfernt werden. Es gibt keinen lokalen GRETL-Fallback.
+
+Prüfberichte enthalten Runtime-Identität, Exit-Code, lokalen Konsollog und einen Ordner für Gradle-Prüfartefakte. Container werden bei Erfolg, Fehler oder Timeout entfernt. `gretl_setup_required` verlangt die Einrichtung; `gretl_image_missing` weist auf ein fehlendes festgelegtes Image hin. Normale Prüfungen beziehen keine neuen Images.

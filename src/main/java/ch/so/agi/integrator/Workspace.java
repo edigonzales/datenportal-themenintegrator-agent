@@ -65,60 +65,7 @@ public final class Workspace {
       String task,
       List<String> properties,
       String logName) {
-    var args =
-        new ArrayList<>(
-            List.of(
-                "bash",
-                snapshot.resolve("shared/bin/gradlew-java17.sh").toString(),
-                "--no-daemon",
-                "--console=plain",
-                "-I",
-                snapshot.resolve("shared/gradle/init.gradle").toString(),
-                task));
-    args.addAll(properties);
-    Path bundle = GretlRuntime.directory(w.settings);
-    if (Files.isDirectory(bundle)) args.add("-PdatenportalOfflineJarsDir=" + bundle);
-    String javaHome =
-        Json.str(w.settings.values, "gretl_java_home", System.getenv("GRADLE_JAVA_HOME_17"));
-    if (javaHome != null) {
-      args.addFirst("GRADLE_JAVA_HOME_17=" + w.settings.path(javaHome));
-      args.addFirst("env");
-    }
-    Path log = w.directory(run).resolve("validation").resolve(logName + ".log");
-    var result =
-        w.process.run(
-            args, snapshot.resolve(Json.required(run, "organization")), w.settings.timeout, log);
-    return Json.map(
-        "valid",
-        result.exitCode() == 0,
-        "returncode",
-        result.exitCode(),
-        "diagnostics",
-        result.exitCode() == 0
-            ? List.of()
-            : result
-                .output()
-                .lines()
-                .skip(Math.max(0, result.output().lines().count() - 60))
-                .toList(),
-        "log",
-        log.toString(),
-        "log_sha256",
-        Json.sha(log),
-        "workspace",
-        snapshot.toString(),
-        "messages",
-        result
-            .output()
-            .lines()
-            .filter(
-                l ->
-                    l.contains("Error")
-                        || l.contains("Warning")
-                        || l.contains("FAILED")
-                        || l.contains("Exception"))
-            .limit(100)
-            .toList());
+    return w.gretl.gradle(w, run, snapshot, task, properties, logName);
   }
 
   public static String groovy(String value) {

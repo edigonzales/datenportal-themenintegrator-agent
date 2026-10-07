@@ -11,10 +11,9 @@ compose_files = ["compose.yaml"]
 stack_start_args = []
 timeout_seconds = 300
 
-# GRETL retains the existing Java-17 wrapper and Jenkins binary bundle.
-# Set a real local JDK 17 path, or export GRADLE_JAVA_HOME_17.
-# gretl_java_home = "/path/to/jdk-17"
-gretl_offline_jars = ".datenportal-integrator/tools/gretl-runtime/jars"
+[gretl]
+image = "sogis/datenportal-jenkins:0.1.0-3"
+# setup-gretl sichert Digest und Bundle; Java 17 läuft ausschliesslich im Image.
 
 [datasheet]
 transport = "stdio"
