@@ -37,6 +37,13 @@ transport = "stdio"
 image = "sogis/interlis-mcp@sha256:b3ed1e738ccfe670f92ecebcbb014cf67aade5f0609e15be1f75948e15e899ff"
 ```
 
+`stack_timeout_seconds` beträgt standardmässig 1800 Sekunden und gilt nur
+für Stackstart, Bootstrap und Service-Starts. `timeout_seconds` bleibt mit
+300 Sekunden der allgemeine Werkzeug-Default. Stacklogs liegen unter
+`.datenportal-integrator/stack-logs/` und bleiben auch bei Fehler oder Timeout
+erhalten. Nach einem Timeout den Containerlauf und den Bootstrap-Prüfstand
+klären, bevor erneut gestartet wird.
+
 Das vollständige Beispiel enthält auch das lokale Jenkins-Profil. Beide Fach-MCPs starten bei Bedarf über `docker run --rm -i` mit dem Profil `stdio`, ohne TTY, Portfreigabe oder Dateimounts. Im CLI endet die Verbindung nach einer Operation; der Integrator-MCP verwendet sie während seiner Laufzeit wieder. Dateien werden vom Integrator gelesen und als Text übertragen.
 
 Für vorhandene HTTP-Dienste im jeweiligen Abschnitt `transport = "http"` und `url = "http://127.0.0.1:8000/mcp"` beziehungsweise Port 8080 setzen. Beim Datenblatt kann `image` als Quelle für die Originalmodelle stehen bleiben. Ohne Image müssen passende lokale `model_dirs` angegeben werden. Das alte `datasheet_mcp_url` bleibt kompatibel, darf aber nicht neben `[datasheet]` stehen. Die frühere INTERLIS-JAR-Konfiguration bleibt unterstützt; `image` und `jar` sind gegenseitig ausgeschlossen.
@@ -175,7 +182,16 @@ java -jar build/libs/datenportal-integrator.jar call apply_local_changes --json 
 java -jar build/libs/datenportal-integrator.jar call deliver --json '{"run_id":"VORGANGS_ID","environment":"local"}'
 ```
 
-`deliver` führt je Aufruf höchstens eine externe Phase weiter. Eine passende laufende Stack-Instanz wird verwendet, andernfalls das vorhandene Startskript ausgeführt. Ein tatsächlich leerer Bestand wird nach dem bestehenden Verfahren initialisiert. Ein vorhandenes oder beschädigtes Manifest wird niemals ersetzt. Anschliessend Seed, Lieferung, Publikationsbericht, Reload, Metadaten und Downloads prüfen. Erneute Aufrufe fragen gespeicherte Läufe ab. Bei Erfolg erscheint der konkrete `portal_url`.
+`deliver` führt je Aufruf höchstens eine externe Phase weiter. Eine passende
+laufende Stack-Instanz wird verwendet; andernfalls führt der Integrator das
+Startskript `scripts/up.sh --infrastructure-only` des Dev-Stacks aus.
+Vor Publikation vergleicht er die tatsächliche Jenkins-Image-/Bundle-Identität
+mit seiner festgelegten GRETL-Runtime. Für einen noch fehlenden
+lokalen Publikationsstand delegiert er an `scripts/bootstrap.sh` mit den
+konfigurierten Compose-Dateien. Der gemeinsame Helfer übernimmt erfolgreichen
+Seed, pausierten administrativen Erstaufbau und Portalstart. Bei vorhandenem
+Bestand prüft `--check-only` lesend, ohne Seed oder Container-Neuerstellung.
+Ein vorhandenes oder beschädigtes Manifest wird niemals durch einen Erstaufbau ersetzt. Anschliessend Seed, Lieferung, Publikationsbericht, Reload, Metadaten und Downloads prüfen. Erneute Aufrufe fragen gespeicherte Läufe ab. Bei Erfolg erscheint der konkrete `portal_url`.
 
 **Dritter menschlicher Stopp:** lokal belassen oder INT/PROD wählen. `publication_plan` zeigt Zieladressen, Branch, Dateien und Ausgangsstand. Erst nach ausdrücklichem OK `gate: publish:int` beziehungsweise `publish:prod` freigeben. `prepare_pr` erstellt notwendige fachliche Änderungen in einer isolierten Git-Arbeitskopie. Ein Mensch übernimmt den PR; danach überprüft der Integrator Merge und exakte Zielbytes. Es folgt `deliver` in der freigegebenen Umgebung. Reine Datenlieferungen ohne Repository-Änderung brauchen keinen PR.
 
@@ -286,6 +302,7 @@ Eine unbestätigte letzte Änderung blockiert weitere Bearbeitung mit `metadata_
 | `unknown_office`, `office_fields`, `unknown_team`, `users_unconfirmed` | Fehlende fachliche Angaben oder bestätigte Benutzerkennungen erfragen. |
 | `model_candidate`, `NEEDS_INPUT`, `PROOF_INCOMPLETE` | Fach-MCP-Diagnosen und offene Fachfragen bearbeiten; Kandidat nicht übernehmen. |
 | `stack_mismatch` | Laufende Instanz und vorgesehenen Themencheckout klären; keine stille Umkonfiguration. |
+| `stack_command_failed`, `command_timeout` | Den gemeldeten Stacklog und den Bootstrap-Prüfstand im Dev-Stack prüfen; unklare Publikationsversuche nicht erneut starten. |
 | `manifest_invalid`, `remote_read_failed` | Bestand beziehungsweise Erreichbarkeit reparieren; nicht neu initialisieren. |
 | `submission_unknown` | Vorhandene Queue/Laufkennung anhand Vorgangsparameter aufklären, dann `reconcile` oder `reconcile_seed`. Kein erneuter Upload. |
 | `publication=accepted`, Prüfung fehlgeschlagen | Publikation ist erfolgt. Reload, RDF, Metadaten oder Downloads separat klären; `verify_delivery` prüft erneut ohne Upload. |

@@ -47,6 +47,24 @@ Dieser Stand ersetzt die Host-Ausführung der GRETL-Vorprüfungen aus den oben d
 
 README, beide Handbücher und Skill beschreiben den Containerbetrieb. Die lokale Konfiguration wurde auf `[gretl].image` umgestellt; alte Host-Einstellungen sind nicht mehr aktiv. Neue technische Prüfungen erteilen keine menschlichen Freigaben. Die unten dokumentierten Dialog-/Publikationsabnahmen bleiben offen.
 
+## Gemeinsamer Stack-Bootstrap vom 8. Oktober 2026
+
+- 117 Unit-/Funktionstests sowie 12 echte Integrationstests ohne übersprungene
+  Tests erfolgreich; ausführbarer JAR und Spotless-Prüfung bestanden.
+- Java-Fixtures prüfen Delegation an `scripts/bootstrap.sh`, lesende Prüfung
+  vorhandener Publikationen, Wiederverwendung passender Instanzen, erhaltene
+  Mount-/Modusgrenzen, separate Stack-Timeouts und persistente Fehlerlogs.
+  Ein kalter Agentstart bereitet zunächst die Infrastruktur vor, sodass der
+  GRETL-Image-/Bundle-Abgleich vor der gemeinsamen Erstpublikation erfolgt.
+- Die echten lokalen Starttests fanden in eigenen Compose-Projekten statt:
+  lokale Themenquelle und Registry-only, Erstpublikation, erneuter Seed,
+  erhaltener Release/Secrets, Portal und Smoke-Tests. Eine getrennte
+  Containerprüfung bestätigte die Sperre nach Abbruch des Host-Clients.
+- Der [gemeinsame Prüfbericht](https://github.com/sogis/datenportal-dokumentation-betrieb/blob/main/pruefprotokolle/2026-10-08-automatischer-stackstart.md)
+  trennt diese tatsächlichen Durchläufe von simulierten Fehlerfällen.
+  Es wurde keine neue fachliche Lieferung, menschliche Freigabe oder
+  INT-/PROD-Publikation im echten Themenrepo vorgenommen.
+
 ## Automatisiert mit Simulationen geprüft
 
 JUnit prüft zusätzlich fehlerhafte CSV, vollständige Scans und begrenzte Fehlerlisten, Datentypen/Pflichtwerte, Freigaben nach Änderungen, Dateimanipulationen, Serien, Teillieferungen, Konverter/JUnit-Fehler, XLSX-Formelcache, XML-/HTML-Behandlung, Kandidaten und unvollständige Proofs, Office-/Teamfehler und Repository-Konflikte.

@@ -27,7 +27,17 @@ Keine Quellen von Dev-Stack, Fachdiensten, Jenkins-Plugin, GRETL oder Portal wer
 - Datenblatt-MCP: Docker-stdio oder Streamable HTTP, `describe_schema`, `import_xtf`, `read_datasheet`, `update_metadata`, Attribut-/Ausgabenwerkzeuge, Validierung und Export. Der Integrator erzeugt nur die Transferidentität eines leeren Imports mit gültigem OID-Präfix; fachliche Datenblätter und ihre Exporte verantwortet der Fach-MCP.
 - INTERLIS-MCP: eigenes SDK-Client/Transport-Paar; standardmässig veröffentlichtes Docker-Image über stdio, optional Streamable HTTP oder vorhandenes lokales JAR. `authorIliModel` und `applyIliModelChanges` liefern Compiler-/Regel-/Constraint-Nachweise. Bei separat geändertem Quellstand `reviewIliModel`; unvollständige Constraint-Beweise verlangen weiterhin High-Level-Änderung/Prüfung.
 - GRETL: vorhandenes Java-17-Skript, Repository-Wrapper und `shared/gradle/init.gradle`; Versionen aus `shared/gradle/gradle-build.properties`. `setup-gretl [--update]` sichert ein veröffentlichtes Jenkins-Image und den darin vorhandenen Bundle-Stand. Java 17 und JARs werden ausschliesslich im Container verwendet.
-- Stack: Docker-/Compose-Status, Mount und `THEMEN_REPO_MODE`, vorhandenes `scripts/up.sh`, normale Starts vorhandener Services. Bei passender laufender Instanz keine neue Instanz. Unpassender Checkout/Modus stoppt.
+- Stack: Docker-/Compose-Status, Mount und `THEMEN_REPO_MODE`, vollständiges
+  `scripts/up.sh` und gemeinsames `scripts/bootstrap.sh [-f DATEI ...]`.
+  Ein kalter Agentstart verwendet zunächst `up.sh --infrastructure-only`,
+  damit der Image-/Bundle-Abgleich vor der gemeinsamen Erstpublikation erfolgt.
+  Erstaufbau und Seed sind im Dev-Stack implementiert; der Java-Integrator
+  enthält keine eigene Gradle-/Quiet-Down-Initialisierung. Bei vorhandenem
+  Bestand prüft `--check-only` Manifest und Portal ohne Mutation.
+  `stack_timeout_seconds` (Default 1800, Bereich 1–7200) ist vom allgemeinen
+  Timeout getrennt; Stackdiagnosen bleiben unter dem lokalen State-Elternpfad
+  in `stack-logs/`. Bei passender laufender Instanz keine neue Instanz.
+  Unpassender Checkout/Modus und GRETL-Runtime stoppen weiterhin.
 - Jenkins: CSRF-Crumb, vorhandener Seed-Job, `gretl-datenportal/build` als Multipart, `gretl-datenportal/runStatus`, Queue-/Build-API und `report.json`. Authentisierung nur an die konfigurierte Jenkins-Basis; Redirects werden nicht verfolgt.
 - Portal/Manifest: HTTP-Lesen von `current.json`, referenzierten Katalogen und Datenblättern, `catalog/published-catalog.xtf`, Themenseiten und Downloads. Nur HTTP 404 bezeichnet einen fehlenden Erstbestand. Die Metadatenprüfung ignoriert ausschliesslich die von GRETL verwalteten `issued`/`modified`-Werte und normalisiert Collections ohne die Reihenfolge der Attribute zu ändern.
 - Git/`gh`: isolierter Clone des Zielbranches, exakte Kandidaten, Commit, Push und PR. Kein automatischer Merge. Nach menschlichem Merge Head, Zielbranch und exakte Blob-Bytes prüfen.

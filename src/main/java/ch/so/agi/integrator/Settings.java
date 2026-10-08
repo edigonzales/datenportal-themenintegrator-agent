@@ -10,7 +10,7 @@ import org.tomlj.TomlTable;
 public final class Settings {
   public final Path root, topics, stack, runs;
   public final Map<String, Object> values;
-  public final int timeout;
+  public final int timeout, stackTimeout;
 
   public Settings(Path config) {
     if (!Files.isRegularFile(config))
@@ -43,6 +43,7 @@ public final class Settings {
             "stack_start_args",
             "environments",
             "timeout_seconds",
+            "stack_timeout_seconds",
             "interlis",
             "gretl",
             "gretl_java_home",
@@ -55,9 +56,13 @@ public final class Settings {
     stack = path(Json.required(values, "stack_repo"));
     runs = path(Json.str(values, "state_dir", ".datenportal-integrator/runs"));
     timeout = Json.number(values, "timeout_seconds", 300);
+    stackTimeout = Json.number(values, "stack_timeout_seconds", 1800);
     if (timeout < 1 || timeout > 7200)
       throw new Problem(
           "invalid_configuration", "timeout_seconds muss zwischen 1 und 7200 liegen.");
+    if (stackTimeout < 1 || stackTimeout > 7200)
+      throw new Problem(
+          "invalid_configuration", "stack_timeout_seconds muss zwischen 1 und 7200 liegen.");
     if (values.containsKey("datasheet") && values.containsKey("datasheet_mcp_url"))
       throw new Problem(
           "invalid_configuration", "datasheet_mcp_url entfernen, wenn [datasheet] verwendet wird.");

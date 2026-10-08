@@ -78,6 +78,12 @@ class ExternalTest {
                   List.of(Json.map("Service", "jenkins", "State", "running", "Health", "healthy")));
             return "";
           }
+
+          @Override
+          public Result run(List<String> args, Path cwd, int timeout, Path log) {
+            calls.add(args);
+            return new Result(0, "");
+          }
         };
     var f = new Fixtures(temp, process, (n, a) -> Json.map(), (n, a) -> Json.map());
     var result = Json.obj(new Stack(f.settings, process).ensure());

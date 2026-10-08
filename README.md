@@ -2,6 +2,12 @@
 
 Java-25-Workflow für Themenanlieferung, INTERLIS-Modellierung und die Anlage neuer Organisationen. CLI und stdio-MCP verwenden denselben ausführbaren JAR und speichern Prüfstände, menschliche Freigaben und externe Laufkennungen lokal.
 
+Für den lokalen Gesamtstack reichen Integrator, Themenrepo und Dev-Stack als
+Checkouts. `../datenportal-dev-stack/scripts/up.sh` ist der gemeinsame
+vollständige Start: Secrets, Garage, erfolgreicher Seed, Erstpublikation und
+Portal. Der Jenkins-Quellcheckout ist nur für lokale Image-Builds erforderlich.
+Passende laufende Instanzen werden weiterverwendet.
+
 Der Integrator verwendet Datenblatt-MCP und `interlis-mcp` als veröffentlichte Docker-Images über stdio sowie GRETL, Jenkins und den Dev-Stack. Fach-MCP-Checkouts und lokale Fach-MCP-Builds sind nicht erforderlich. GRETL-Vorprüfungen laufen in eigenen Containern aus dem Jenkins-Image; lokal genügt JDK 25. Deren Quellen bleiben unverändert. Fachliche Änderungen im Themenrepo werden als Kandidaten geprüft und erst nach Freigabe übernommen.
 
 ## Einstieg

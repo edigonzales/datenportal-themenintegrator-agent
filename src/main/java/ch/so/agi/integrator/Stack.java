@@ -24,6 +24,27 @@ public final class Stack {
     return p.checked(composeArgs(args), s.stack, s.timeout);
   }
 
+  private String stackCommand(List<String> args) {
+    Path log;
+    try {
+      Path directory = s.runs.getParent().resolve("stack-logs");
+      Files.createDirectories(directory);
+      log = Files.createTempFile(directory, "stack-", ".log");
+    } catch (java.io.IOException e) {
+      throw new Problem("stack_log_unavailable", "Stack-Diagnoselog kann nicht angelegt werden.");
+    }
+    var result = p.run(args, s.stack, s.stackTimeout, log);
+    if (result.exitCode() != 0)
+      throw new Problem(
+          "stack_command_failed",
+          "Stack-Aufruf fehlgeschlagen; Diagnose vor erneutem Start prüfen.",
+          "returncode",
+          result.exitCode(),
+          "log",
+          log.toString());
+    return result.output().strip();
+  }
+
   public Map<String, Object> inspect() {
     String ids =
         p.checked(
@@ -86,7 +107,10 @@ public final class Stack {
     if (!running) {
       var cmd = new ArrayList<>(List.of("bash", "scripts/up.sh"));
       cmd.addAll(s.strings("stack_start_args", List.of()));
-      p.checked(cmd, s.stack, s.timeout);
+      // Deliveries checks the pinned GRETL image/bundle before allowing the
+      // shared bootstrap to publish into a fresh bucket.
+      if (!cmd.contains("--infrastructure-only")) cmd.add("--infrastructure-only");
+      stackCommand(cmd);
     }
     inspect();
     services(Set.of("garage", "jenkins", "downloads"));
@@ -115,7 +139,7 @@ public final class Stack {
       var cmd =
           new ArrayList<>(List.of("up", "-d", "--no-recreate", "--wait", "--wait-timeout", "120"));
       cmd.addAll(missing);
-      compose(cmd.toArray(String[]::new));
+      stackCommand(composeArgs(cmd.toArray(String[]::new)));
     }
     var bad =
         required.stream()
@@ -132,47 +156,25 @@ public final class Stack {
   public Object bootstrap(Map<String, Object> env) {
     if (!Json.str(env, "kind", "").equals("local"))
       throw new Problem("local_only", "Automatischer Erstaufbau ist nur lokal vorgesehen.");
-    if (Jenkins.manifest(env) != null) {
+    boolean existing = Jenkins.manifest(env) != null;
+    if (existing) {
       services(Set.of("sodata"));
-      return Json.map("initialized", false, "reason", "existing_manifest");
     }
-    var j = new Jenkins(env);
-    if (Json.bool(j.get("api/json"), "quietingDown", false))
-      throw new Problem("jenkins_paused", "Jenkins ist bereits administrativ pausiert.");
-    j.post("quietDown");
-    try {
-      var running =
-          j.get(
-              "computer/api/json?tree=computer[executors[currentExecutable[url]],oneOffExecutors[currentExecutable[url]]]");
-      for (Object c : Json.list(running.get("computer")))
-        for (String key : List.of("executors", "oneOffExecutors"))
-          for (Object executor : Json.list(Json.obj(c).get(key)))
-            if (Json.obj(executor).get("currentExecutable") != null)
-              throw new Problem(
-                  "builds_running",
-                  "Laufende Builds abwarten; Erstinitialisierung noch nicht gestartet.");
-      if (Jenkins.manifest(env) != null) {
-        services(Set.of("sodata"));
-        return Json.map("initialized", false, "reason", "manifest_appeared");
-      }
-      String script =
-          """
-                    set -euo pipefail
-                    work=$(mktemp -d /var/jenkins_home/datenportal-integrator.XXXXXX)
-                    tar -C /workspace/themenrepo --exclude=.git --exclude=.gradle --exclude=build --exclude=.DS_Store -cf - . | tar -C "$work" -xf -
-                    cd "$work"
-                    ./shared/bin/gradlew-java17.sh --no-daemon -I "$work/shared/gradle/init.gradle" initializePublication -Ps3Publish=true -PgitWriteBack=false -PreloadPortal=false
-                    """;
-      // Pass the script as an argument to the existing container's bash, without shell
-      // interpolation on the host.
-      compose("exec", "-T", "jenkins", "bash", "-c", script);
-    } finally {
-      j.post("cancelQuietDown");
-    }
+    var cmd = new ArrayList<>(List.of("bash", "scripts/bootstrap.sh"));
+    for (String file : s.strings("compose_files", List.of("compose.yaml")))
+      cmd.addAll(List.of("-f", file));
+    cmd.addAll(List.of("--timeout", Integer.toString(s.stackTimeout)));
+    if (existing) cmd.add("--check-only");
+    stackCommand(cmd);
     var manifest = Jenkins.manifest(env);
     if (manifest == null)
       throw new Problem("bootstrap_incomplete", "Initialisierung lieferte kein lesbares Manifest.");
-    services(Set.of("sodata"));
-    return Json.map("initialized", true, "release_id", manifest.get("releaseId"));
+    return Json.map(
+        "initialized",
+        !existing,
+        "release_id",
+        manifest.get("releaseId"),
+        "reason",
+        existing ? "existing_manifest" : "stack_bootstrap");
   }
 }
