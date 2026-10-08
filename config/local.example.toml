@@ -14,18 +14,27 @@ stack_timeout_seconds = 1800
 
 [gretl]
 image = "sogis/datenportal-jenkins:0.1.0-3"
+mode = "compose"
 # setup-gretl sichert Digest und Bundle; Java 17 läuft ausschliesslich im Image.
 
 [datasheet]
-transport = "stdio"
+transport = "http"
+managed = true
+url = "http://127.0.0.1:8000/mcp"
 image = "sogis/datenportal-datenblatt-mcp@sha256:b391421578f8c4652fb7a64465187746a3057ab4413d17cfc20a56025b470da1"
-# Alternative: transport = "http", url = "http://127.0.0.1:8000/mcp"
+# Für einen vorhandenen HTTP-Dienst managed=false setzen.
 # image bleibt als Quelle für Originalmodelle auch bei HTTP möglich.
 
 [interlis]
-transport = "stdio"
+transport = "http"
+managed = true
+url = "http://127.0.0.1:8080/mcp"
 image = "sogis/interlis-mcp@sha256:b3ed1e738ccfe670f92ecebcbb014cf67aade5f0609e15be1f75948e15e899ff"
-# Alternative: transport = "http", url = "http://localhost:8080/mcp"; image entfernen.
+# Für bestehende externe HTTP-Dienste managed=false setzen.
+# Für stdio managed/url entfernen und transport="stdio" setzen.
+
+[runtime]
+project = "datenportal-integrator"
 
 [environments.local]
 kind = "local"

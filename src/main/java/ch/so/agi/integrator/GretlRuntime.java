@@ -26,6 +26,10 @@ public class GretlRuntime {
     return Json.str(Json.obj(s.values.get("gretl")), "image", DEFAULT_IMAGE);
   }
 
+  static String mode(Settings s) {
+    return Json.str(Json.obj(s.values.get("gretl")), "mode", "ephemeral");
+  }
+
   public static Map<String, Object> recorded(Settings s) {
     Path file = file(s);
     if (!Files.isRegularFile(file))
@@ -235,6 +239,22 @@ public class GretlRuntime {
 
   public Map<String, Object> doctor() {
     var expected = selected(true);
+    if (mode(settings).equals("compose")) {
+      var compose = new ComposeRuntime(settings, process);
+      String container = compose.ensure("gretl");
+      var actual = describe(container);
+      return Json.map(
+          "valid",
+          expected.get("sha256").equals(actual.get("sha256")),
+          "mode",
+          "compose",
+          "runtime",
+          expected,
+          "service",
+          compose.inspect("gretl"),
+          "daemon_status",
+          daemonStatus(container));
+    }
     String name = start(Json.required(expected, "image_id"));
     try {
       var actual = describe(name);
@@ -245,21 +265,42 @@ public class GretlRuntime {
     }
   }
 
+  String daemonStatus(String container) {
+    return process.checked(
+        List.of(
+            "docker",
+            "exec",
+            "--user",
+            "jenkins",
+            "-w",
+            "/var/lib/integrator/warmup",
+            container,
+            "bash",
+            "shared/bin/gradlew-java17.sh",
+            "--status"),
+        settings.root,
+        30);
+  }
+
   record Input(Path source, String target) {}
 
   static List<String> mapProperties(List<String> properties, List<Input> inputs) {
+    return mapProperties(properties, inputs, "/tmp/integrator-inputs");
+  }
+
+  static List<String> mapProperties(List<String> properties, List<Input> inputs, String inputDir) {
     var result = new ArrayList<String>();
     for (int n = 0; n < properties.size(); n++) {
       String value = properties.get(n);
       if (value.startsWith("-PdataFile=")) {
         Path file = Path.of(value.substring("-PdataFile=".length())).toAbsolutePath().normalize();
-        String target = "/tmp/integrator-inputs/data.csv";
+        String target = inputDir + "/data.csv";
         inputs.add(new Input(file, target));
         result.add("-PdataFile=" + target);
       } else if (value.equals("-I") || value.equals("--init-script")) {
         if (++n >= properties.size())
           throw new Problem("invalid_arguments", "Zusätzliches Init-Script fehlt.");
-        String target = "/tmp/integrator-inputs/init-" + n + ".gradle";
+        String target = inputDir + "/init-" + n + ".gradle";
         inputs.add(new Input(Path.of(properties.get(n)).toAbsolutePath().normalize(), target));
         result.add(value);
         result.add(target);
@@ -275,34 +316,55 @@ public class GretlRuntime {
       String task,
       List<String> properties,
       String logName) {
+    if (mode(settings).equals("compose")) {
+      try (var guard =
+          RuntimeGuard.acquire(
+              settings.root.resolve(".datenportal-integrator/tools/compose/jobs.lock"),
+              settings.stackTimeout)) {
+        return executeGradle(w, run, snapshot, task, properties, logName);
+      }
+    }
+    return executeGradle(w, run, snapshot, task, properties, logName);
+  }
+
+  private Map<String, Object> executeGradle(
+      Workflow w,
+      Map<String, Object> run,
+      Path snapshot,
+      String task,
+      List<String> properties,
+      String logName) {
     var runtime = selected(true);
     Path log = w.directory(run).resolve("validation").resolve(logName + ".log");
     Path reports = w.directory(run).resolve("validation").resolve(logName + "-reports");
-    String name = start(Json.required(runtime, "image_id"));
+    boolean persistent = mode(settings).equals("compose");
+    var compose = new ComposeRuntime(settings, process);
+    String name = persistent ? compose.ensure("gretl") : start(Json.required(runtime, "image_id"));
+    String job = "/var/lib/integrator/jobs/" + UUID.randomUUID();
+    String work = persistent ? job + "/work" : "/tmp/integrator-work";
+    String inputDir = persistent ? job + "/inputs" : "/tmp/integrator-inputs";
+    long started = System.nanoTime();
     Map<String, Object> report = null;
     Problem failure = null;
     try {
+      if (persistent) compose.recover(name);
       var actual = describe(name);
       if (!runtime.get("sha256").equals(actual.get("sha256")))
         throw new Problem(
             "gretl_runtime_mismatch", "GRETL-Bundle weicht vom eingerichteten Image ab.");
       var inputs = new ArrayList<Input>();
-      var mapped = mapProperties(properties, inputs);
+      var mapped = mapProperties(properties, inputs, inputDir);
       process.checked(
-          List.of(
-              "docker",
-              "exec",
-              "--user",
-              "root",
-              name,
-              "mkdir",
-              "-p",
-              "/tmp/integrator-work",
-              "/tmp/integrator-inputs"),
+          List.of("docker", "exec", "--user", "root", name, "mkdir", "-p", work, inputDir),
           settings.root,
           settings.timeout);
+      if (persistent)
+        process.checked(
+            List.of("docker", "exec", "--user", "root", name, "chown", "jenkins:jenkins", job),
+            settings.root,
+            30);
       process.checked(
-          List.of("docker", "cp", snapshot + "/.", name + ":/tmp/integrator-work/"),
+          List.of("docker", "cp", snapshot + "/.", name + ":" + work + "/"),
           settings.root,
           settings.timeout);
       for (var input : inputs) {
@@ -324,30 +386,50 @@ public class GretlRuntime {
               "chown",
               "-R",
               "jenkins:jenkins",
-              "/tmp/integrator-work",
-              "/tmp/integrator-inputs"),
+              work,
+              inputDir),
           settings.root,
           settings.timeout);
       String org = Json.required(run, "organization");
-      var args =
-          new ArrayList<>(
-              List.of(
-                  "docker",
-                  "exec",
-                  "--user",
-                  "jenkins",
-                  "-w",
-                  "/tmp/integrator-work/" + org,
-                  name,
-                  "bash",
-                  "/tmp/integrator-work/shared/bin/gradlew-java17.sh",
-                  "--no-daemon",
-                  "--console=plain",
-                  "-I",
-                  "/tmp/integrator-work/shared/gradle/init.gradle",
-                  task));
+      var args = new ArrayList<String>();
+      if (persistent)
+        args.addAll(
+            List.of(
+                "docker",
+                "exec",
+                "--user",
+                "jenkins",
+                name,
+                "bash",
+                "/opt/integrator-runtime/gretl-job.sh",
+                job,
+                Integer.toString(settings.timeout),
+                work + "/" + org,
+                work + "/shared/bin/gradlew-java17.sh",
+                "--daemon"));
+      else
+        args.addAll(
+            List.of(
+                "docker",
+                "exec",
+                "--user",
+                "jenkins",
+                "-w",
+                work + "/" + org,
+                name,
+                "bash",
+                work + "/shared/bin/gradlew-java17.sh",
+                "--no-daemon"));
+      args.addAll(List.of("--console=plain", "-I", work + "/shared/gradle/init.gradle", task));
       args.addAll(mapped);
-      var result = process.run(args, settings.root, settings.timeout, log);
+      args.addAll(List.of("-Ps3Publish=false", "-PgitWriteBack=false", "-PreloadPortal=false"));
+      var result = process.run(args, settings.root, settings.timeout + (persistent ? 40 : 0), log);
+      if (persistent && Set.of(124, 137, 76).contains(result.exitCode()))
+        throw new Problem(
+            "command_timeout",
+            "GRETL-Pruefung abgebrochen; Diagnoseartefakte bleiben erhalten.",
+            "log",
+            log.toString());
       report =
           Json.map(
               "valid",
@@ -384,6 +466,13 @@ public class GretlRuntime {
                               || l.contains("Exception"))
                   .limit(100)
                   .toList());
+      report.put(
+          "duration_ms",
+          java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started));
+      if (persistent) {
+        report.put("container_workspace", work);
+        report.put("daemon_status", daemonStatus(name));
+      }
       return report;
     } catch (Problem p) {
       failure = translate(p);
@@ -398,10 +487,7 @@ public class GretlRuntime {
                 List.of(
                     "docker",
                     "cp",
-                    name
-                        + ":/tmp/integrator-work/"
-                        + Json.required(run, "organization")
-                        + "/build/.",
+                    name + ":" + work + "/" + Json.required(run, "organization") + "/build/.",
                     reports.toString()),
                 settings.root,
                 Math.min(settings.timeout, 30),
@@ -411,7 +497,20 @@ public class GretlRuntime {
       }
       if (report != null) report.put("reports_copied", copied);
       if (failure != null) failure.details.put("reports_copied", copied);
-      docker.remove(name);
+      if (persistent) {
+        if (failure != null) {
+          try {
+            process.run(
+                List.of("docker", "cp", name + ":" + job + "/task.log", log.toString()),
+                settings.root,
+                30,
+                null);
+            compose.recover(name);
+          } catch (Problem recovery) {
+            failure.details.put("recovery", recovery.result());
+          }
+        }
+      } else docker.remove(name);
     }
   }
 

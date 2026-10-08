@@ -21,12 +21,21 @@ public final class Setup {
       case "setup-gretl" -> {
         if (!args.isEmpty() && !args.equals(List.of("--update")))
           throw new Problem("invalid_arguments", "setup-gretl [--update]");
-        yield new GretlRuntime(s, new ProcessRunner()).setup(!args.isEmpty());
+        var result = new GretlRuntime(s, new ProcessRunner()).setup(!args.isEmpty());
+        ComposeRuntime.afterSetup(s, new ProcessRunner());
+        yield result;
       }
       case "setup-mcps" -> {
         if (!args.isEmpty() && !args.equals(List.of("--update")))
           throw new Problem("invalid_arguments", "setup-mcps [--update]");
-        yield new DockerMcps(s, new ProcessRunner()).setup(!args.isEmpty());
+        var result = new DockerMcps(s, new ProcessRunner()).setup(!args.isEmpty());
+        ComposeRuntime.afterSetup(s, new ProcessRunner());
+        yield result;
+      }
+      case "runtime-up" -> {
+        if (!args.isEmpty())
+          throw new Problem("invalid_arguments", "runtime-up akzeptiert keine Argumente.");
+        yield new ComposeRuntime(s, new ProcessRunner()).up();
       }
       case "start-datasheet" ->
           Json.map(

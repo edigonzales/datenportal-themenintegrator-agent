@@ -6,7 +6,7 @@ description: Integriere Datenportal-Themen aus CSV/XTF/XLSX, leite ausdrücklich
 Verwende die Werkzeuge des `datenportal_integrator`-MCP. CLI-Fallback im Integrator-Repo:
 `java -jar build/libs/datenportal-integrator.jar call <operation> --args-file <datei.json>`.
 `schema <operation>` zeigt verbindliche Argumente. `setup-mcps` bereitet konfigurierte Docker-Images und deren Originalmodelle vor; `doctor` prüft beide echten MCP-Verbindungen. Keine Fach-MCP-Quellbuilds ausführen. Image-Versionen nur bewusst mit `setup-mcps --update` wechseln und anschliessend betroffene Prüfungen/Freigaben erneuern.
-`setup-gretl` bereitet das festgelegte Jenkins-Image für separate GRETL-Prüfcontainer vor, ohne Stack-Start oder Host-Java-17. Änderungen am Image nur bewusst vorbereiten und erneut prüfen/freigeben. Bei `gretl_runtime_mismatch` die gemeldete Grenze klären, keinen Host-Fallback und keine stille Stack-Umkonfiguration verwenden.
+`setup-gretl` bereitet das festgelegte Jenkins-Image für GRETL-Vorprüfungen vor, ohne Publikationsstack-Start oder Host-Java-17. Das lokale Beispiel nutzt dauerhafte Compose-Dienste mit HTTP-MCPs und einem eigenen GRETL-Container; fehlende Dienste starten automatisch. Bestehende stdio-/ephemeral-Konfigurationen bleiben unterstützt. Änderungen am Image nur bewusst vorbereiten und erneut prüfen/freigeben. Bei `gretl_runtime_mismatch` die gemeldete Grenze klären, keinen Host-Fallback und keine stille Stack-Umkonfiguration verwenden.
 Einrichtung und Beispiele stehen im [Anwenderhandbuch](../../docs/anwenderhandbuch.md).
 
 ## Grenzen und Entscheidungen

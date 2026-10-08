@@ -46,6 +46,7 @@ public final class Settings {
             "stack_timeout_seconds",
             "interlis",
             "gretl",
+            "runtime",
             "gretl_java_home",
             "gretl_offline_jars");
     for (String key : values.keySet())
@@ -68,10 +69,18 @@ public final class Settings {
           "invalid_configuration", "datasheet_mcp_url entfernen, wenn [datasheet] verwendet wird.");
     for (String service : List.of("datasheet", "interlis")) validateMcp(service);
     var gretl = Json.obj(values.get("gretl"));
-    if (gretl.keySet().stream().anyMatch(k -> !k.equals("image"))
+    if (gretl.keySet().stream().anyMatch(k -> !Set.of("image", "mode").contains(k))
+        || !Set.of("compose", "ephemeral").contains(GretlRuntime.mode(this))
         || !GretlRuntime.reference(this).matches("[A-Za-z0-9][A-Za-z0-9._/:@-]*"))
       throw new Problem(
-          "invalid_configuration", "[gretl] unterstützt nur eine gültige Image-Referenz.");
+          "invalid_configuration",
+          "[gretl] benötigt eine gültige Image-Referenz und mode=compose|ephemeral.");
+    var runtime = Json.obj(values.get("runtime"));
+    if (runtime.keySet().stream().anyMatch(k -> !k.equals("project"))
+        || !Json.str(runtime, "project", "datenportal-integrator")
+            .matches("[a-z0-9][a-z0-9_-]{0,63}"))
+      throw new Problem(
+          "invalid_configuration", "[runtime].project muss ein gültiger Compose-Projektname sein.");
     for (Object profile : Json.obj(values.get("environments")).values()) {
       var environment = Json.obj(profile);
       for (String field : environment.keySet())
@@ -113,7 +122,7 @@ public final class Settings {
     var c = mcp(service);
     if (c.isEmpty() && service.equals("interlis")) return;
     for (String field : c.keySet())
-      if (!Set.of("transport", "image", "jar", "java_command", "url").contains(field))
+      if (!Set.of("transport", "image", "jar", "java_command", "url", "managed").contains(field))
         throw new Problem(
             "invalid_configuration", "Unbekannte MCP-Einstellung.", "field", service + "." + field);
     String transport = Json.str(c, "transport", "stdio");
@@ -137,6 +146,20 @@ public final class Settings {
     if (c.containsKey("image")
         && !Json.required(c, "image").matches("[A-Za-z0-9][A-Za-z0-9._/:@-]*"))
       throw new Problem("invalid_configuration", "Ungültige Docker-Image-Referenz.");
+    if (Json.bool(c, "managed", false)) {
+      var endpoint = url(Json.required(c, "url"));
+      if (!transport.equals("http")
+          || !c.containsKey("image")
+          || !endpoint.getScheme().equals("http")
+          || !Set.of("127.0.0.1", "localhost").contains(endpoint.getHost())
+          || !endpoint.getPath().equals("/mcp")
+          || endpoint.getQuery() != null
+          || endpoint.getPort() < 1
+          || endpoint.getPort() > 65535)
+        throw new Problem(
+            "invalid_configuration",
+            "managed=true benötigt ein Image und lokales HTTP /mcp mit explizitem Port.");
+    }
   }
 
   public List<String> modelDirectories() {

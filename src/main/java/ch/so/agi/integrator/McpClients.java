@@ -51,6 +51,13 @@ public final class McpClients {
       if (client != null && !expectedIdentity.equals(identity)) close();
       if (client != null) return;
       try {
+        if (ComposeRuntime.managed(settings, service)) {
+          new ComposeRuntime(settings, new ProcessRunner()).ensure(service);
+          connectManagedHttp(config);
+          session = UUID.randomUUID().toString();
+          identity = expectedIdentity;
+          return;
+        }
         McpClientTransport transport;
         if (Json.str(config, "transport", "stdio").equals("http")) {
           transport = http(Json.required(config, "url"));
@@ -121,6 +128,52 @@ public final class McpClients {
       }
     }
 
+    void connectManagedHttp(Map<String, Object> config) {
+      long deadline =
+          System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(settings.stackTimeout);
+      String exception = "unknown";
+      while (System.nanoTime() < deadline) {
+        try {
+          client =
+              McpClient.sync(http(Json.required(config, "url")))
+                  .requestTimeout(Duration.ofSeconds(settings.timeout))
+                  .initializationTimeout(Duration.ofSeconds(Math.min(10, settings.timeout)))
+                  .build();
+          client.initialize();
+          var available =
+              client.listTools().tools().stream()
+                  .map(McpSchema.Tool::name)
+                  .collect(java.util.stream.Collectors.toSet());
+          if (!available.containsAll(expectedTools(service)))
+            throw new Problem(
+                "runtime_tools_missing",
+                "Compose-MCP meldet nicht den erwarteten Werkzeugkatalog.",
+                "service",
+                service);
+          return;
+        } catch (Problem e) {
+          close();
+          throw e;
+        } catch (Exception e) {
+          exception = e.getClass().getSimpleName();
+          close();
+          try {
+            Thread.sleep(250);
+          } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new Problem("runtime_interrupted", "MCP-Start unterbrochen.");
+          }
+        }
+      }
+      throw new Problem(
+          "runtime_start_timeout",
+          "MCP-Initialisierung wurde nicht rechtzeitig bereit; Compose-Logs pruefen.",
+          "service",
+          service,
+          "exception",
+          exception);
+    }
+
     @Override
     public synchronized String sessionKey() {
       connect();
@@ -144,6 +197,17 @@ public final class McpClients {
     @Override
     public synchronized Map<String, Object> call(String name, Map<String, Object> args) {
       connect();
+      if (ComposeRuntime.managed(settings, service)) {
+        var actual = new ComposeRuntime(settings, new ProcessRunner()).inspect(service);
+        if (!"running".equals(actual.get("state"))) {
+          close();
+          throw new Problem(
+              "runtime_unhealthy",
+              "Compose-MCP wurde waehrend der Sitzung angehalten.",
+              "service",
+              service);
+        }
+      }
       try {
         return result(client.callTool(new McpSchema.CallToolRequest(name, args)));
       } catch (Problem p) {
@@ -175,6 +239,22 @@ public final class McpClients {
       }
       session = null;
     }
+  }
+
+  static Set<String> expectedTools(String service) {
+    return service.equals("datasheet")
+        ? Set.of(
+            "describe_schema",
+            "import_xtf",
+            "read_datasheet",
+            "update_metadata",
+            "upsert_attribute",
+            "remove_attribute",
+            "upsert_issue",
+            "remove_issue",
+            "validate_datasheet",
+            "export_xtf")
+        : Set.of("authorIliModel", "applyIliModelChanges", "reviewIliModel", "reviewIliChange");
   }
 
   private static McpClientTransport http(String url) {

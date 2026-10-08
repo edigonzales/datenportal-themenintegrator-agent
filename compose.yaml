@@ -1,0 +1,51 @@
+name: datenportal-integrator
+
+services:
+  datasheet:
+    image: sogis/datenportal-datenblatt-mcp@sha256:b391421578f8c4652fb7a64465187746a3057ab4413d17cfc20a56025b470da1
+    pull_policy: never
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: http
+      DATASHEET_HOST: 0.0.0.0
+      DATASHEET_PORT: 8000
+    ports:
+      - "127.0.0.1:8000:8000"
+    labels:
+      datenportal.integrator.root: ${PWD}
+
+  interlis:
+    image: sogis/interlis-mcp@sha256:b3ed1e738ccfe670f92ecebcbb014cf67aade5f0609e15be1f75948e15e899ff
+    pull_policy: never
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: http
+    ports:
+      - "127.0.0.1:8080:8080"
+    labels:
+      datenportal.integrator.root: ${PWD}
+
+  gretl:
+    image: sogis/datenportal-jenkins:0.1.0-3
+    pull_policy: never
+    restart: unless-stopped
+    user: root
+    entrypoint: ["bash", "/opt/integrator-runtime/gretl-entrypoint.sh"]
+    environment:
+      GRADLE_USER_HOME: /var/lib/integrator/gradle
+      INTEGRATOR_RUNTIME_KEY: jenkins-0.1.0-3
+    volumes:
+      - gretl-data:/var/lib/integrator
+      - ./runtime:/opt/integrator-runtime:ro
+      - ../datenportal-themenrepo:/opt/integrator-topic:ro
+    labels:
+      datenportal.integrator.root: ${PWD}
+    healthcheck:
+      test: ["CMD", "test", "-f", "/var/lib/integrator/ready"]
+      interval: 2s
+      timeout: 2s
+      retries: 150
+
+volumes:
+  gretl-data:
+    name: datenportal-integrator-gradle-default

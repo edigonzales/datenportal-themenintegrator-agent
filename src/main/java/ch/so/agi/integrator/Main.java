@@ -26,7 +26,7 @@ public final class Main {
       }
       if (args.isEmpty() || args.getFirst().equals("--help")) {
         System.out.println(
-            "Java 25 Themenintegrator\njava -jar build/libs/datenportal-integrator.jar [--config PATH] doctor|serve|schema OP|call OP [--json JSON|--args-file PATH|-]\nWeitere Helfer: setup-tools, setup-mcps [--update], setup-gretl, harness-config, codex");
+            "Java 25 Themenintegrator\njava -jar build/libs/datenportal-integrator.jar [--config PATH] doctor|serve|schema OP|call OP [--json JSON|--args-file PATH|-]\nWeitere Helfer: setup-tools, setup-mcps [--update], setup-gretl [--update], runtime-up, harness-config, codex");
         return 0;
       }
       String command = args.removeFirst();
@@ -53,6 +53,7 @@ public final class Main {
               "setup-tools",
               "setup-gretl",
               "setup-mcps",
+              "runtime-up",
               "start-datasheet",
               "harness-config",
               "codex")

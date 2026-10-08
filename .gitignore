@@ -7,6 +7,7 @@ __pycache__/
 .datenportal-integrator/
 config/local.toml
 .env
+compose.override.yaml
 build/
 dist/
 *.egg-info/

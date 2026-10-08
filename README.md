@@ -8,7 +8,9 @@ vollständige Start: Secrets, Garage, erfolgreicher Seed, Erstpublikation und
 Portal. Der Jenkins-Quellcheckout ist nur für lokale Image-Builds erforderlich.
 Passende laufende Instanzen werden weiterverwendet.
 
-Der Integrator verwendet Datenblatt-MCP und `interlis-mcp` als veröffentlichte Docker-Images über stdio sowie GRETL, Jenkins und den Dev-Stack. Fach-MCP-Checkouts und lokale Fach-MCP-Builds sind nicht erforderlich. GRETL-Vorprüfungen laufen in eigenen Containern aus dem Jenkins-Image; lokal genügt JDK 25. Deren Quellen bleiben unverändert. Fachliche Änderungen im Themenrepo werden als Kandidaten geprüft und erst nach Freigabe übernommen.
+Das lokale Konfigurationsbeispiel verwendet drei dauerhafte Compose-Dienste: Datenblatt-MCP und `interlis-mcp` über HTTP sowie einen eigenen GRETL-Prüfcontainer aus dem Jenkins-Image. Fehlende Dienste starten automatisch; passende laufende Instanzen und der Gradle-Daemon werden wiederverwendet. Fach-MCP-Checkouts und lokale Fach-MCP-Builds sind nicht erforderlich; lokal genügt JDK 25. Bestehende stdio-/ephemeral-Konfigurationen bleiben unterstützt. Fachliche Änderungen im Themenrepo werden als Kandidaten geprüft und erst nach Freigabe übernommen.
+
+Die Setup-Befehle erzeugen eine ignorierte `compose.override.yaml` mit den ausgewählten Image-Identitäten, Ports und lokalen Mounts. Compose startet keine neueren Images. Dienste bleiben nach dem Ende des Integrators verfügbar; `docker compose down` hält sie an und erhält den Gradle-Cache. Jenkins und sein Home gehören weiterhin zum Dev-Stack.
 
 ## Einstieg
 
@@ -22,6 +24,8 @@ java -jar build/libs/datenportal-integrator.jar setup-java
 java -jar build/libs/datenportal-integrator.jar setup-tools
 java -jar build/libs/datenportal-integrator.jar setup-mcps
 java -jar build/libs/datenportal-integrator.jar setup-gretl
+# Optional vorab starten; ansonsten startet der erste Werkzeugaufruf bei Bedarf.
+docker compose up -d
 java -jar build/libs/datenportal-integrator.jar doctor
 ```
 

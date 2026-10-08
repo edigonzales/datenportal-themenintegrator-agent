@@ -65,6 +65,55 @@ README, beide Handbücher und Skill beschreiben den Containerbetrieb. Die lokale
   Es wurde keine neue fachliche Lieferung, menschliche Freigabe oder
   INT-/PROD-Publikation im echten Themenrepo vorgenommen.
 
+## Dauerhafte Compose-Laufzeit vom 8. Oktober 2026
+
+- 123 Unit-/Funktionstests erfolgreich, ohne übersprungene Tests. Ausführbarer
+  JAR und `spotlessCheck` erfolgreich; Bash-Laufzeitdateien bestehen `bash -n`.
+- Die zwölf bestehenden echten Integrationstests bestanden im vollständigen
+  Regressionslauf: stdio-MCPs, XTF/Office, Typprüfungen, Wiederaufnahme und
+  gleicher GRETL-Task im vorhandenen Jenkins. Keine neue fachliche Lieferung.
+- Alle neun neuen Compose-Integrationstests bestanden im abschliessenden
+  eigenen Prüflauf. Sie verwenden eigene Projekte, freie Loopback-Ports,
+  private Themenkopien und ausschliesslich synthetische Testdaten.
+- Tatsächlich geprüft: automatischer Kaltstart beider HTTP-MCPs und GRETL,
+  erwartete Werkzeugkataloge, manuelles `docker compose up -d`, gerenderte
+  Konfiguration, Compose-Build ohne lokale Image-Builddefinitionen und Status.
+- Tatsächlich geprüft: derselbe Gradle-Daemon bei zwei CSV-Prüfungen, getrennte
+  Arbeitskopien, parallele gültige/ungültige CSV und Organisationsprüfung.
+  Im letzten Messlauf: erste CSV-Prüfung 6473 ms, Folgeprüfung 1236 ms,
+  ephemeral-Vergleich 9043 ms. Die Messung beginnt nach Containerbereitstellung
+  und enthält Kopieren und Taskausführung; sie ist ein lokaler Einzelvergleich,
+  keine allgemeine Leistungszusage.
+- Tatsächlich geprüft: containerseitiger Timeout mit Diagnose, verlorener
+  Hostprozess bei laufendem Task, nächste erfolgreiche Prüfung, GRETL-Neustart
+  samt Warm-up, bewusst gestoppter Leerlauf-Daemon und Datenblatt-Wiederaufnahme
+  nach MCP-Neustart. Die isolierten Container und selbst angelegten Testvolumes
+  wurden entfernt.
+- Ein absichtlich unvollständiger Abschlussnachweis im Testvolume löst einen
+  Neustart ausschliesslich der eigenen GRETL-Runtime aus. Eine manipulierte
+  erwartete Bundle-Prüfsumme stoppt vor der Taskausführung. Dies sind explizite
+  Fehlerfixtures, keine beschädigte echte Jenkins-Installation.
+- Ein tatsächlich belegter IPv4-Loopback-Port verhindert den Containerstart
+  mit erhaltenem Diagnoselog. Unit-Fixtures prüfen ausserdem fremde Images,
+  Arbeitsbereiche und Caches, nicht verfügbares Docker, Konfigurationsgrenzen
+  und konkurrierende Sperren.
+- Eingabestand: Themenrepo `b877712`, Dev-Stack `64ce441`; GRETL-Image
+  `sogis/datenportal-jenkins:0.1.0-3` mit dem oben dokumentierten Image-/Bundle-
+  Stand. Die beiden MCPs verwenden die Digests aus dem Konfigurationsbeispiel.
+  Alle GRETL-Läufe nutzen Java 17 aus dem Image; der Hostprozess verwendet
+  JDK 25 und `GRADLE_JAVA_HOME_17=/no-host-java17`.
+- Änderungen betreffen ausschliesslich den Integrator. Schwester-Repositories
+  und die vorhandenen Änderungen an `test-image-duckdb.sh` beziehungsweise
+  `ibx.png` bleiben erhalten. `git diff --check` erfolgreich, einschliesslich
+  zusätzlicher Prüfung der neuen Dateien.
+
+Der bestehende Dev-Stack blieb während der Prüfung verfügbar. Docker-Daemon-
+und Rechnerneustart wurden nicht ausgelöst; Containerneustart und die deklarierte
+Restart-Policy sind geprüft. Die bestehende lokale Konfiguration wird nicht
+automatisch migriert. Vorhandene Freigaben bleiben Aufzeichnungen; geänderte
+Runtime-/Konfigurationsfingerprints verlangen erneut Prüfung und Freigabe.
+Keine neuen menschlichen Freigaben oder INT-/PROD-Aktionen wurden vorgenommen.
+
 ## Automatisiert mit Simulationen geprüft
 
 JUnit prüft zusätzlich fehlerhafte CSV, vollständige Scans und begrenzte Fehlerlisten, Datentypen/Pflichtwerte, Freigaben nach Änderungen, Dateimanipulationen, Serien, Teillieferungen, Konverter/JUnit-Fehler, XLSX-Formelcache, XML-/HTML-Behandlung, Kandidaten und unvollständige Proofs, Office-/Teamfehler und Repository-Konflikte.

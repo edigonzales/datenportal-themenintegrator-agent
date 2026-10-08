@@ -4,7 +4,7 @@ Der Integrator unterstützt drei Vorgänge: ein Thema integrieren (`topic`), ein
 
 ## Installation und Konfiguration
 
-Benötigt werden JDK 25, Git, Docker sowie die Checkouts von Integrator, Themenrepo und Dev-Stack. Die beiden Fach-MCPs kommen als veröffentlichte Images; deren Quellcheckouts und lokale Builds sind nicht erforderlich. Für PRs ist `gh` mit Anmeldung erforderlich. GRETL-Vorprüfungen verwenden Java 17 aus dem Jenkins-Image. Eine lokale Java-17-Installation und ein lokales GRETL-JAR-Bundle sind nicht erforderlich.
+Benötigt werden JDK 25, Git, Docker mit Compose ab 2.24.4 sowie die Checkouts von Integrator, Themenrepo und Dev-Stack. Die beiden Fach-MCPs kommen als veröffentlichte Images; deren Quellcheckouts und lokale Builds sind nicht erforderlich. Für PRs ist `gh` mit Anmeldung erforderlich. GRETL-Vorprüfungen verwenden Java 17 aus dem Jenkins-Image. Eine lokale Java-17-Installation und ein lokales GRETL-JAR-Bundle sind nicht erforderlich.
 
 ```sh
 cd /pfad/datenportal-themenintegrator-agent
@@ -27,26 +27,31 @@ model_dirs = [] # Originalmodelle kommen automatisch aus dem Datenblatt-Image
 
 [gretl]
 image = "sogis/datenportal-jenkins:0.1.0-3"
+mode = "compose"
 
 [datasheet]
-transport = "stdio"
+transport = "http"
+managed = true
+url = "http://127.0.0.1:8000/mcp"
 image = "sogis/datenportal-datenblatt-mcp@sha256:b391421578f8c4652fb7a64465187746a3057ab4413d17cfc20a56025b470da1"
 
 [interlis]
-transport = "stdio"
+transport = "http"
+managed = true
+url = "http://127.0.0.1:8080/mcp"
 image = "sogis/interlis-mcp@sha256:b3ed1e738ccfe670f92ecebcbb014cf67aade5f0609e15be1f75948e15e899ff"
 ```
 
 `stack_timeout_seconds` beträgt standardmässig 1800 Sekunden und gilt nur
-für Stackstart, Bootstrap und Service-Starts. `timeout_seconds` bleibt mit
+für Stackstart, Bootstrap, Compose-Service-Starts und deren Bereitschaft. `timeout_seconds` bleibt mit
 300 Sekunden der allgemeine Werkzeug-Default. Stacklogs liegen unter
 `.datenportal-integrator/stack-logs/` und bleiben auch bei Fehler oder Timeout
 erhalten. Nach einem Timeout den Containerlauf und den Bootstrap-Prüfstand
 klären, bevor erneut gestartet wird.
 
-Das vollständige Beispiel enthält auch das lokale Jenkins-Profil. Beide Fach-MCPs starten bei Bedarf über `docker run --rm -i` mit dem Profil `stdio`, ohne TTY, Portfreigabe oder Dateimounts. Im CLI endet die Verbindung nach einer Operation; der Integrator-MCP verwendet sie während seiner Laufzeit wieder. Dateien werden vom Integrator gelesen und als Text übertragen.
+Das vollständige Beispiel enthält auch das lokale Jenkins-Profil. `managed = true` verbindet einen Fach-MCP mit der lokalen Compose-Laufzeit. Beide Dienste verwenden HTTP auf `/mcp`; die Ports sind ausschliesslich an `127.0.0.1` gebunden. Andere freie Ports direkt in den beiden `url`-Werten wählen. Unter `[runtime]` kann `project = "datenportal-integrator"` einen eigenen Compose-Projektnamen wählen. Der öffentliche Werkzeugkatalog wird nach dem Start geprüft. Dateien werden weiterhin vom Integrator gelesen und als Text übertragen.
 
-Für vorhandene HTTP-Dienste im jeweiligen Abschnitt `transport = "http"` und `url = "http://127.0.0.1:8000/mcp"` beziehungsweise Port 8080 setzen. Beim Datenblatt kann `image` als Quelle für die Originalmodelle stehen bleiben. Ohne Image müssen passende lokale `model_dirs` angegeben werden. Das alte `datasheet_mcp_url` bleibt kompatibel, darf aber nicht neben `[datasheet]` stehen. Die frühere INTERLIS-JAR-Konfiguration bleibt unterstützt; `image` und `jar` sind gegenseitig ausgeschlossen.
+Für schon vorhandene HTTP-Dienste `managed = false` setzen oder das Feld weglassen. Sie werden nicht durch den Integrator gestartet. Ein `image` kann für beide Fach-MCPs die ausgewählte Version dokumentieren; beim Datenblatt liefert es zusätzlich die Originalmodelle. Ohne Datenblatt-Image müssen passende lokale `model_dirs` angegeben werden. Für stdio `transport = "stdio"` verwenden und `url` sowie `managed` entfernen: dann startet jede CLI-Verbindung wie bisher ihren eigenen Container über `docker run --rm -i`. Die frühere INTERLIS-JAR-Konfiguration und `datasheet_mcp_url` bleiben unterstützt.
 
 Zugangsdatenwerte stehen weder in versionierter Konfiguration noch in Argumentdateien. Ein Umgebungsprofil nennt nur Variablennamen (`username_env`, `token_env`). Zum Setzen in einer Shell die Werte ohne Echo eingeben, beispielsweise unter zsh:
 
@@ -67,7 +72,20 @@ java -jar build/libs/datenportal-integrator.jar setup-mcps
 
 `setup-tools` prüft ilivalidator 1.15.0 gegen eine feste SHA-256-Prüfsumme. `setup-mcps` bezieht fehlende Images, sichert ihre konkrete Identität und kopiert die beiden Originalmodelle aus `/app/models` eines gestoppten Datenblatt-Containers. Die ignorierte Auswahl liegt unter `.datenportal-integrator/tools/mcps/runtime.json`, die Modelle im nach Image-Stand getrennten Unterordner `models/`. Keine Modelle aus einem Editor-Checkout in `model_dirs` doppelt hinzufügen. `setup-gretl` sichert das GRETL-Image und dessen Bundle-Prüfsumme unter `.datenportal-integrator/tools/gretl-runtime/runtime.json`. Es startet einen kurzlebigen Prüfcontainer mit überschriebenem Einstiegspunkt, ohne Jenkins-Server oder laufenden Dev-Stack. JARs bleiben im Image.
 
-Normale Workflow-Aufrufe und wiederholtes `setup-mcps` wechseln keine Image-Version. Für ein bewusstes Update zuerst die Image-Referenz in der Konfiguration ändern oder bei einem Versionstag `setup-mcps --update` verwenden. Danach betroffene Dateien erneut prüfen und freigeben. `start-datasheet` ist ein veralteter Hinweisbefehl; er baut und startet keinen Server mehr. Docker muss auch im PATH des Desktop-MCP-Prozesses verfügbar sein.
+Sind die ausgewählten Images vorbereitet, erzeugen die Setup-Befehle die ignorierte `compose.override.yaml` und Laufzeitdateien unter `.datenportal-integrator/tools/compose/`. Die Reihenfolge von `setup-gretl` und `setup-mcps` ist beliebig. Eine fremde Override-Datei wird nicht überschrieben. Die generierte Konfiguration enthält keine Zugangsdaten. Für normale Starts ist keine Neueinrichtung erforderlich.
+
+```sh
+# Im Integrator-Root nach der Einrichtung:
+docker compose config --quiet
+docker compose up -d
+docker compose ps
+# Alternativ inklusive MCP-Bereitschaftsprüfung:
+java -jar build/libs/datenportal-integrator.jar runtime-up
+```
+
+Der erste benötigte MCP- oder GRETL-Aufruf startet fehlende Dienste selbst. Eine normale CLI-Operation oder das Ende des Integrator-MCP hält diese Dienste nicht an. Docker muss laufen und im PATH des Desktop-Prozesses verfügbar sein. Container verwenden `restart: unless-stopped`; Docker-Autostart auf dem Rechner wird nicht eingerichtet. `docker compose down` entfernt die eigenen Container und das Netzwerk, erhält aber den Gradle-Cache. Keine Volumes zur normalen Fehlerbehebung löschen.
+
+Normale Aufrufe wechseln keine Image-Version. Für ein bewusstes Update zuerst die Dienste mit der vorhandenen Compose-Konfiguration anhalten, dann die Image-Referenz ändern beziehungsweise `setup-mcps --update` oder `setup-gretl --update` ausführen und erneut starten. GRETL erhält bei einem anderen Image einen eigenen Cache. Betroffene Prüfungen und Freigaben erneuern. Eine laufende abweichende Instanz wird diagnostiziert und nicht automatisch ersetzt. `start-datasheet` bleibt ein veralteter Hinweisbefehl.
 
 Prüfen:
 
@@ -76,7 +94,7 @@ java -jar build/libs/datenportal-integrator.jar doctor
 java -jar build/libs/datenportal-integrator.jar schema start
 ```
 
-`doctor` prüft Pfade, Stack-Zuordnung, Image-/Modellcache, beide echten MCP-Werkzeugkataloge und die Java-17-/GRETL-Laufzeit im Prüfimage. Fehler stehen im JSON-Ergebnis. Ein erfolgreicher Katalogtest ersetzt noch keine fachliche Modell- oder Publikationsabnahme.
+`doctor` prüft Pfade, Stack-Zuordnung, Image-/Modellcache, beide echten MCP-Werkzeugkataloge und die Java-17-/GRETL-Laufzeit im Prüfimage. Zusätzlich zeigt `doctor` sichere Dienst-/Image-Kennungen und den Gradle-Daemon-Status. Ein beendeter Leerlauf-Daemon ist bei funktionsfähiger Runtime kein Fehler. Fehler stehen im JSON-Ergebnis. Ein erfolgreicher Katalogtest ersetzt noch keine fachliche Modell- oder Publikationsabnahme.
 
 ## Codex Desktop, Codex CLI und OpenCode
 
@@ -324,14 +342,43 @@ Eine unbestätigte letzte Änderung blockiert weitere Bearbeitung mit `metadata_
 | `draft_restore_mismatch` | Rekonstruktion weicht ab; Vorgang erhalten und Ursache klären. Keine Änderung oder Lieferung fortsetzen. |
 | `mcp_unavailable` | Docker und den lokalen Fehlerlog unter `.datenportal-integrator/tools/mcps/logs/` prüfen. Unbestätigte Änderungen separat aufklären. |
 
-Der stdio-Export liefert keine Browser-Downloadadresse. Der Integrator speichert das validierte XML lokal und zeigt seine Vorschau. HTTP bleibt für Browser-Downloads verfügbar. Eigene Container werden beim Beenden entfernt; bei einem abgebrochenen Integratorprozess räumt die nächste Docker-MCP-Verbindung seine gespeicherten, nicht mehr zu einem lebenden Prozess gehörenden Containerkennungen auf. Fremde Container werden nicht entfernt.
+Der stdio-Export liefert keine Browser-Downloadadresse. Der Integrator speichert das validierte XML lokal und zeigt seine Vorschau. HTTP bleibt für Browser-Downloads verfügbar. Eigene stdio-Container werden beim Beenden entfernt; bei einem abgebrochenen Integratorprozess räumt die nächste Docker-MCP-Verbindung seine gespeicherten, nicht mehr zu einem lebenden Prozess gehörenden Containerkennungen auf. Fremde Container werden nicht entfernt.
 
 ## GRETL-Vorprüfungen im Container
 
-Die CSV-Modellprüfung und die Gradle-Prüfung neuer Organisationen starten pro Prüfung einen eigenen Container aus dem festgelegten Jenkins-Image. Die Themenkopie, Kandidaten, CSV und zusätzliche Init-Scripte werden hineinkopiert. Gradle läuft als `jenkins` mit dem vorhandenen Java-17-Wrapper und dem Bundle/Gradle-Cache des Images. Die aktuelle Jenkins-Instanz und ihr Home werden für diese Vorprüfung nicht verwendet. Die eigentliche Anlieferung bleibt ein Jenkins-Job.
+Mit `[gretl].mode = "compose"` verwenden CSV-Modellprüfung und Organisationsprüfung einen eigenen dauerhaften Container aus dem festgelegten Jenkins-Image. Java 17, GRETL und die ursprünglichen Gradle-Abhängigkeiten kommen aus dem Image. Der eigene beschreibbare Cache gehört zu genau dieser Image-Identität. Nach jedem Containerstart läuft ein nebenwirkungsfreies `help` in einem minimalen Projekt mit dem bestehenden Themenrepo-Wrapper. Das Themenrepo ist dafür read-only eingebunden; dessen fachlicher Build wird beim Warm-up nicht ausgeführt.
+
+Jede Prüfung erhält eine neue beschreibbare Themenkopie und eigene Eingabepfade. Gradle läuft als `jenkins` mit `--daemon`, ohne S3-Publikation, Git-Rückschreiben oder Reload. Prüfungen sind pro Runtime serialisiert. Der Daemon wird wiederverwendet, solange Gradle ihn aktiv hält; nach Inaktivität oder einem Abbruch darf er neu starten. Die aktuelle Jenkins-Instanz und ihr Home werden für Vorprüfungen nicht verwendet. Die eigentliche Anlieferung bleibt ein Jenkins-Job.
+
+Ohne `mode` oder mit `mode = "ephemeral"` bleibt das bisherige Verhalten erhalten: ein neuer Container pro Prüfung, `--no-daemon`, anschliessende Entfernung. Es gibt keinen automatischen Wechsel zwischen den Betriebswegen bei einem Fehler.
 
 `setup-gretl` behält die ausgewählte Image-Version bei. Nach einer bewusst geänderten Image-Referenz oder mit `setup-gretl --update` wird ein neuer Stand aufgenommen; anschliessend betroffene Prüfungen und Freigaben erneuern. Vor dem lokalen Gesamttest vergleicht der Integrator Image und Bundle mit dem tatsächlich laufenden Jenkins. Bei `gretl_runtime_mismatch` anhalten, die Konfiguration abstimmen und erneut vorbereiten/prüfen; der Integrator ändert den Stack nicht automatisch.
 
 Alte Felder `gretl_java_home` und `gretl_offline_jars` werden noch gelesen, aber ignoriert und von `doctor` als veraltet gemeldet. Alte Runtime-Nachweise verlangen `setup-gretl`; sie werden vor der Übernahme gesichert. Ein vorhandener alter JAR-Cache wird nicht mehr benutzt und kann nach erfolgreicher Umstellung entfernt werden. Es gibt keinen lokalen GRETL-Fallback.
 
-Prüfberichte enthalten Runtime-Identität, Exit-Code, lokalen Konsollog und einen Ordner für Gradle-Prüfartefakte. Container werden bei Erfolg, Fehler oder Timeout entfernt. `gretl_setup_required` verlangt die Einrichtung; `gretl_image_missing` weist auf ein fehlendes festgelegtes Image hin. Normale Prüfungen beziehen keine neuen Images.
+Prüfberichte enthalten Runtime-Identität, Exit-Code, lokalen Konsollog und einen Ordner für Gradle-Prüfartefakte. Im Compose-Modus bleiben Container und Diagnosearbeitskopien erhalten. Logs, Abschlussnachweise und Prüfartefakte liegen zusätzlich unter `/var/lib/integrator/jobs/` im eigenen Volume. Ein Timeout beendet den Task im Container; bei nicht bestätigtem Abbruch wird ausschliesslich die eigene GRETL-Runtime unter der Sperre neu gestartet. Auch nach Verlust des Hostprozesses wartet die nächste Prüfung auf den Abschluss oder klärt ihn durch diesen Neustart. Im ephemeral-Modus werden Container wie bisher entfernt. `gretl_setup_required` verlangt die Einrichtung; `gretl_image_missing` weist auf ein fehlendes festgelegtes Image hin. Normale Prüfungen beziehen keine neuen Images.
+
+### Compose-Diagnose
+
+| Beobachtung | Vorgehen |
+|---|---|
+| `runtime_start_failed` | Genannten Startlog unter `.datenportal-integrator/tools/compose/` prüfen; Docker, freien Port und `docker compose logs datasheet interlis gretl` prüfen. |
+| `runtime_mismatch` | Arbeitsbereich, Image-Identität, Portfreigabe und eigenen GRETL-Cache abgleichen. Fremde Instanzen nicht ersetzen. |
+| `runtime_tools_missing` / `runtime_start_timeout` | MCP-Profil, Serverlogs und erwarteten Werkzeugkatalog prüfen; keine Mutation automatisch wiederholen. |
+| `runtime_configuration_conflict` | Eigene `compose.override.yaml` sichern und deren Verwendung klären; der Integrator überschreibt sie nicht. |
+| `runtime_locked` | Laufende Prüfung beziehungsweise Container-Abschlussnachweis prüfen. Ein getrennter Host kann einen noch laufenden Task hinterlassen. |
+| GRETL-Warm-up schlägt fehl | `docker compose logs gretl` und `/var/lib/integrator/warmup.log` lesen; Wrapper, Java 17, Image und Cache prüfen. |
+
+Die erzeugte Compose-Konfiguration wird nach Änderungen mit den Setup-Befehlen erneuert. Eine vorhandene lokale Konfiguration wird nicht automatisch auf den neuen Standard umgestellt.
+
+### Vorhandene lokale Konfiguration umstellen
+
+Die bestehende `config/local.toml` erhalten und gezielt ergänzen: unter `[gretl]`
+`mode = "compose"` setzen; bei beiden Fach-MCPs `transport = "http"`,
+`managed = true` und die gewünschten lokalen `/mcp`-Adressen mit freiem Port
+eintragen. Vorhandene Image-Referenzen, Pfade und Umgebungsprofile beibehalten.
+Ein altes `datasheet_mcp_url` entfernen, wenn stattdessen `[datasheet]` verwendet
+wird. Anschliessend `setup-mcps`, `setup-gretl` und `doctor` ausführen. Die
+Setup-Befehle wechseln ohne `--update` keine bestehende Image-Auswahl.
+Geänderte Konfiguration und Integrator-JAR verlangen erneut die betroffenen
+Prüfungen und Freigaben.
