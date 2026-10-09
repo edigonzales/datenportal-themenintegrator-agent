@@ -8,9 +8,48 @@ vollständige Start: Secrets, Garage, erfolgreicher Seed, Erstpublikation und
 Portal. Der Jenkins-Quellcheckout ist nur für lokale Image-Builds erforderlich.
 Passende laufende Instanzen werden weiterverwendet.
 
-Das lokale Konfigurationsbeispiel verwendet drei dauerhafte Compose-Dienste: Datenblatt-MCP und `interlis-mcp` über HTTP sowie einen eigenen GRETL-Prüfcontainer aus dem Jenkins-Image. Fehlende Dienste starten automatisch; passende laufende Instanzen und der Gradle-Daemon werden wiederverwendet. Fach-MCP-Checkouts und lokale Fach-MCP-Builds sind nicht erforderlich. Der Launcher baut und startet den Java-Kern standardmässig in Docker; ein Host-JDK 25 ist optional. Bestehende stdio-/ephemeral-Konfigurationen bleiben unterstützt. Fachliche Änderungen im Themenrepo werden als Kandidaten geprüft und erst nach Freigabe übernommen.
+Das lokale Konfigurationsbeispiel verwendet drei dauerhafte Compose-Dienste: Datenblatt-MCP und `interlis-mcp` über HTTP sowie einen eigenen GRETL-Prüfcontainer aus dem Jenkins-Image. Fehlende Dienste starten automatisch; passende laufende Instanzen und der Gradle-Daemon werden wiederverwendet. Fach-MCP-Checkouts und lokale Fach-MCP-Builds sind nicht erforderlich. Der Launcher startet standardmässig das fertig gebaute Docker-Image `sogis/datenportal-themenintegrator-agent`; beim Start ist kein Agent-Build nötig. Ein Host-JDK 25 ist optional. Bestehende stdio-/ephemeral-Konfigurationen bleiben unterstützt. Fachliche Änderungen im Themenrepo werden als Kandidaten geprüft und erst nach Freigabe übernommen.
 
 Die Setup-Befehle erzeugen eine ignorierte `compose.override.yaml` mit den ausgewählten Image-Identitäten, Ports und lokalen Mounts. Compose startet keine neueren Images. Dienste bleiben nach dem Ende des Integrators verfügbar; `docker compose down` hält sie an und erhält den Gradle-Cache. Jenkins und sein Home gehören weiterhin zum Dev-Stack.
+
+## Agent-Image und Updates
+
+Jeder erfolgreiche Push-Build auf `main` veröffentlicht auf Docker Hub
+`0.1.<GitHub Run Number>` für `linux/amd64` und `linux/arm64` sowie `latest`.
+Git-Tags und GitHub Releases werden dafür nicht erstellt.
+
+Beim ersten Start lädt der Launcher `latest` und speichert den Digest und die
+lokale Image-ID. Weitere Starts verwenden diesen Stand. Updates erfolgen explizit:
+
+```sh
+./bin/datenportal-agent --update-agent --version
+./bin/datenportal-agent init
+```
+
+Ein fehlgeschlagenes Update lässt die bisherige Auswahl erhalten. Fehlt ein
+bereits gewähltes Image lokal, lädt der Launcher denselben Digest nach.
+Konfiguration und Arbeitsdaten bleiben im Workspace; Programmressourcen liegen
+im Image unter `/opt/datenportal-agent`.
+
+Für Änderungen am Java-Agenten vor einer Veröffentlichung:
+
+```sh
+./bin/datenportal-agent --runtime docker-build serve
+./bin/datenportal-agent gradle test jar spotlessCheck
+```
+
+`gradle` verwendet automatisch den Entwicklungscontainer. `--runtime local`
+bleibt für ein vorhandenes Host-JDK 25 verfügbar. Vor dem ersten Docker-Hub-Release
+ist `docker-build` ebenfalls der nutzbare Startmodus.
+
+Die Pipeline benötigt die GitHub-Actions-Secrets `DOCKERHUB_USERNAME` und
+`DOCKERHUB_TOKEN` mit Schreibrecht auf `sogis/datenportal-themenintegrator-agent`.
+Pull Requests prüfen beide Plattformen ohne diese Secrets und publizieren nicht.
+Details stehen im [Entwicklerhandbuch](docs/entwicklerhandbuch.md#image-veröffentlichung).
+
+Die vollständige [Erstinitialisierung mit dem Docker-Image](docs/anwenderhandbuch.md#erstinitialisierung-mit-dem-veröffentlichten-image)
+beschreibt Checkout-Struktur, Konfiguration, Voraussetzungen und den Wechsel
+vom lokalen Entwicklungsbuild zum veröffentlichten Image.
 
 ## Einstieg
 

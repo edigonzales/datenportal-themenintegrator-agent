@@ -62,7 +62,8 @@ public final class Models {
         profile = Json.str(identity, "rule_profile", "SO");
     var attrs = Json.list(sheet.get("attributes"));
     var inspection =
-        Csv.inspect(csv, Json.read(w.settings.root.resolve("config/rules.json")), attrs);
+        Csv.inspect(
+            csv, Json.read(AgentResources.resolve(w.settings.root, "config/rules.json")), attrs);
     if (!Json.bool(inspection, "valid", false))
       throw new Problem(
           "csv_contract_invalid", "CSV entspricht nicht dem Datenblatt.", "report", inspection);

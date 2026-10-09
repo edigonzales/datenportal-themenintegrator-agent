@@ -39,7 +39,7 @@ public final class Reports {
   }
 
   public static String render(Path root, Path output, String title, Object data) {
-    String template = Json.contents(root.resolve("templates/review-java.html"));
+    String template = Json.contents(AgentResources.resolve(root, "templates/review-java.html"));
     Json.write(
         output, template.replace("{{TITLE}}", escape(title)).replace("{{CONTENT}}", html(data)));
     return output.toString();

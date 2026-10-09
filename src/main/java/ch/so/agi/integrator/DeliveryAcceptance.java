@@ -36,12 +36,14 @@ final class DeliveryAcceptance {
         repo = directory.resolve("datenportal-themenrepo"),
         stack = directory.resolve("datenportal-dev-stack");
     Files.createDirectories(root.resolve("config"));
-    Files.copy(source.root.resolve("config/rules.json"), root.resolve("config/rules.json"));
+    Files.copy(
+        AgentResources.resolve(source.root, "config/rules.json"),
+        root.resolve("config/rules.json"));
     for (String part : List.of("validation", "templates"))
-      Workspace.copy(source.root.resolve(part), root.resolve(part));
+      Workspace.copy(AgentResources.resolve(source.root, part), root.resolve(part));
     Files.createDirectories(root.resolve("build/libs"));
     Files.copy(
-        source.root.resolve("build/libs/datenportal-integrator.jar"),
+        AgentResources.resolve(source.root, "build/libs/datenportal-integrator.jar"),
         root.resolve("build/libs/datenportal-integrator.jar"));
     for (Path proof :
         List.of(new DockerMcps(source, process).lockFile(), GretlRuntime.file(source))) {
@@ -76,7 +78,7 @@ final class DeliveryAcceptance {
         repo.resolve("agi/gretl-datenportal-job.yaml"),
         "title: SYNTHETIC TEST FIXTURE\ndescription: Isolated delivery acceptance\npermissions:\n  read:\n    - team: datenportal-read\n  build:\n    - team: agi-build\n");
     String xml =
-        Json.contents(source.root.resolve("tests/fixtures/dataset.xtf"))
+        Json.contents(AgentResources.resolve(source.root, "tests/fixtures/dataset.xtf"))
             .replace("ch.so.grundwasser.qualitaet", DATASET)
             .replace("Wasserqualität Grundwasser Kanton Solothurn", "SYNTHETIC TEST FIXTURE")
             .replace(

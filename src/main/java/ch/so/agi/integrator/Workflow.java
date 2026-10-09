@@ -481,7 +481,8 @@ public final class Workflow implements AutoCloseable {
   private Object analyze(Map<String, Object> r) {
     Path p = store.file(r, "data");
     if (p == null) return Json.map("skipped", true, "reason", "metadata_only");
-    var report = Csv.inspect(p, Json.read(settings.root.resolve("config/rules.json")), null);
+    var report =
+        Csv.inspect(p, Json.read(AgentResources.resolve(settings.root, "config/rules.json")), null);
     report.put("fingerprint", fingerprint(r, "data"));
     Json.obj(r.get("checks")).put("data", report);
     var result = new LinkedHashMap<>(report);
@@ -610,7 +611,9 @@ public final class Workflow implements AutoCloseable {
                 "attributes_missing",
                 "message",
                 "Jede Datenspalte benötigt ein Attribut."));
-      csv = Csv.inspect(data, Json.read(settings.root.resolve("config/rules.json")), attrs);
+      csv =
+          Csv.inspect(
+              data, Json.read(AgentResources.resolve(settings.root, "config/rules.json")), attrs);
       errors.addAll(Json.list(csv.get("errors")));
       warnings.addAll(Json.list(csv.get("warnings")));
     }

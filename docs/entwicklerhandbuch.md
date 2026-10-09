@@ -43,17 +43,34 @@ gesperrt; es gibt keine automatische Container-Neuerstellung als Umgehung.
 
 ## Docker-Launcher und Initialisierung
 
-`bin/datenportal-agent` verwendet ein über Digest festgelegtes JDK-25-Basisimage
-mit Docker CLI/Compose und Werkzeugen für die vorhandenen externen Skripte.
-Build und Runtime sprechen den Host-Docker über dessen Unix-Socket an.
-Image-Build und Gradle-Build sind serialisiert; Buildausgaben gehen nach stderr.
-CLI/MCP-Ausgaben bleiben auf stdout. Der Buildcache ist ein benanntes Volume;
-der automatische JAR-Build verwendet ein Bridge-Netz. Agent und explizite
-Gradle-Testläufe verwenden Host-Networking mit IPv4 für Java, damit lokale
-Testserver und veröffentlichte Fachdienste auf Docker Desktop erreichbar sind.
-Arbeitsdateien behalten die Host-UID/GID. Bei hart beendetem Image-Build kann eine
-Sperre unter `.datenportal-integrator/launcher/build.lock` verbleiben; zuerst die
-PID und laufende Container klären, erst dann die verwaiste Sperre entfernen.
+`bin/datenportal-agent` startet das veröffentlichte Agent-Image mit eingebautem
+JAR und JDK 25. Immutable Ressourcen werden über `AgentResources` unter
+`/opt/datenportal-agent` aufgelöst; Konfiguration, Credentials, Themencheckouts
+und Vorgänge bleiben im schreibbaren Workspace. Im Entwicklungsmodus ohne
+`DATENPORTAL_AGENT_HOME` gelten die bisherigen Checkout-Pfade.
+
+Die erste Auswahl lädt `sogis/datenportal-themenintegrator-agent:latest`.
+`.datenportal-integrator/launcher/release-image` speichert atomar Referenz,
+Repo-Digest und lokale Image-ID. `--update-agent` prüft den neuen Stand mit einem
+netzlosen CLI-Start, bevor die Auswahl ersetzt wird. Ohne Update wird nicht
+nach `latest` gesucht; fehlende lokale Images werden per gespeichertem Digest
+wiederhergestellt. `image.id` bezeichnet das zuletzt gestartete Image,
+`build-image.id` separat den Entwicklungscontainer.
+
+`--runtime docker-build` baut die Stufe `tools` und anschliessend das aktuelle
+Checkout-JAR. `gradle …` wählt diesen Modus automatisch. `--runtime local`
+benötigt weiterhin Host-JDK 25. Die Moduswahl bleibt in erzeugten Harness-Aufrufen
+erhalten; `--update-agent` wird nicht als dauerhafte Startoption gespeichert.
+
+Build und Runtime sprechen Host-Docker über dessen Unix-Socket an.
+Image-Auswahl und Builds sind serialisiert; Build-/Pull-Ausgaben gehen nach
+stderr, CLI/MCP-Ausgaben nach stdout. Der Buildcache ist ein benanntes Volume;
+der Entwicklungs-JAR-Build verwendet ein Bridge-Netz. Agent und explizite
+Gradle-Testläufe verwenden Host-Networking mit IPv4. Arbeitsdateien behalten die
+Host-UID/GID. Nach hartem Abbruch zuerst PID und laufende Container klären, bevor
+eine verwaiste `.datenportal-integrator/launcher/build.lock` entfernt wird.
+Der Netzwerk-Selbsttest startet das JAR im gleichen Release-Image; im
+Entwicklungsmodus verwendet er weiterhin einen expliziten Host-JAR-Mount.
 
 `Initializer` speichert abgeschlossene Schritte und Fehler atomar. `AgentRuntime`
 prüft Host-Loopback mit einem kurzlebigen, nur an 127.0.0.1 veröffentlichten
@@ -72,6 +89,8 @@ Erfolg entfernt. Der bestehende GRETL-Daemon wird weiterverwendet.
 ./bin/datenportal-agent gradle integrationTest
 ```
 
+Unit-Tests verwenden das temporäre Linux-Dateisystem des Testcontainers, damit
+POSIX-Eigentums-/Rechteprüfungen nicht von VirtioFS-Metadaten abhängen.
 Integrationstests verwenden im Docker-Modus ein hostseitig gemountetes temporäres
 Verzeichnis, damit Docker-Bind-Mounts auch aus Tests gültig sind. Keine neuen
 Python-Quellen: Python im Image ist nur Laufzeit des unveränderten externen
@@ -88,14 +107,14 @@ repo_dir=$(pwd -P)
 runtime_image=$(cat .datenportal-integrator/launcher/image.id)
 socket_path=$(docker context inspect --format '{{.Endpoints.docker.Host}}')
 socket_path=${socket_path#unix://}
-socket_group=$(docker run --rm --mount "type=bind,source=$socket_path,target=/var/run/docker.sock" "$runtime_image" stat -c '%g' /var/run/docker.sock)
+socket_group=$(docker run --rm --mount "type=bind,source=$socket_path,target=/var/run/docker.sock" --entrypoint stat "$runtime_image" -c '%g' /var/run/docker.sock)
 docker run --rm --network host --user "$(id -u):$(id -g)" --group-add "$socket_group" \
   --mount "type=bind,source=$(dirname "$repo_dir"),target=$(dirname "$repo_dir")" \
   --mount "type=bind,source=$socket_path,target=/var/run/docker.sock" \
   -w "$repo_dir" -e HOME=/tmp -e JAVA_HOME=/no-host-jdk \
   -e JAVA_TOOL_OPTIONS=-Djava.net.preferIPv4Stack=true \
   -e DATENPORTAL_CONTAINER_MODE=true -e "DATENPORTAL_RUNTIME_IMAGE=$runtime_image" \
-  "$runtime_image" bash -c '
+  --entrypoint bash "$runtime_image" -c '
     /opt/java/openjdk/bin/java -cp build/classes/java/test:build/libs/datenportal-integrator.jar ch.so.agi.integrator.LauncherAcceptance "$PWD" &&
     /opt/java/openjdk/bin/java -cp build/classes/java/test:build/libs/datenportal-integrator.jar ch.so.agi.integrator.InitAcceptance "$PWD"
   '
@@ -333,3 +352,45 @@ Der GRETL-Einstiegspunkt bereitet den eigenen Cache aus dem Image vor, übernimm
 Bestehende Runtime-Dateien behalten Schema 2. Betriebsmodus, MCP-Verwaltung und Integrator-JAR sind bereits durch den Konfigurationsfingerprint gebunden; eine Umstellung verlangt neue Prüfungen/Freigaben. Freigegebene Snapshots, externe Laufkennungen und blockierte unbestätigte Mutationen werden nicht migriert oder gelöscht. `doctor` zeigt Dienstzustand und Daemon-Status; ein fehlender Leerlauf-Daemon allein macht die Runtime nicht ungültig.
 
 Die echte `ComposeRuntimeIntegrationTest` verwendet ein eigenes Projekt, freie Ports, private Themenkopien und synthetische CSV. Sie darf ausschliesslich ihre selbst angelegten Testvolumes aufräumen. Die bestehenden echten Integrationstests bleiben die Regression für stdio, ephemeral-GRETL, Wiederaufnahme und den Jenkins-Taskvertrag.
+
+## Image-Veröffentlichung
+
+`.github/workflows/agent-image.yml` prüft Pull Requests und Pushes auf `main`.
+Nur Pushes veröffentlichen `sogis/datenportal-themenintegrator-agent:0.1.<github.run_number>`.
+Die Run Number gilt pro Workflow und bleibt bei Wiederholungen gleich; durch
+Pull Requests oder fehlgeschlagene Runs sind Lücken möglich. Den Workflow zur
+Fortführung dieser Versionsreihe nicht durch einen neuen Zähler ersetzen.
+Lokale Builds verwenden `0.1.0-dev`; CI übergibt `AGENT_VERSION` an Docker und
+`agentVersion` an Gradle. `--version` und die OCI-Labels weisen den Stand aus.
+
+Vor dem ersten Push die Actions-Secrets `DOCKERHUB_USERNAME` und
+`DOCKERHUB_TOKEN` einrichten und dem Token Schreibrecht auf das Docker-Hub-Repo
+einräumen. Die Pipeline bricht bei fehlenden Secrets oder fehlgeschlagener
+Anmeldung ab. Registry-Schreibrechte werden beim ersten Push tatsächlich geprüft.
+Es werden keine Tokens in Build-Argumente, Images oder Protokolle übernommen.
+
+Beide Architekturen werden vor der Publikation gebaut und ohne Workspace-Mount
+mit `runtime/image-smoke.sh` geprüft: Version, CLI, MCP-Initialisierung,
+Konfigurationsvorlage, HTML-Bericht und Java-Konverter.
+`bash runtime/image-network-smoke.sh <image>` prüft zusätzlich mit kompilierten
+Testklassen den echten Host-Loopback aus dem installierten Image. Die private
+Fixture enthält kein Workspace-JAR; CI führt diese Prüfung auf Linux aus. Das Image enthält nur
+freigegebene Build-Eingaben und Laufzeitressourcen; `.dockerignore` schliesst
+insbesondere lokale Konfiguration und Vorgangsdaten aus.
+
+`runtime/publish-image.sh version` veröffentlicht nur fehlende Versions-Tags.
+Ein vorhandener Tag muss auf beiden Plattformen dieselbe Version und denselben
+Commit ausweisen; sonst schlägt der Run fehl. Registry-/Netzfehler gelten nicht
+als fehlender Tag. Nach dem Push werden beide Plattformen frisch geladen und
+nochmals geprüft. Eine Wiederholung kann nach einem unklaren Push-Ergebnis den
+vorhandenen Stand prüfen, ohne ihn zu überschreiben.
+
+Nur die anschliessende `latest`-Promotion ist serialisiert. Versionspublikationen
+laufen unabhängig davon. Eine ältere Run Number ersetzt niemals ein neueres
+`latest`; die Promotion übernimmt den geprüften Multi-Plattform-Digest und
+kontrolliert ihn anschliessend. Keine Git-Tags, GitHub Releases oder fachlichen
+Publikationen werden erzeugt.
+
+Die vollständigen Fachintegrationstests bleiben eine eigene lokale Prüfung mit
+`config/local.toml` und den tatsächlich konfigurierten MCP-/GRETL-Diensten.
+Die isolierten CI-Smokes ersetzen diese Abnahme nicht.

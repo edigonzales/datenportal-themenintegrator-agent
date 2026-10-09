@@ -4,17 +4,81 @@ Der Integrator unterstützt drei Vorgänge: ein Thema integrieren (`topic`), ein
 
 ## Installation und Konfiguration
 
-Standard ist `bin/datenportal-agent`: Docker baut und startet den Java-Kern.
-Benötigt werden eine Bash-Shell, lokales Docker mit Compose und die Checkouts von
-Integrator, Themenrepo und Dev-Stack. Ein Host-JDK ist optional. macOS benötigt
-aktiviertes Host-Networking in Docker Desktop ab 4.34; Linux einen lokalen Docker
-Engine. `init` prüft Loopback tatsächlich über einen kurzlebigen Prüfcontainer.
+Standard ist `bin/datenportal-agent`: Der Launcher lädt das fertig gebaute Image
+`sogis/datenportal-themenintegrator-agent` von Docker Hub und startet den Java-Kern
+darin. Für diesen Betrieb sind weder ein lokaler Agent-Build noch ein Host-JDK
+nötig. Der Integrator-Checkout bleibt für Launcher, projektlokale MCP-Einträge,
+Konfiguration und Arbeitsdaten erforderlich.
+
+### Erstinitialisierung mit dem veröffentlichten Image
+
+Voraussetzungen sind eine Bash-Shell, laufendes lokales Docker mit Compose und
+vorhandene Checkouts von Integrator, Themenrepo und Dev-Stack. Bei den
+Standardpfaden liegen sie nebeneinander:
+
+```text
+arbeitsverzeichnis/
+  datenportal-themenintegrator-agent/
+  datenportal-themenrepo/
+  datenportal-dev-stack/
+```
+
+macOS benötigt aktiviertes **Settings → Resources → Network → Enable host
+networking** in Docker Desktop ab 4.34; Linux einen lokalen Docker Engine.
+`init` prüft Loopback tatsächlich über einen kurzlebigen Prüfcontainer.
 Fehlende Docker-Einstellungen werden gemeldet, nicht automatisch geändert.
+Beim ersten Start sind Netzwerkzugriff auf Docker Hub und für die von `init`
+bereitgestellten Fachwerkzeuge erforderlich.
+
+Im Integrator-Checkout ausführen:
 
 ```sh
 ./bin/datenportal-agent init
 ./bin/datenportal-agent doctor
 ```
+
+Beim ersten Aufruf lädt der Launcher `latest` für die Rechnerarchitektur
+(`linux/amd64` oder `linux/arm64`), prüft den Image-Start und speichert Digest und
+Image-ID unter `.datenportal-integrator/launcher/release-image`. Ein separates
+`docker pull` oder ein eigener `docker run` mit manuellen Mounts ist nicht nötig.
+Der Launcher übernimmt Docker-Socket, Netzwerk, Arbeitsverzeichnis und UID/GID.
+
+`init` erzeugt `config/local.toml` aus der Vorlage im Image, sofern die Datei
+fehlt. Die Standardpfade passen zur oben gezeigten Verzeichnisstruktur. Bei
+abweichenden Pfaden **vor dem ersten `init`** eine lokale Konfiguration anlegen:
+
+```sh
+cp config/local.example.toml config/local.toml
+```
+
+Dann `topics_repo` und `stack_repo` in `config/local.toml` an die bestehenden
+Checkouts anpassen und `init` ausführen. Relative Pfade beziehen sich auf `root`,
+das wiederum relativ zur Konfigurationsdatei ausgewertet wird. Liegen benötigte
+Verzeichnisse ausserhalb des gemeinsamen Checkout-Elternordners, müssen sie mit
+`--mount-ro` beziehungsweise `--mount-rw` eingebunden werden; Beispiele folgen
+weiter unten. Zugangsdaten gehören in Umgebungsvariablen oder den Credential-Store.
+
+Erfolgreiche Initialisierung meldet `ready=true`. Anschliessend kann der Agent
+über `./bin/datenportal-agent codex` oder den eingerichteten projektlokalen
+MCP-Eintrag verwendet werden. `./bin/datenportal-agent serve` startet den
+stdio-MCP direkt; dabei wartet der Prozess auf einen MCP-Client.
+
+Voraussetzung für diesen Startweg ist ein erfolgreich veröffentlichtes Image.
+Der bisherige [Abnahmestand](abnahme.md#agent-run-image-und-release-pipeline-vom-9-oktober-2026)
+bestätigt die erste Docker-Hub-Publikation noch nicht. Bis diese verfügbar ist,
+kann mit Docker aus dem Checkout initialisiert werden:
+
+```sh
+./bin/datenportal-agent --runtime docker-build init
+./bin/datenportal-agent --runtime docker-build doctor
+```
+
+Dieser Entwicklungsmodus baut den Agenten lokal im Container. Seine Auswahl
+bleibt in den erzeugten MCP-Einträgen erhalten. Nach der ersten Veröffentlichung
+stellt `./bin/datenportal-agent --runtime docker init` die bekannten Einträge auf
+den Betrieb mit dem veröffentlichten Image um.
+
+### Wiederaufnahme und Bereitschaft
 
 `init` ist gesperrt gegen parallele Aufrufe und protokolliert jeden Schritt in
 `.datenportal-integrator/init.json`. Es legt eine fehlende Standardkonfiguration
@@ -36,6 +100,30 @@ synthetisch; sie gelten für keine Geschäftsdaten. Nachweise liegen unter
 `doctor` trennt Agent-Runtime/Mounts/Loopback, Fachwerkzeuge, aktuellen Smoke und
 optionale Publikationszugänge. Ein fehlender Jenkins-Zugang verhindert reine
 Modellierung nicht. Technische Bereitschaft ersetzt keine fachliche Freigabe.
+
+### Agent-Image aktualisieren
+
+Normale Starts verwenden den gespeicherten Image-Stand. Sie prüfen `latest`
+nicht erneut. Fehlt das Image lokal, wird derselbe Digest nachgeladen.
+Ein Update und die anschliessende Initialisierung erfolgen ausdrücklich:
+
+```sh
+./bin/datenportal-agent --update-agent --version
+./bin/datenportal-agent init
+./bin/datenportal-agent doctor
+```
+
+Erst nach erfolgreichem Download und Starttest ersetzt der Launcher die Auswahl.
+Ein fehlgeschlagenes Update lässt die bisherige Auswahl erhalten. Konfiguration,
+Credential-Store und Vorgänge bleiben im Workspace; sie werden nicht ins Image
+kopiert. Nach einem Image-Wechsel bewertet `init` die Prüfnachweise neu und führt
+den erforderlichen Funktionstest aus. Laufende MCP-Prozesse in Codex oder
+OpenCode danach neu verbinden, damit auch sie das gewählte Image verwenden.
+
+`--update-agent` aktualisiert den Agenten. `init --update-tools` wählt hingegen
+die konfigurierten Fachwerkzeug-Images neu; beide Updates sind getrennt.
+
+### Mounts und Aufruf aus Codex oder OpenCode
 
 Alle bisherigen CLI-Befehle funktionieren hinter dem Launcher. Zusätzliche
 Eingabeordner müssen ausdrücklich eingebunden werden:

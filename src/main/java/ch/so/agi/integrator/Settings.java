@@ -284,7 +284,8 @@ public final class Settings {
       files.put(
           "gretl_runtime", Json.map("reference", GretlRuntime.reference(this), "prepared", false));
     }
-    for (var directory : List.of(root.resolve("config"), root.resolve("validation")))
+    for (var directory :
+        List.of(AgentResources.resolve(root, "config"), AgentResources.resolve(root, "validation")))
       try (var paths = Files.list(directory)) {
         paths
             .filter(Files::isRegularFile)
@@ -316,7 +317,7 @@ public final class Settings {
     String jar = Json.str(interlis, "jar", "");
     if (!jar.isEmpty() && Files.isRegularFile(path(jar)))
       files.put("interlis_jar", Json.sha(path(jar)));
-    Path own = root.resolve("build/libs/datenportal-integrator.jar");
+    Path own = AgentResources.jar(root);
     if (Files.isRegularFile(own)) files.put("integrator_jar", Json.sha(own));
     var effective = new LinkedHashMap<>(values);
     effective.remove("gretl_java_home");

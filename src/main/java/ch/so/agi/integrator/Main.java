@@ -13,6 +13,11 @@ public final class Main {
     if (code != 0) System.exit(code);
   }
 
+  static String version() {
+    String version = Main.class.getPackage().getImplementationVersion();
+    return version == null ? "0.1.0-dev" : version;
+  }
+
   static int execute(String[] argv) {
     try {
       var args = new ArrayList<>(Arrays.asList(argv));
@@ -24,9 +29,13 @@ public final class Main {
         config = args.remove(i + 1);
         args.remove(i);
       }
+      if (args.equals(List.of("--version"))) {
+        System.out.println(version());
+        return 0;
+      }
       if (args.isEmpty() || args.getFirst().equals("--help")) {
         System.out.println(
-            "Java 25 Themenintegrator\nbin/datenportal-agent [--runtime docker|local] [--mount-ro PATH|--mount-rw PATH] [--config PATH] init|doctor|serve|schema OP|call OP [--json JSON|--args-file PATH|-]\ninit [--update-tools] [--skip-smoke]\ncredentials set PROFIL --username USER --token-stdin | --from-env\ncredentials status|remove PROFIL\nacceptance delivery\nbin/datenportal-agent gradle TASK...\nDirekt: java -jar build/libs/datenportal-integrator.jar [--config PATH] COMMAND\nWeitere Helfer: setup-java, setup-tools, setup-mcps [--update], setup-gretl [--update], runtime-up, harness-config, codex");
+            "Java 25 Themenintegrator\nbin/datenportal-agent [--runtime docker|docker-build|local] [--update-agent] [--mount-ro PATH|--mount-rw PATH] [--config PATH] init|doctor|serve|schema OP|call OP [--json JSON|--args-file PATH|-]\ninit [--update-tools] [--skip-smoke]\ncredentials set PROFIL --username USER --token-stdin | --from-env\ncredentials status|remove PROFIL\nacceptance delivery\nbin/datenportal-agent gradle TASK...\nDirekt: java -jar build/libs/datenportal-integrator.jar [--config PATH] COMMAND\nWeitere Helfer: setup-java, setup-tools, setup-mcps [--update], setup-gretl [--update], runtime-up, harness-config, codex");
         return 0;
       }
       String command = args.removeFirst();
@@ -283,7 +292,7 @@ public final class Main {
                     .build()));
     var server =
         McpServer.sync(transport)
-            .serverInfo("datenportal-themenintegrator", "0.2.0")
+            .serverInfo("datenportal-themenintegrator", version())
             .capabilities(McpSchema.ServerCapabilities.builder().tools(false).build())
             .instructions(
                 "Menschliche Freigaben nur nach tatsächlicher Antwort protokollieren. Modellableitung ausdrücklich anfordern. Fehlende Benutzer/Office-Fakten erfragen. Bei unklarem Upload vorhandene Laufkennung aufklären.")

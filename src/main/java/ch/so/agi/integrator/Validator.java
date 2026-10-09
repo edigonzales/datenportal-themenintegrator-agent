@@ -34,13 +34,13 @@ public final class Validator {
     var dirs = new ArrayList<String>();
     for (String p : settings.modelDirectories())
       dirs.add(p.startsWith("https://") ? p : settings.path(p).toString());
-    dirs.add(settings.root.resolve("validation").toString());
+    dirs.add(AgentResources.resolve(settings.root, "validation").toString());
     args.addAll(List.of("--modeldir", String.join(";", dirs)));
     if (reference != null)
       args.addAll(
           List.of(
               "--config",
-              settings.root.resolve("validation/office-check.ini").toString(),
+              AgentResources.resolve(settings.root, "validation/office-check.ini").toString(),
               "--allObjectsAccessible",
               "--refdata",
               reference.toString()));

@@ -113,7 +113,7 @@ class LauncherTest {
           image) printf 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\n';;
           run)
             case " $* " in
-              *' stat -c '*) printf '0\\n';;
+              *' --entrypoint stat '*) printf '0\\n';;
               *' java '*) printf '{"fixture":true}\\n';;
             esac;;
         esac
@@ -127,6 +127,8 @@ class LauncherTest {
           new ProcessBuilder(
               "bash",
               bin.resolve("datenportal-agent").toString(),
+              "--runtime",
+              "docker-build",
               "--mount-ro",
               alias.toString(),
               "--mount-rw",

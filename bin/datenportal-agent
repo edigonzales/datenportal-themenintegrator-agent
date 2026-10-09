@@ -4,14 +4,16 @@ root=$(cd -- "$(dirname -- "$0")/.." && pwd -P)
 cd "$root"
 [[ $root != *','* && $root != *$'\n'* ]] || { echo 'Unsupported checkout path' >&2; exit 2; }
 mode=docker
+update_agent=false
 mounts=()
 launch_options=()
 args=()
 config_file=
 while (($#)); do
   case "$1" in
+    --update-agent) update_agent=true; shift ;;
     --runtime)
-      [[ $# -ge 2 ]] || { echo '--runtime docker|local required' >&2; exit 2; }
+      [[ $# -ge 2 ]] || { echo '--runtime docker|docker-build|local required' >&2; exit 2; }
       mode=$2; shift 2 ;;
     --mount-ro|--mount-rw)
       [[ $# -ge 2 && -d $2 ]] || { echo 'Mount must be an existing directory' >&2; exit 2; }
@@ -29,17 +31,24 @@ while (($#)); do
   esac
 done
 [[ -z $config_file ]] || args=(--config "$config_file" "${args[@]}")
-[[ $mode == docker || $mode == local ]] || { echo 'Unknown runtime (docker|local)' >&2; exit 2; }
-if [[ $mode == local ]]; then launch_options=(--runtime local "${launch_options[@]}"); fi
+[[ $mode == docker || $mode == docker-build || $mode == local ]] || { echo 'Unknown runtime (docker|docker-build|local)' >&2; exit 2; }
 mkdir -p .datenportal-integrator/launcher .datenportal-integrator/tmp
 export DATENPORTAL_TEST_TMP="$root/.datenportal-integrator/tmp"
-if ((${#launch_options[@]})); then export DATENPORTAL_LAUNCH_OPTIONS; DATENPORTAL_LAUNCH_OPTIONS=$(printf '%s\n' "${launch_options[@]}"); fi
 command_index=0
 if [[ ${args[0]:-} == --config ]]; then command_index=2; fi
+if [[ ${args[$command_index]:-} == gradle && $mode == docker ]]; then mode=docker-build; fi
+launch_options=(--runtime "$mode" "${launch_options[@]}")
+if ((${#launch_options[@]})); then export DATENPORTAL_LAUNCH_OPTIONS; DATENPORTAL_LAUNCH_OPTIONS=$(printf '%s\n' "${launch_options[@]}"); fi
+if $update_agent && [[ $mode != docker ]]; then echo '--update-agent requires --runtime docker' >&2; exit 2; fi
+# Updating before host-side delegation ensures recursive calls keep the selected image.
+if $update_agent && [[ ${args[$command_index]:-} == codex || ${args[$command_index]:-} == acceptance ]]; then
+  "$root/bin/datenportal-agent" --update-agent --help >&2
+  update_agent=false
+fi
 # The disposable acceptance stack is deliberately created by the host Docker CLI.
 # All fixture construction, credential handling and MCP checks remain Java.
 if [[ ${args[$command_index]:-} == acceptance && ${args[$((command_index+1))]:-} == delivery ]]; then
-  [[ $mode == docker && ${#args[@]} == $((command_index+2)) ]] || { echo 'acceptance delivery requires Docker and no extra arguments' >&2; exit 2; }
+  [[ $mode != local && ${#args[@]} == $((command_index+2)) ]] || { echo 'acceptance delivery requires Docker and no extra arguments' >&2; exit 2; }
   export DATENPORTAL_FORWARD_ENV='' JAVA_HOME=/no-host-jdk
   prefix=("${args[@]:0:$command_index}")
   if ! acceptance_fixture=$("$root/bin/datenportal-agent" "${launch_options[@]}" "${prefix[@]}" acceptance-prepare); then
@@ -110,29 +119,55 @@ run_build() {
   wait "$build_pid"
   build_pid=
 }
-image=datenportal-agent-java25:local
-stamp=$(cksum < runtime/Dockerfile)
-record=.datenportal-integrator/launcher
-if [[ ! -f $record/dockerfile.checksum ]] || [[ $(cat "$record/dockerfile.checksum") != "$stamp" ]] || [[ ! -f $record/image.id ]] || ! docker image inspect "$(cat "$record/image.id")" >/dev/null 2>&1; then
-  run_build docker build -f runtime/Dockerfile -t "$image" . >&2
-  docker image inspect --format '{{.Id}}' "$image" > "$record/image.id"
-  printf '%s\n' "$stamp" > "$record/dockerfile.checksum"
-fi
-# Keep the recorded image even if somebody retags the shared local image name.
-if [[ -f $record/image.id && $(cat "$record/dockerfile.checksum") == "$stamp" ]] && docker image inspect "$(cat "$record/image.id")" >/dev/null 2>&1; then
-  image_id=$(cat "$record/image.id")
+if [[ $mode == docker-build ]]; then
+  image=datenportal-agent-java25:local
+  stamp=$(cksum < runtime/Dockerfile)
+  record=.datenportal-integrator/launcher
+  if [[ ! -f $record/dockerfile.checksum ]] || [[ $(cat "$record/dockerfile.checksum") != "$stamp" ]] || [[ ! -f $record/build-image.id ]] || ! docker image inspect "$(cat "$record/build-image.id")" >/dev/null 2>&1; then
+    run_build docker build --target tools -f runtime/Dockerfile -t "$image" . >&2
+    docker image inspect --format '{{.Id}}' "$image" > "$record/build-image.id"
+    printf '%s\n' "$stamp" > "$record/dockerfile.checksum"
+  fi
+  # Keep the recorded image even if somebody retags the shared local image name.
+  if [[ -f $record/build-image.id && $(cat "$record/dockerfile.checksum") == "$stamp" ]] && docker image inspect "$(cat "$record/build-image.id")" >/dev/null 2>&1; then
+    image_id=$(cat "$record/build-image.id")
+  else
+    image_id=$(docker image inspect --format '{{.Id}}' "$image")
+  fi
+
 else
-  image_id=$(docker image inspect --format '{{.Id}}' "$image")
+  record=.datenportal-integrator/launcher
+  reference=sogis/datenportal-themenintegrator-agent:latest
+  selection="$record/release-image"
+  if [[ -f $selection ]] && ! $update_agent; then
+    { IFS= read -r reference; IFS= read -r digest; IFS= read -r image_id; } < "$selection"
+    [[ $digest =~ ^sogis/datenportal-themenintegrator-agent@sha256:[a-f0-9]{64}$ && $image_id =~ ^sha256:[a-f0-9]{64}$ ]] || { echo 'Invalid recorded agent image; use --update-agent' >&2; exit 2; }
+    if ! docker image inspect "$image_id" >/dev/null 2>&1; then
+      run_build docker pull "$digest" >&2
+      restored=$(docker image inspect --format '{{.Id}}' "$digest")
+      [[ $restored == "$image_id" ]] || { echo 'Recorded agent image identity differs' >&2; exit 2; }
+    fi
+  else
+    run_build docker pull "$reference" >&2
+    image_id=$(docker image inspect --format '{{.Id}}' "$reference")
+    digest=$(docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$image_id" | sed -n '/^sogis\/datenportal-themenintegrator-agent@sha256:[a-f0-9]\{64\}$/p' | head -1)
+    [[ $image_id =~ ^sha256:[a-f0-9]{64}$ && -n $digest ]] || { echo 'Published agent image identity missing' >&2; exit 2; }
+    run_build docker run --rm --network none "$image_id" --help >&2
+    # One atomic record: a failed pull or smoke check never replaces the selection.
+    pending=$(mktemp "$record/release-image.XXXXXX")
+    printf '%s\n%s\n%s\n' "$reference" "$digest" "$image_id" > "$pending"
+    mv "$pending" "$selection"
+  fi
 fi
 
 printf '%s\n' "$image_id" > "$record/image.id"
 uid=$(id -u); gid=$(id -g)
-socket_gid=$(docker run --rm --mount "type=bind,source=$socket,target=/var/run/docker.sock" "$image_id" stat -c '%g' /var/run/docker.sock)
+socket_gid=$(docker run --rm --mount "type=bind,source=$socket,target=/var/run/docker.sock" --entrypoint stat "$image_id" -c '%g' /var/run/docker.sock)
 cache="datenportal-agent-build-$uid"
 # Only the named agent cache is initialized as root; checkout files use host UID/GID.
-docker run --rm --mount "type=volume,source=$cache,target=/cache" "$image_id" \
-  bash -c 'mkdir -p /cache/gradle /cache/home; chown "$1:$2" /cache /cache/gradle /cache/home' -- "$uid" "$gid" >&2
-common=(--rm --init --label "datenportal.integrator.agent.root=$root" --user "$uid:$gid" --group-add "$socket_gid"
+docker run --rm --mount "type=volume,source=$cache,target=/cache" --entrypoint bash "$image_id" \
+  -c 'mkdir -p /cache/gradle /cache/home; chown "$1:$2" /cache /cache/gradle /cache/home' -- "$uid" "$gid" >&2
+common=(--rm --init --entrypoint "" --label "datenportal.integrator.agent.root=$root" --user "$uid:$gid" --group-add "$socket_gid"
   --mount "type=bind,source=$(dirname -- "$root"),target=$(dirname -- "$root")"
   --mount "type=bind,source=$socket,target=/var/run/docker.sock"
   --mount "type=volume,source=$cache,target=/cache"
@@ -144,7 +179,7 @@ if ((${#launch_options[@]})); then common+=(-e "DATENPORTAL_LAUNCH_OPTIONS=$(pri
 forward=()
 for name in ${DATENPORTAL_FORWARD_ENV:-}; do
   [[ $name =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || { echo 'Invalid forwarded environment variable name' >&2; exit 2; }
-  case "$name" in HOME|PATH|JAVA_HOME|JAVA_TOOL_OPTIONS|DOCKER_HOST|DOCKER_CONTEXT|DATENPORTAL_CONTAINER_MODE|DATENPORTAL_RUNTIME_IMAGE|DATENPORTAL_LAUNCH_OPTIONS|DATENPORTAL_TEST_TMP|GRADLE_USER_HOME|GIT_CONFIG_COUNT|GIT_CONFIG_KEY_*|GIT_CONFIG_VALUE_*) echo 'Reserved runtime variable cannot be forwarded' >&2; exit 2;; esac
+  case "$name" in HOME|PATH|JAVA_HOME|JAVA_TOOL_OPTIONS|DOCKER_HOST|DOCKER_CONTEXT|DATENPORTAL_CONTAINER_MODE|DATENPORTAL_RUNTIME_IMAGE|DATENPORTAL_LAUNCH_OPTIONS|DATENPORTAL_TEST_TMP|GRADLE_USER_HOME|DATENPORTAL_AGENT_HOME|GIT_CONFIG_COUNT|GIT_CONFIG_KEY_*|GIT_CONFIG_VALUE_*) echo 'Reserved runtime variable cannot be forwarded' >&2; exit 2;; esac
   forward+=(-e "$name")
 done
 if [[ -n ${DATENPORTAL_INTEGRATOR_CONFIG:-} ]]; then forward+=(-e DATENPORTAL_INTEGRATOR_CONFIG); fi
@@ -152,7 +187,11 @@ if [[ ${args[$command_index]:-} == gradle ]]; then
   run_build docker run "${common[@]}" --network host "${forward[@]}" "$image_id" flock /cache/agent-build.lock ./gradlew --console=plain "${args[@]:$((command_index+1))}"
   exit $?
 fi
-run_build docker run "${common[@]}" --network bridge "$image_id" flock /cache/agent-build.lock ./gradlew --console=plain jar >&2
+if [[ $mode == docker-build ]]; then
+  run_build docker run "${common[@]}" --network bridge "$image_id" flock /cache/agent-build.lock ./gradlew --console=plain jar >&2
+fi
+jar_path=/opt/datenportal-agent/build/libs/datenportal-integrator.jar
+[[ $mode != docker-build ]] || jar_path=build/libs/datenportal-integrator.jar
 rm -f "$lock/pid"; rmdir "$lock"; trap - EXIT INT TERM
 exec docker run -i --network host "${common[@]}" "${forward[@]}" "$image_id" \
-  java -Djava.io.tmpdir="$DATENPORTAL_TEST_TMP" -jar build/libs/datenportal-integrator.jar "${args[@]}"
+  java -Djava.io.tmpdir="$DATENPORTAL_TEST_TMP" -jar "$jar_path" "${args[@]}"

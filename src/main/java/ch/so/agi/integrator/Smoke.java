@@ -27,7 +27,7 @@ final class Smoke {
     Json.write(invalid, "Jahr\nnot-a-number\n");
     Json.write(
         meta,
-        Json.contents(source.root.resolve("tests/fixtures/dataset.xtf"))
+        Json.contents(AgentResources.resolve(source.root, "tests/fixtures/dataset.xtf"))
             .replace(
                 "<ns2:name>Jahr</ns2:name>",
                 "<ns2:name>Jahr</ns2:name><ns2:description>Beobachtungsjahr der synthetischen Testfixture</ns2:description>"));

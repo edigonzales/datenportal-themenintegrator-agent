@@ -18,7 +18,8 @@ final class Initializer {
     Path target = Path.of("config/local.toml");
     if (Files.exists(target)) return;
     try {
-      Files.copy(Path.of("config/local.example.toml"), target);
+      Files.createDirectories(target.getParent());
+      Files.copy(AgentResources.resolve(Path.of("."), "config/local.example.toml"), target);
     } catch (FileAlreadyExistsException ignored) {
     } catch (java.io.IOException e) {
       throw new Problem(
@@ -96,7 +97,7 @@ final class Initializer {
             "runtime/Dockerfile",
             "tests/fixtures/dataset.xtf",
             "tests/fixtures/offices.xtf")) {
-      hashes.put(path, Json.sha(s.root.resolve(path)));
+      hashes.put(path, Json.sha(AgentResources.resolve(s.root, path)));
     }
     for (Path directory : List.of(s.topics.resolve("shared"), s.topics.resolve("agi"))) {
       try (var paths = Files.walk(directory)) {

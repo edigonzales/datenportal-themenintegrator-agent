@@ -315,3 +315,60 @@ SO verlangt für TEXT eine bestätigte maximale Länge; ein konkreter INTERLIS-Z
 Die frühere lokale Pilotlieferung verwendete ausdrücklich gekennzeichnete automatisierte Testfreigaben. Die lesende Java-Nachprüfung und technische Harness-Verbindung ersetzen keine der hier genannten menschlichen Abnahmen.
 
 Der erste menschliche CSV-Prüfstand ist vorbereitet: Vorgang `34b7934e694540ed9fc2dbf99c1c97b5`, Altersstruktur 2025, 106 Zeilen und sechs INTEGER-Spalten. `Total` ist als mögliche Redundanz zur bewussten Entscheidung markiert. Zum Zeitpunkt dieses Standes ist keine menschliche Freigabe protokolliert; Modellidentität und technischer Kontakt sind ebenfalls noch zu bestätigen. Die Dateien und die HTML-Vorschau liegen im ignorierten Arbeitsverzeichnis.
+
+## Agent-Run-Image und Release-Pipeline vom 9. Oktober 2026
+
+Tatsächlich geprüft:
+
+- `./bin/datenportal-agent gradle test jar spotlessCheck`: 154 Unit-Tests ohne
+  Fehler und erfolgreiche Formatprüfung. Shell-Syntax, Workflow-YAML und
+  `git diff --check` ebenfalls geprüft. Unit-Tests laufen auf dem Linux-Dateisystem
+  im Container; hostseitige temporäre Pfade bleiben auf Integrationstests beschränkt.
+- Fertiges Image lokal für `linux/amd64` und `linux/arm64` gebaut.
+  `runtime/image-smoke.sh` besteht auf beiden Plattformen ohne Workspace-,
+  Quellcode-, Cache- oder Host-JAR-Mount: CLI-Version und Hilfe, echte MCP-
+  Initialisierung und Werkzeugliste, übereinstimmende MCP-Version,
+  Konfigurationserzeugung, HTML-Bericht sowie Kompilierung und Ausführung eines
+  synthetischen Java-Konverters bei unveränderter Eingabe. Das ist keine
+  Veröffentlichung auf Docker Hub.
+- Ein echter Probecontainer startet den Netzwerkserver aus dem eingebauten JAR
+  ohne Host-JAR-Mount; sein veröffentlichter Port antwortet vom Host aus.
+  Der Zugriff aus einem weiteren Container mit `--network host` scheitert in
+  dieser Docker-Desktop-Umgebung. Der vollständige Host-Loopback-Selbsttest ist
+  deshalb nicht bestanden; die Probecontainer wurden entfernt.
+
+Simuliert und isoliert geprüft:
+
+- Erstes Laden und Festhalten des Release-Images, Start ohne erneutes Pull/Build,
+  Wiederherstellung per Digest, erfolgreicher expliziter Update sowie Erhalt der
+  bisherigen Auswahl bei Pull-/Startfehlern. Docker-Aufrufe sind Test-Doubles.
+- Registry-Neuveröffentlichung, Wiederholung mit passendem Commit, Ablehnung
+  eines abweichenden Commits, Registry-Verbindungsfehler und Verhinderung eines
+  Rücksprungs von `latest`. Diese Tests verwenden ausschliesslich synthetische
+  Registry-Antworten, keine Zugangsdaten und keine tatsächlichen Uploads.
+
+Fehlgeschlagene Vorläufe und offene Abnahme:
+
+- Die ersten Unit-Testläufe scheiterten bei Eigentumsprüfungen des bestehenden
+  Credential-Stores auf dem Docker-Desktop-Bind-Mount. Derselbe Testbestand
+  bestand auf dem internen Linux-Dateisystem. Die Sicherheitsprüfungen des Stores
+  wurden nicht abgeschwächt; nur die temporären Unit-Testpfade wurden getrennt.
+- Ein erster Smoke mit sofortigem stdin-EOF lieferte sporadisch keine MCP-Antwort.
+  Der abschliessende Smoke verwendet einen echten MCP-Client mit Initialisierung,
+  Werkzeugabfrage und geordnetem Schliessen.
+- `./bin/datenportal-agent gradle integrationTest` wurde ausgeführt: 14 Tests,
+  davon 13 fehlgeschlagen. Für zwölf fehlt `config/local.toml`; ein Credential-
+  Integrationstest scheiterte an den Eigentumsprüfungen auf dem Bind-Mount.
+  Die vollständige MCP-/GRETL-/Init-Abnahme mit tatsächlich konfigurierten
+  Fachwerkzeugen bleibt offen. Es wurde keine lokale Fachkonfiguration erfunden.
+- Die Abfrage der GitHub-Actions-Secrets erhielt mit dem verfügbaren gh-Aufruf
+  HTTP 401. `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`, Schreibrecht auf das
+  Docker-Hub-Repo und die erste CI-Publikation sind nicht bestätigt.
+  Der erste veröffentlichte Versions-Tag, sein Plattformmanifest und das erneute
+  Laden aus Docker Hub bleiben zu prüfen. Die Pipeline enthält diese Prüfungen.
+- Keine reale Fachfreigabe, INT-/PROD-Publikation oder Änderung an externen
+  Quellrepositories wurde vorgenommen.
+
+Lokale technische Nachweise liegen unter
+`.datenportal-integrator/image-release-abnahme/`; sie sind keine Registry-
+oder Fachabnahme. Die reproduzierbaren Prüfskripte liegen unter `runtime/`.

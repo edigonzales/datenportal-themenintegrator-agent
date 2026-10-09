@@ -46,30 +46,35 @@ final class AgentRuntime {
     var p = new ProcessRunner();
     String name = "datenportal-network-probe-" + UUID.randomUUID().toString().substring(0, 12);
     String token = UUID.randomUUID().toString();
-    Path jar = s.root.resolve("build/libs/datenportal-integrator.jar");
+    Path jar = AgentResources.resolve(s.root, "build/libs/datenportal-integrator.jar");
     try {
-      p.checked(
+      var command =
+          new ArrayList<>(
+              List.of(
+                  "docker",
+                  "run",
+                  "-d",
+                  "--rm",
+                  "--name",
+                  name,
+                  "--label",
+                  "datenportal.integrator.probe=true",
+                  "-p",
+                  "127.0.0.1::18764",
+                  "--entrypoint",
+                  "java"));
+      if (!AgentResources.installed()) {
+        command.addAll(
+            List.of("--mount", "type=bind,source=" + jar + ",target=/agent.jar,readonly"));
+      }
+      command.addAll(
           List.of(
-              "docker",
-              "run",
-              "-d",
-              "--rm",
-              "--name",
-              name,
-              "--label",
-              "datenportal.integrator.probe=true",
-              "-p",
-              "127.0.0.1::18764",
-              "--mount",
-              "type=bind,source=" + jar + ",target=/agent.jar,readonly",
               image,
-              "java",
               "-cp",
-              "/agent.jar",
+              AgentResources.installed() ? jar.toString() : "/agent.jar",
               AgentRuntime.class.getName(),
-              token),
-          s.root,
-          60);
+              token));
+      p.checked(command, s.root, 60);
       String port =
           p.checked(
               List.of(

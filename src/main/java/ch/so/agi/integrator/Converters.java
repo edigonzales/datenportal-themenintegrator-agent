@@ -141,7 +141,10 @@ public final class Converters {
     if (result.exitCode() != 0 || !Files.isRegularFile(converted))
       throw new Problem("converter_failed", "Konverter hat keine erfolgreiche Ausgabe erzeugt.");
     var technical =
-        Csv.inspect(converted, Json.read(w.settings.root.resolve("config/rules.json")), null);
+        Csv.inspect(
+            converted,
+            Json.read(AgentResources.resolve(w.settings.root, "config/rules.json")),
+            null);
     if (!Json.bool(technical, "valid", false))
       throw new Problem(
           "converter_output_invalid", "Konverterausgabe verletzt CSV-Regeln.", "report", technical);
@@ -199,7 +202,10 @@ public final class Converters {
             "CSV-Transformation prüfen",
             Json.map(
                 "before",
-                Csv.inspect(input, Json.read(w.settings.root.resolve("config/rules.json")), null),
+                Csv.inspect(
+                    input,
+                    Json.read(AgentResources.resolve(w.settings.root, "config/rules.json")),
+                    null),
                 "after",
                 technical,
                 "transform",
