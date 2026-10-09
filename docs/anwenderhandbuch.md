@@ -182,6 +182,12 @@ opencode
 
 OpenCode startet den Launcher aus `opencode.json`. Im optionalen lokalen Java-Betrieb legt `setup-java` einen ignorierten Symlink auf das tatsächlich verwendete JDK 25 an. `java` muss auf JDK 25 zeigen; bei Desktop-Prozessen gegebenenfalls den absoluten Befehl aus `harness-config` verwenden. Im Chat zum Beispiel: „Verwende den Themenintegrator-Skill. Integriere diese CSV und die XLSX-Metadaten lokal; erkläre zuerst die CSV und halte an den Freigaben an.“ Dateien anhängen oder absolute lokale Pfade nennen.
 
+In OpenCode Beta das Integrator-Repository als Projekt öffnen und den Skill mit
+`@datenportal-themenintegrator` auswählen. Die Anhangübernahme erfolgt automatisch
+nach der Regel [Chat-Anhänge übernehmen](../skills/datenportal-themenintegrator/SKILL.md#chat-anhänge-übernehmen);
+Kopieren und Prüfsummenvergleich müssen nicht im Prompt wiederholt werden.
+Wenn die GUI keinen zugänglichen Originalpfad übermittelt, fragt der Agent gezielt danach.
+
 Die aktuelle technische und menschliche Abnahme ist in [abnahme.md](abnahme.md) dokumentiert. Ein erfolgreicher MCP-Handshake ersetzt keinen vollständigen menschlichen Dialogtest.
 
 ## Durchgängiges Thema: CSV, XLSX und XTF

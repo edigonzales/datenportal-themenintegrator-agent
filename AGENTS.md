@@ -1,7 +1,9 @@
 # datenportal-themenintegrator-agent
 
 For integration, read `skills/datenportal-themenintegrator/SKILL.md` and use this
-repository's Java CLI/MCP. Integrator implementation, rules, tests and runtime
+repository's Java CLI/MCP. Apply the skill's mandatory "Chat-Anhänge übernehmen"
+rule before passing chat attachments to the integrator.
+Integrator implementation, rules, tests and runtime
 files belong here. Never modify source files in the dev-stack, datasheet MCP,
 interlis-mcp, Jenkins plugin, GRETL or portal. Only staged, reviewed business
 changes belong in datenportal-themenrepo.

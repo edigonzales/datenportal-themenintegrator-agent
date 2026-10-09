@@ -1,5 +1,39 @@
 # Abnahmestand
 
+## Anhangübernahme im gemeinsamen Skill vom 9. Oktober 2026
+
+Tatsächlich geprüft:
+
+- Der vorhandene `.agents/skills`-Link führt auf die gleiche Skill-Datei für
+  Codex und OpenCode. Der Skill-Creator-Validator besteht; `AGENTS.md` verweist
+  verbindlich auf die Anhangregel. Der Java-MCP bleibt unverändert.
+- OpenCode Beta `0.0.0-beta-19723`, GUI, vorhandener Build-Agent mit DeepSeek
+  V4.1 Flash: Skill über die `@`-Auswahl geladen, zwei unterschiedliche
+  `lieferung.csv` und ein synthetisches `datenblatt.xtf` über den nativen
+  Dateidialog angehängt. Der Auftrag enthielt keine Kopier- oder Hash-Anleitung.
+- Originaldateien lagen unter `/private/tmp`, ausserhalb des Agent-Docker-Mounts.
+  OpenCode kopierte sie mit den Host-Dateiwerkzeugen automatisch unter
+  `.datenportal-integrator/input/fixture/`, je Datei in einen eigenen UUID-Ordner.
+  Originaldateinamen und Endungen blieben erhalten. Alle drei Hashes (Quelle
+  vorher/nachher, Kopie) stimmten überein; unabhängig wurden Bytegleichheit und
+  unveränderte Quellen geprüft. Die CSV-Fixtures verwenden Umlaute sowie
+  unterschiedliche Zeilenenden (CRLF/LF).
+- Ein erster Kopierversuch scheiterte am unter zsh reservierten Variablennamen
+  `status`; der isolierte Testlauf wurde danach mit vollständigen Nachweisen
+  wiederholt. Die Skill-Regel nennt nun eigene Arbeitsvariablen. Es wurde kein
+  fachlicher Integrator-Vorgang gestartet und keine Freigabe oder Publikation
+  ausgeführt.
+
+Berichte: `.datenportal-integrator/attachment-acceptance/8a7e2289-4ea0-4f88-a3dc-5eeb5b07241d/`;
+`sources.json` enthält die ursprünglichen Soll-Prüfsummen, `observed.json` die
+unabhängige Byte-/Hash-Prüfung, `gui-session.json` den tatsächlichen GUI-Dialog
+und seine Werkzeugaufrufe. GUI-Sitzung: `ses_edf4906cfffeWgcTx15VmGsQWw`.
+
+Offen bleiben die separate Finder-Drag-and-drop-Abnahme, XLSX als GUI-Anhang und
+der GUI-Fall ohne zugänglichen Originalpfad. Diese Fälle sind durch die Anweisung
+abgedeckt, aber noch nicht praktisch abgenommen. Fachliche MFK-Abnahme und
+Publikation bleiben eigene Vorgänge.
+
 ## Docker-Einstieg und gemeinsames init vom 9. Oktober 2026
 
 Die folgenden Nachweise betreffen den neuen Docker-Launcher. Frühere Abnahmen
