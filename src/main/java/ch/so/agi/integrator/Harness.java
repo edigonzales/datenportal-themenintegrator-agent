@@ -98,18 +98,145 @@ final class Harness {
         Json.map(
             "mcp",
             Json.map(
-                "datenportal_integrator",
+                "servers",
                 Json.map(
-                    "type",
-                    "local",
-                    "command",
-                    Setup.concat(List.of(launcher()), arguments()),
-                    "enabled",
-                    true,
-                    "timeout",
-                    1800000,
-                    "environment",
-                    Json.map("DATENPORTAL_FORWARD_ENV", String.join(" ", credentials()))))));
+                    "datenportal_integrator",
+                    Json.map(
+                        "type",
+                        "local",
+                        "command",
+                        Setup.concat(List.of(launcher()), arguments()),
+                        "disabled",
+                        false,
+                        "timeout",
+                        openCodeTimeouts(),
+                        "environment",
+                        Json.map("DATENPORTAL_FORWARD_ENV", String.join(" ", credentials())))))));
+  }
+
+  static Map<String, Object> openCodeTimeouts() {
+    return Json.map("startup", 180000, "catalog", 1800000, "execution", 1800000);
+  }
+
+  static Problem openCodeConflict(String field) {
+    return new Problem(
+        "harness_conflict", "OpenCode-Konfiguration bewusst abgleichen.", "field", field);
+  }
+
+  static Map<String, Object> objectField(Map<String, Object> parent, String key, String field) {
+    if (!parent.containsKey(key)) return Json.map();
+    if (!(parent.get(key) instanceof Map<?, ?>)) throw openCodeConflict(field);
+    return Json.obj(parent.get(key));
+  }
+
+  static Map<String, Object> timeoutFields(Object value, String field) {
+    if (!(value instanceof Map<?, ?>)) throw openCodeConflict(field);
+    var result = Json.obj(value);
+    for (var entry : result.entrySet()) {
+      if (!Set.of("startup", "catalog", "execution").contains(entry.getKey())
+          || !positiveInteger(entry.getValue()))
+        throw openCodeConflict(field + "." + entry.getKey());
+    }
+    return result;
+  }
+
+  static boolean positiveInteger(Object value) {
+    return (value instanceof Integer || value instanceof Long) && ((Number) value).longValue() > 0;
+  }
+
+  // Normalize explicit values only. Defaults are filled after duplicate entries are reconciled.
+  Map<String, Object> normalizeOpenCode(Map<String, Object> entry, String field) {
+    Object command = entry.get("command");
+    if (!(command instanceof List<?> rawParts)
+        || rawParts.isEmpty()
+        || rawParts.stream().anyMatch(p -> !(p instanceof String text) || text.isBlank()))
+      throw openCodeConflict(field + ".command");
+    var parts = Json.strings(command);
+    if (!known(parts.getFirst(), parts.subList(1, parts.size()), launcher()))
+      throw openCodeConflict(field + ".command");
+    if (entry.containsKey("type") && !"local".equals(entry.get("type")))
+      throw openCodeConflict(field + ".type");
+    for (String key : List.of("enabled", "disabled", "codemode"))
+      if (entry.containsKey(key) && !(entry.get(key) instanceof Boolean))
+        throw openCodeConflict(field + "." + key);
+    if (entry.containsKey("cwd") && !(entry.get("cwd") instanceof String))
+      throw openCodeConflict(field + ".cwd");
+    if (entry.containsKey("protocol")
+        && (!(entry.get("protocol") instanceof String protocol)
+            || !Set.of("legacy", "auto", "2026-07-28").contains(protocol)))
+      throw openCodeConflict(field + ".protocol");
+    var env = objectField(entry, "environment", field + ".environment");
+    if (env.values().stream().anyMatch(v -> !(v instanceof String)))
+      throw openCodeConflict(field + ".environment");
+    if (entry.containsKey("enabled")) {
+      boolean disabled = !((Boolean) entry.remove("enabled"));
+      if (entry.containsKey("disabled") && !entry.get("disabled").equals(disabled))
+        throw openCodeConflict(field + ".disabled");
+      entry.put("disabled", disabled);
+    }
+    if (entry.containsKey("timeout")) {
+      Object timeout = entry.get("timeout");
+      if (positiveInteger(timeout))
+        entry.put("timeout", Json.map("catalog", timeout, "execution", timeout));
+      else timeoutFields(timeout, field + ".timeout");
+    }
+    // These managed fields intentionally follow the current init invocation.
+    entry.remove("command");
+    entry.put("type", "local");
+    return entry;
+  }
+
+  static void mergeOpenCode(
+      Map<String, Object> target, Map<String, Object> incoming, String field) {
+    for (var entry : incoming.entrySet()) {
+      String key = entry.getKey();
+      Object value = entry.getValue();
+      if (!target.containsKey(key)) target.put(key, value);
+      else if (key.equals("DATENPORTAL_FORWARD_ENV") && field.endsWith(".environment")) {
+        var names = new LinkedHashSet<String>();
+        for (Object source : List.of(target.get(key), value))
+          for (String name : source.toString().split("\\s+")) if (!name.isBlank()) names.add(name);
+        target.put(key, String.join(" ", names));
+      } else if (target.get(key) instanceof Map<?, ?> && value instanceof Map<?, ?>)
+        mergeOpenCode(Json.obj(target.get(key)), Json.obj(value), field + "." + key);
+      else if (!Objects.equals(target.get(key), value)) throw openCodeConflict(field + "." + key);
+    }
+  }
+
+  Map<String, Object> updateOpenCode(Map<String, Object> original) {
+    var json = Json.read(Json.text(original));
+    if (json == null) throw openCodeConflict("opencode.json");
+    var mcp = objectField(json, "mcp", "mcp");
+    for (String key : mcp.keySet())
+      if (!Set.of("servers", "timeout", "datenportal_integrator").contains(key))
+        throw openCodeConflict("mcp." + key);
+    if (mcp.containsKey("timeout")) timeoutFields(mcp.get("timeout"), "mcp.timeout");
+    var servers = objectField(mcp, "servers", "mcp.servers");
+    var merged = Json.map();
+    for (var parent : List.of(mcp, servers)) {
+      if (parent.containsKey("datenportal_integrator")) {
+        String field =
+            parent == mcp ? "mcp.datenportal_integrator" : "mcp.servers.datenportal_integrator";
+        mergeOpenCode(
+            merged,
+            normalizeOpenCode(objectField(parent, "datenportal_integrator", field), field),
+            "mcp.servers.datenportal_integrator");
+      }
+    }
+    merged.put("type", "local");
+    merged.put("command", Setup.concat(List.of("bin/datenportal-agent"), projectArguments()));
+    merged.putIfAbsent("disabled", false);
+    var timeouts = objectField(merged, "timeout", "mcp.servers.datenportal_integrator.timeout");
+    openCodeTimeouts().forEach(timeouts::putIfAbsent);
+    merged.put("timeout", timeouts);
+    var env = objectField(merged, "environment", "mcp.servers.datenportal_integrator.environment");
+    mergeForward(env, credentials());
+    merged.put("environment", env);
+    servers.put("datenportal_integrator", merged);
+    mcp.remove("datenportal_integrator");
+    mcp.put("servers", servers);
+    json.put("mcp", mcp);
+    return json;
   }
 
   static boolean known(String command, List<String> args, String launcher) {
@@ -124,30 +251,17 @@ final class Harness {
     Path codex = s.root.resolve(".codex/config.toml"), open = s.root.resolve("opencode.json");
     String toml = Files.exists(codex) ? Json.contents(codex) : "";
     String updated = updateToml(toml);
-    var json =
-        Files.exists(open)
-            ? Json.read(open)
-            : Json.map("$schema", "https://opencode.ai/config.json");
-    var mcps = Json.obj(json.computeIfAbsent("mcp", k -> Json.map()));
-    var previous = Json.obj(mcps.get("datenportal_integrator"));
-    var cmd = Json.strings(previous.get("command"));
-    if (!previous.isEmpty()
-        && (cmd.isEmpty() || !known(cmd.getFirst(), cmd.subList(1, cmd.size()), launcher())))
-      throw new Problem(
-          "harness_conflict",
-          "Unbekannten OpenCode-MCP-Eintrag bewusst abgleichen.",
-          "path",
-          open.toString());
-    var replacement =
-        Json.obj(
-            Json.obj(Json.obj(proposal().get("opencode")).get("mcp"))
-                .get("datenportal_integrator"));
-    replacement.put("command", Setup.concat(List.of("bin/datenportal-agent"), projectArguments()));
-    var env = new LinkedHashMap<>(Json.obj(previous.get("environment")));
-    mergeForward(env, credentials());
-    previous.putAll(replacement);
-    previous.put("environment", env);
-    mcps.put("datenportal_integrator", previous);
+    Map<String, Object> json;
+    try {
+      json =
+          updateOpenCode(
+              Files.exists(open)
+                  ? Json.read(open)
+                  : Json.map("$schema", "https://opencode.ai/config.json"));
+    } catch (Problem e) {
+      if (e.code.equals("invalid_json")) throw openCodeConflict("opencode.json");
+      throw e;
+    }
     // Both candidates are checked before either file is replaced.
     backup(codex);
     backup(open);
@@ -160,6 +274,7 @@ final class Harness {
     var merged = new LinkedHashSet<>(names);
     env.keySet().stream()
         .filter(name -> !name.equals("DATENPORTAL_FORWARD_ENV"))
+        .sorted()
         .forEach(merged::add);
     for (String name : Json.str(env, "DATENPORTAL_FORWARD_ENV", "").split("\\s+"))
       if (!name.isBlank()) merged.add(name);

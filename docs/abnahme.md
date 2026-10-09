@@ -1,5 +1,56 @@
 # Abnahmestand
 
+## OpenCode-2.x-Konfiguration und Migration vom 9. Oktober 2026
+
+Tatsächlich geprüft:
+
+- `./bin/datenportal-agent gradle test jar spotlessCheck`: 168 Tests bestanden,
+  keine Fehler oder übersprungenen Tests; einschliesslich zwölf neuer
+  `HarnessTest`-Tests. Nachweis: `.datenportal-integrator/opencode-v2-unit.log`
+  und JUnit-Berichte unter `build/test-results/test/`.
+- OpenCode 2.0.26 aus `/Applications/OpenCode.app/Contents/Resources/opencode-cli`:
+  tatsächliche Ausgabe von `harness-config` mit `--runtime docker-build` in
+  einem isolierten Git-Projekt verwendet. Der echte OpenCode-Dienst meldete
+  `datenportal_integrator` als `connected`. Eigene XDG-Verzeichnisse, eigener
+  Port, minimale Testkonfiguration ohne Publikationsprofile; anschliessend den
+  eigenen Dienst beendet. Keine Geschäftsvorgänge oder Freigaben ausgeführt.
+  Nachweise: `.datenportal-integrator/opencode-v2-check/6cb99e18-641f-4402-b6e8-91968e9019c8/`,
+  insbesondere `harness.json`, `opencode.json`, `mcp-persistent-result.json`
+  und `evidence.json` mit Konfigurationsprüfsumme.
+
+Isoliert mit synthetischen Konfigurationen geprüft: Erzeugung und Migration von
+Java-/Launcher-Einträgen, Deaktivierung, individuelle Timeouts, Weitergabe von
+Umgebungsvariablen, Erhalt fremder V2-Server, kompatible Doppeleinträge,
+Konflikte und ungültige Feldtypen ohne Änderung beider Konfigurationsdateien,
+Sicherungen und wiederholte Installation. Alle schreibenden Tests verwenden
+temporäre Arbeitsbereiche. Der Konfigurationsleser der Lieferabnahme wurde
+gegen die erzeugte V2-Datei geprüft; dies ist keine erneute Lieferabnahme.
+
+Tatsächlich fehlgeschlagen beziehungsweise offen:
+
+- `./bin/datenportal-agent gradle integrationTest` wurde ausgeführt und schlug
+  fehl: 14 gemeldete Testfälle, davon einer erfolgreich und 13 fehlgeschlagen.
+  Zwölf Fehler einschliesslich eines Klassen-Initialisierungsfehlers betreffen
+  die fehlende `config/local.toml`; die Prüfung der tatsächlich konfigurierten
+  Fachwerkzeuge bleibt damit offen. Der Credential-Store-Integrationstest
+  erwartete `jenkins_authentication_failed`, erhielt jedoch
+  `credential_store_permissions`. Nachweis:
+  `.datenportal-integrator/opencode-v2-integration.log` und
+  `build/test-results/integrationTest/`. Dieser Lauf gilt nicht als erfolgreiche
+  Integrationsabnahme; die Ursachen wurden nicht durch Ersatzkonfigurationen
+  oder Änderungen an den Credential-Regeln umgangen.
+- Die Shell-CLI `opencode` meldet weiterhin 1.18.22. Für den obigen V2-Nachweis
+  wurde ausdrücklich die mit der installierten Desktop-App gelieferte CLI
+  verwendet; OpenCode wurde nicht installiert oder aktualisiert.
+- Erste kurzlebige API-Abfragen lieferten noch keinen Verbindungsnachweis.
+  Der erste eigene Hintergrunddienst kollidierte mit dem belegten Standardport;
+  der erfolgreiche Test verwendete einen separaten Port und eine ausdrücklich
+  gewählte Test-Location. Ein falsch kodierter Location-Parameter wurde zuvor
+  mit HTTP 400 abgewiesen. Diese Vorversuche werden nicht als Erfolg gewertet.
+- Ein vollständiger GUI-Fachdialog, eine erneute vollständige `init`-Prüfung
+  mit Fachwerkzeugen und die Veröffentlichung eines korrigierten Agent-Images
+  wurden nicht durchgeführt. Historische Beta-Nachweise bleiben unverändert.
+
 ## Docker-Anlieferung und gemeinsamer Credential-Store vom 9. Oktober 2026
 
 Tatsächlich auf macOS mit Docker Desktop geprüft:

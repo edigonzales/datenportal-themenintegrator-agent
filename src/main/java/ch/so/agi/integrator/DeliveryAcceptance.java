@@ -545,11 +545,7 @@ final class DeliveryAcceptance {
       command = table.getString("command");
       args = table.getArray("args").toList().stream().map(Object::toString).toList();
     } else {
-      var entry =
-          Json.obj(
-              Json.obj(Json.read(s.root.resolve("opencode.json")).get("mcp"))
-                  .get("datenportal_integrator"));
-      var parts = Json.strings(entry.get("command"));
+      var parts = openCodeCommand(s.root);
       command = parts.getFirst();
       args = parts.subList(1, parts.size());
     }
@@ -570,6 +566,12 @@ final class DeliveryAcceptance {
             .build();
     client.initialize();
     return client;
+  }
+
+  static List<String> openCodeCommand(Path root) {
+    var mcp = Json.obj(Json.read(root.resolve("opencode.json")).get("mcp"));
+    var entry = Json.obj(Json.obj(mcp.get("servers")).get("datenportal_integrator"));
+    return Json.strings(entry.get("command"));
   }
 
   static Map<String, Object> call(

@@ -252,6 +252,24 @@ Das verbindliche Schema wird in `Operations.ALL` definiert; unbekannte Felder un
 
 Werkzeughelfer: `setup-java`, `setup-tools`, `setup-mcps [--update]`, `setup-gretl [--update]`, `harness-config`, `codex [harness-argumente]`. Diese sind CLI-Helfer, keine zusätzlichen MCP-Fachoperationen.
 
+`Harness` erzeugt OpenCode-2.x-Konfiguration unter
+`mcp.servers.datenportal_integrator`. `harness-config` liefert absolute
+Launcherpfade, `init` schreibt projektbezogene Pfade mit der aktuellen
+Runtime-/Mount-Auswahl und Konfiguration. Bekannte ältere Integrator-Einträge
+werden migriert; deaktivierte Server, eigene Timeouts, Umgebungszuordnungen
+und fremde V2-Server bleiben erhalten. Numerische Alt-Timeouts werden zu
+`catalog` und `execution`, fehlende Werte zu `startup=180000`,
+`catalog=1800000`, `execution=1800000` Millisekunden. Doppeleinträge werden vor
+dem Ergänzen von Standardwerten normalisiert und zusammengeführt.
+Widersprüche, unbekannte Startbefehle und fremde alte MCP-Einträge führen vor
+Dateiänderungen zu `harness_conflict`. Sicherungen bleiben unter
+`.datenportal-integrator/harness-backups/`; wiederholte Installation ist
+inhaltlich stabil. Die synthetische Lieferabnahme liest denselben V2-Pfad.
+`HarnessTest` verwendet ausschliesslich temporäre Arbeitsbereiche für schreibende
+Tests. Die bisherigen `Fixtures` mit dem echten Integrator-Root dürfen dafür
+nicht unverändert verwendet werden. Bedienung und Übergang vom veröffentlichten
+Image stehen im [Anwenderhandbuch](anwenderhandbuch.md#codex-desktop-codex-cli-und-opencode).
+
 ## Modellierung und GRETL-Hook
 
 Die erste Umsetzung erzeugt eine Topic mit einer flachen Klasse. Keine aus Beispielen erfundenen Schlüssel, Fachwertebereiche, geschlossenen Codelisten oder Geometrien. INTEGER hat den technischen CSV-Vertrag mit 64-Bit-Grenzen. Für konkrete DECIMAL-/NUMERIC-Domains werden Wertebereich und Genauigkeit erfragt; beobachtete Grenzen werden nicht automatisch übernommen. DATE verwendet INTERLIS.XMLDate. Die Standarddomain INTERLIS.XMLDateTime unterstützt im bestehenden Adapter den CSV-Offset +01:00 nicht; der Integrator meldet diese Grenze ohne Formatänderung. Fachliche Beschreibungen und belegte Einheiten werden übernommen. Zusätzliche Domains/Constraints brauchen eine bestätigte Spezifikation.
