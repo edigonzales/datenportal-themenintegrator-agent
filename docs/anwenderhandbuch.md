@@ -2,6 +2,324 @@
 
 Der Integrator unterstützt drei Vorgänge: ein Thema integrieren (`topic`), ein INTERLIS-Modell erstellen (`model`) und eine Organisation anlegen (`organization`). Das Sprachmodell läuft in Codex oder OpenCode. Der Java-Kern prüft Dateien und kontrolliert Freigaben sowie externe Abläufe. Er benötigt keinen Modellzugang und betreibt keinen zusätzlichen Webserver.
 
+## Mit dem Agenten arbeiten
+
+### Arbeitsbereich öffnen und Skill auswählen
+
+Diese Anleitung richtet sich an Codex und OpenCode 2.x stable. Für den ersten
+Start zuerst die [Repositories bereitstellen](#repositories-bereitstellen) und
+die [Initialisierung](#erstinitialisierung-mit-dem-veröffentlichten-image)
+abschliessen. Anschliessend das Repository `datenportal-themenintegrator-agent`
+als Projekt öffnen und die [MCP-Verbindung](#codex-desktop-codex-cli-und-opencode)
+prüfen; `init` erzeugt die Konfiguration für OpenCode 2.x automatisch.
+
+Wähle zu Beginn den [Skill datenportal-themenintegrator](../skills/datenportal-themenintegrator/SKILL.md)
+aus. Er beschreibt dem Agenten die fachlichen Abläufe und Freigaben; die
+MCP-Verbindung stellt die dazugehörigen Werkzeuge bereit.
+
+| Oberfläche | Skill ausdrücklich auswählen |
+|---|---|
+| OpenCode 2.x | `@datenportal-themenintegrator` im Prompt auswählen. |
+| Codex | `$datenportal-themenintegrator` verwenden; in CLI und IDE ist auch die Auswahl über `/skills` möglich. |
+| Ausgeschriebener Auftrag | „Verwende den Skill `datenportal-themenintegrator`.“ |
+
+Die Aufrufweisen sind in der [OpenCode-2.x-Skill-Dokumentation](https://opencode.ai/v2/docs/skills/)
+und der [Codex-Skill-Dokumentation](https://learn.chatgpt.com/docs/build-skills)
+beschrieben. In Folgeantworten desselben Vorgangs musst du den Skill nicht
+erneut auswählen. Wird er nicht gefunden, prüfe den geöffneten Arbeitsbereich
+und den gemeinsamen Skill unter `.agents/skills/`.
+
+Hänge CSV-Daten und vorhandene XTF- oder XLSX-Metadaten an oder nenne zugängliche
+absolute Dateipfade. Gib Organisation, Themenidentifier und bei Serien die
+Ausgabe an. Der Agent fragt fehlende Angaben nach. Chat-Anhänge übernimmt er
+automatisch unverändert und vergleicht die Prüfsummen; du musst weder das
+Kopieren noch die Prüfung zusätzlich beauftragen. Ist der Originalpfad nicht
+zugänglich, fragt er danach. Die Übernahme ist noch keine fachliche Freigabe.
+
+Vollständiger Startprompt für OpenCode:
+
+```text
+@datenportal-themenintegrator Integriere die angehängte CSV und die
+XLSX-Metadaten für die Organisation statistikdienst, Thema
+ch.so.bevoelkerung.altersstruktur, Ausgabe 2025. Erkläre zuerst die Daten
+und zeige mir die CSV-Vorschau zur Freigabe. Bereite danach das Datenblatt
+zur Prüfung vor. Ziel ist zunächst die lokale Lieferung. Frage fehlende
+fachliche Angaben nach und halte an den menschlichen Freigaben an.
+```
+
+Derselbe Startprompt für Codex:
+
+```text
+$datenportal-themenintegrator Integriere die angehängte CSV und die
+XLSX-Metadaten für die Organisation statistikdienst, Thema
+ch.so.bevoelkerung.altersstruktur, Ausgabe 2025. Erkläre zuerst die Daten
+und zeige mir die CSV-Vorschau zur Freigabe. Bereite danach das Datenblatt
+zur Prüfung vor. Ziel ist zunächst die lokale Lieferung. Frage fehlende
+fachliche Angaben nach und halte an den menschlichen Freigaben an.
+```
+
+Alle Themen, Zahlen und Dateinamen in den folgenden Szenarien sind Beispiele.
+Ersetze sie durch deine Angaben; Platzhalter wie `<Vorgangs-ID>` stammen aus
+deinem tatsächlichen Vorgang. Die Beispiele beschreiben unterstützte Abläufe,
+keine durchgeführten Lieferungen. Den geprüften Betriebsstand hält die
+[Abnahme](abnahme.md) getrennt fest.
+
+### Ablauf und deine Entscheidungen
+
+Du kannst einen vollständigen Ablauf oder einen einzelnen Schritt beauftragen.
+Für ein Thema mit CSV und neuen oder geänderten Metadaten gilt:
+
+```text
+Du: Dateien und fachliche Angaben liefern
+                  |
+Agent: übernehmen, bei Bedarf konvertieren, CSV prüfen und erklären
+                  |
+Du: gezeigte CSV-Fassung freigeben
+                  |
+Agent: Datenblatt bearbeiten und prüfen
+       optional: ausdrücklich beauftragtes INTERLIS-Modell ableiten
+                  |
+Du: Metadaten und gegebenenfalls Modell freigeben
+                  |
+Agent: Änderungen übernehmen, lokal liefern, Portal und Downloads prüfen
+                  |
+Du: lokal abschliessen ODER konkreten Plan für INT/PROD freigeben
+                  |
+Bei Repository-Änderungen: Agent erstellt PR -> Mensch mergt
+                  |
+Agent: Zielstand prüfen, Lieferung fortsetzen und Ergebnis kontrollieren
+```
+
+Bei reinen Metadatenlieferungen entfällt die CSV-Freigabe. Bei reinen
+Datenlieferungen bleiben die bestehenden Metadaten erhalten. Eigenständige
+Modell- und Organisationsvorgänge haben ihre jeweilige Freigabe und benötigen
+keine Datenpublikation. Die automatische Anhangübernahme, ein Korrekturauftrag
+oder ein allgemeines „Integriere das Thema“ ersetzen kein OK zum konkret
+gezeigten Prüfstand. Kontakte, Benutzerkennungen und fachliche Regeln werden
+bei fehlender Grundlage nachgefragt.
+
+### 1. CSV verstehen und prüfen
+
+**Ausgangssituation:** Du erhältst `bevoelkerung_2025.csv` und möchtest wissen,
+ob die Lieferung zur vereinbarten Struktur passt.
+
+**Agentenunterstützung:** Der Agent prüft alle Zeilen, erklärt Spalten und
+Typvorschläge und zeigt fehlende Werte sowie Auffälligkeiten. Beispielsweise:
+
+| Wert in der CSV | Fachliche Frage |
+|---|---|
+| Gemeindecode `0012` | Muss die führende Null erhalten bleiben? Dann ist ein Texttyp zu prüfen. |
+| Leere Einwohnerzahl | Bedeutet sie „nicht erhoben“? Sie wird nicht automatisch zu `0`. |
+| Einwohnerzahl `0` | Ist dies ein tatsächlicher Messwert? Er bleibt von fehlenden Werten unterscheidbar. |
+
+**Ergebnis:** Eine HTML-Vorschau mit Beispielen und Prüfmeldungen.
+**Deine Entscheidung:** Bedeutung unklarer Werte klären, Korrekturen beauftragen
+oder die konkret gezeigte CSV-Fassung freigeben.
+
+**Beispielprompt:**
+
+> Verwende den Skill `datenportal-themenintegrator`. Prüfe die angehängte CSV für die Organisation `statistikdienst`, Thema `ch.so.bevoelkerung.altersstruktur`, Ausgabe `2025`. Erkläre Spalten, fehlende Werte und Auffälligkeiten. Zeige mir die Vorschau und halte vor der CSV-Freigabe an.
+
+Technische Details: [CSV-Prüfung und Themenablauf](#durchgängiges-thema-csv-xlsx-und-xtf).
+
+### 2. Lieferformat umwandeln
+
+**Ausgangssituation:** Der Lieferant liefert eine Spalte je Jahr; benötigt
+wird eine Zeile je Gemeinde und Jahr.
+
+| Eingangsformat | Vereinbartes Zielformat |
+|---|---|
+| `Gemeinde;2024;2025` | `Gemeinde;Jahr;Einwohner` |
+| `Beispielwil;1200;1215` | `Beispielwil;2024;1200` |
+| | `Beispielwil;2025;1215` |
+
+**Agentenunterstützung:** Zielstruktur klären, einen vorhandenen Java-Konverter
+verwenden oder einen neuen mit Tests vorbereiten und die erzeugte CSV prüfen.
+Die Originaldatei bleibt unverändert.
+
+**Ergebnis:** Vorher/Nachher-Vergleich, geprüfte Ziel-CSV und bei wiederkehrender
+Umwandlung ein Konverter. Alternativ entsteht eine lokale Formatvorgabe für
+den Lieferanten; sie wird nicht ungefragt versendet.
+**Deine Entscheidung:** Zielstruktur bestätigen und festlegen, ob der Lieferant
+künftig passend liefert oder der Integrator jede Lieferung konvertiert.
+Anschliessend die Ziel-CSV prüfen und freigeben.
+
+**Beispielprompt:**
+
+> Verwende den Skill `datenportal-themenintegrator`. Die angehängte CSV für `statistikdienst`, Thema `ch.so.bevoelkerung.altersstruktur`, enthält eine Spalte pro Jahr. Wir brauchen `Gemeinde;Jahr;Einwohner`. Bereite einen wiederkehrenden Konverter vor, der leere Werte erhält. Zeige Vorher/Nachher und die geprüfte Ziel-CSV zur Freigabe. Kläre die Zuordnung zu den Serienausgaben mit mir.
+
+Technische Details: [Konverter und Serien](#serien-teillieferungen-und-konverter).
+
+### 3. Datenblatt aus XLSX-Metadaten erstellen
+
+**Ausgangssituation:** Zur CSV liegt eine Excel-Datei mit Titel, Beschreibung,
+Einheiten und Zuständigkeit vor.
+
+**Agentenunterstützung:** Der Agent übernimmt passende Angaben in das
+Datenblatt, dokumentiert ihre Herkunft bis zu den Quellenzellen und fragt
+fehlende Pflichtangaben nach. Eigene Formulierungsvorschläge bleiben erkennbar.
+Excel-Formeln werden nicht ausgeführt; fehlende gespeicherte Formelresultate
+werden als fehlend gemeldet und nicht als Null übernommen.
+
+**Ergebnis:** Ein geprüftes Datenblatt als XTF und eine HTML-Vorschau mit
+Quellen, Änderungen und Prüfmeldungen.
+**Deine Entscheidung:** Fehlende Fachangaben ergänzen und nach der CSV-Freigabe
+den konkreten Metadatenstand prüfen und freigeben.
+
+**Beispielprompt:**
+
+> Verwende den Skill `datenportal-themenintegrator`. Erstelle für die Organisation `statistikdienst`, Thema `ch.so.bevoelkerung.altersstruktur`, Ausgabe `2025`, ein Datenblatt aus der angehängten XLSX. Prüfe zuerst die angehängte CSV und zeige sie zur Freigabe. Verwende sie danach zur Beschreibung der Attribute. Kennzeichne eigene Textvorschläge, frage fehlende Fachangaben nach und zeige das Datenblatt zur Prüfung.
+
+Technische Details: [XLSX, Herkunft und XTF](#durchgängiges-thema-csv-xlsx-und-xtf).
+
+### 4. Nur Metadaten korrigieren
+
+**Ausgangssituation:** Die Beschreibung der Erhebungsmethode ändert sich;
+die vorhandenen Daten sollen erhalten bleiben.
+
+**Agentenunterstützung:** Bestehenden Stand laden, Änderungen vorbereiten,
+Datenblatt exportieren und validieren. Eine CSV wird dafür nicht benötigt.
+
+**Ergebnis:** Geprüfte Metadaten mit einem Vergleich zum bisherigen Stand.
+**Deine Entscheidung:** Die gezeigten Metadatenänderungen freigeben; eine
+CSV-Freigabe entfällt.
+
+**Beispielprompt:**
+
+> Verwende den Skill `datenportal-themenintegrator`. Ändere für `statistikdienst`, Thema `ch.so.bevoelkerung.altersstruktur`, nur die Beschreibung der Erhebungsmethode gemäss angehängter XTF. Erhalte die vorhandenen Daten. Zeige die Änderungen zum bisherigen Stand und bereite eine reine Metadatenlieferung zur Freigabe vor.
+
+Technische Details: [Teillieferungen](#serien-teillieferungen-und-konverter).
+
+### 5. Daten oder neue Serienausgaben nachliefern
+
+**Ausgangssituation:** Für eine vorhandene Ausgabe kommt eine korrigierte CSV,
+oder eine Serie erhält die nächste Jahresausgabe.
+
+**Agentenunterstützung:** Der Agent prüft die CSV gegen die bestehende
+Vereinbarung zu Spalten, Reihenfolge und Werten. Bei einer reinen Datenlieferung
+bleibt das Datenblatt erhalten. Bei einer neuen Ausgabe prüft er zusätzlich,
+ob sie bereits im Datenblatt steht und welche Ausgabe als aktuell markiert ist.
+Serienidentifier und Ausgabe wie `2026` bleiben getrennt.
+
+**Ergebnis:** Geprüfte Datenlieferung und gegebenenfalls ein ergänztes Datenblatt.
+**Deine Entscheidung:** CSV freigeben; nötige Ausgabenänderungen separat im
+Metadatenreview bestätigen. Eine neue Jahresausgabe ist nicht automatisch eine
+reine Datenlieferung.
+
+**Beispielprompt:**
+
+> Verwende den Skill `datenportal-themenintegrator`. Integriere für die Organisation `statistikdienst`, Serie `ch.so.bevoelkerung.altersstruktur`, die Ausgabe `2026` mit der angehängten CSV. Prüfe die bestehende Datenstruktur und ob die Ausgabe bereits im Datenblatt vorhanden ist. Bereite notwendige Ergänzungen zur Prüfung vor und kläre, welche Ausgabe aktuell sein soll. Ziel ist zunächst die lokale Lieferung nach den nötigen Freigaben.
+
+Technische Details: [Serien und Teillieferungen](#serien-teillieferungen-und-konverter).
+
+### 6. INTERLIS-Modell ausdrücklich beauftragen
+
+**Ausgangssituation:** Die vereinbarte Datenstruktur soll mit einem
+INTERLIS-Modell überprüfbar werden.
+
+**Agentenunterstützung:** Auf ausdrücklichen Auftrag ein Modell aus CSV und
+bestätigtem Datenblatt ableiten, Modellidentität und offene Fachregeln klären
+und die CSV gegen das Modell prüfen lassen. Standard sind INTERLIS 2.4,
+Profil SO und zunächst eine flache Klasse. Beobachtete Werte von 120 bis
+20'000 begründen keinen fachlichen Wertebereich; zufällige Eindeutigkeit
+begründet keinen Schlüssel.
+
+**Ergebnis:** Modell, Prüfresultate, aktualisierte Modellreferenz im Datenblatt
+und die erforderliche Validierungsaufgabe.
+**Deine Entscheidung:** Modellname, URI, ISO-Version, technischen Kontakt,
+Titel und Kurzbeschreibung sowie unbelegte Regeln klären. Beim Themenvorgang
+Metadaten und Modell gemeinsam prüfen und beide konkreten Stände freigeben.
+Eigenständige Modellierung ist auch ohne Datenpublikation möglich.
+
+**Beispielprompt:**
+
+> Verwende den Skill `datenportal-themenintegrator`. Leite im Vorgang `<Vorgangs-ID>` aus der bestätigten CSV und dem Datenblatt ein INTERLIS-Modell ab. Frage die Modellidentität und fachlich nicht belegte Regeln nach. Zeige Modell und Validierungsergebnis gemeinsam mit dem aktualisierten Datenblatt zur Freigabe.
+
+Technische Details: [INTERLIS-Modellierung](#interlis-modellierung).
+
+### 7. Organisation oder Dienststelle vorbereiten
+
+**Ausgangssituation:** Eine neue Fachstelle möchte künftig Themen publizieren.
+
+**Agentenunterstützung:** Bestehende Dienststellen und Teams prüfen,
+Organisationsdateien und Berechtigungszuordnungen vorbereiten und validieren.
+Organisation und Dienststelle haben getrennte Kennungen. Kontakte und
+Benutzerkennungen müssen tatsächlich vorliegen oder von dir bestätigt werden.
+
+**Ergebnis:** Ein geprüfter Änderungsvorschlag mit Dateien und Berechtigungen.
+**Deine Entscheidung:** Zuständigkeit, Lese-/Build-Teams und gegebenenfalls neue
+Mitglieder bestätigen und den Organisationsstand freigeben. Eine Organisation
+ohne Thema kann im Repository angelegt werden; ihr Jenkins-Job entsteht erst
+mit dem ersten Thema. Es wird kein Dummy-Thema angelegt.
+
+**Beispielprompt:**
+
+> Verwende den Skill `datenportal-themenintegrator`. Bereite die Organisation `mobilitaet` mit dem Titel „Fachstelle Mobilität“ vor. Prüfe zuerst vorhandene Dienststellen und Teams. Frage fehlende Kontakte und Berechtigungszuordnungen nach und zeige alle geplanten Änderungen zur Freigabe. Lege noch kein Thema an.
+
+Technische Details: [Organisation und Dienststelle](#neue-organisation-und-dienststelle).
+
+### 8. Lokal liefern und INT oder PROD vorbereiten
+
+**Ausgangssituation:** CSV und Metadaten sowie ein gegebenenfalls beauftragtes
+Modell sind freigegeben; das Thema soll zunächst lokal geprüft werden.
+
+**Agentenunterstützung:** Freigegebene Änderungen übernehmen, Lieferung
+begleiten und Portalansicht, Metadaten und Downloads prüfen. Anschliessend kann
+der Agent einen konkreten Publikationsplan für INT oder PROD zeigen. Dafür
+müssen die jeweilige Umgebung und passende Zugänge eingerichtet sein.
+
+**Ergebnis:** Bei Erfolg ein geprüfter lokaler Portal-Link; optional ein
+Publikationsplan mit Ziel, Dateien und Repository-Änderungen.
+**Deine Entscheidung:** Lokal abschliessen oder den konkreten Zielplan
+ausdrücklich freigeben. Bei Repository-Änderungen erstellt der Agent einen PR,
+den ein Mensch mergt. Erst nach Prüfung des Zielstands folgt die Lieferung.
+Reine Datenlieferungen ohne Repository-Änderungen brauchen keinen PR.
+
+**Beispielprompt:**
+
+> Verwende den Skill `datenportal-themenintegrator`. Führe den freigegebenen Vorgang `<Vorgangs-ID>` lokal bis zur überprüften Portalansicht fort. Bereite danach den Publikationsplan für INT vor und zeige Ziel, Dateien und nötige Repository-Änderungen zur ausdrücklichen Freigabe.
+
+Technische Details: [Lokale Lieferung und Zielpublikation](#durchgängiges-thema-csv-xlsx-und-xtf).
+
+### 9. Unterbrochene Vorgänge wiederaufnehmen
+
+**Ausgangssituation:** Die Sitzung wurde beendet oder Jenkins meldet einen
+Timeout, dessen Ausgang unklar ist.
+
+**Agentenunterstützung:** Den gespeicherten Vorgang und bestehende externe
+Läufe prüfen und am bestätigten Stand fortsetzen. Bei unklarem Uploadstatus
+zuerst aufklären, ob bereits geliefert wurde. Eine erfolgte Publikation mit
+anschliessendem Reload- oder Downloadfehler wird getrennt nachgeprüft.
+
+**Ergebnis:** Eine Übersicht über abgeschlossene und offene Schritte sowie
+der nächste ausführbare Schritt oder eine konkrete Betreiberhandlung.
+**Deine Entscheidung:** Offene Fachfragen beantworten und veränderte
+Prüfstände erneut freigeben. Ein Timeout allein rechtfertigt keinen erneuten
+Upload und keinen zweiten Vorgang am bisherigen Lauf vorbei.
+
+**Beispielprompt:**
+
+> Verwende den Skill `datenportal-themenintegrator`. Nimm den Vorgang `<Vorgangs-ID>` wieder auf. Kläre den bestehenden Jenkins-Lauf und den Publikationsstatus. Zeige, was abgeschlossen ist und was fehlt, und setze den Vorgang fort, soweit die vorhandenen Freigaben gelten. Lade bei unklarem Status nicht erneut hoch.
+
+Technische Details: [Wiederaufnahme und Fehler](#wiederaufnahme-migration-und-fehler).
+
+### Beispieldialog: Korrektur und Freigabe
+
+Der folgende Dialog ist eine Illustration, kein tatsächlicher Vorgang und
+keine verwendbare Freigabe. In echten Vorgängen zählt deine tatsächliche
+Antwort zum jeweils gezeigten Prüfstand.
+
+| Sprecher | Beispiel |
+|---|---|
+| Agent | „Die CSV-Vorschau A schlägt den Gemeindecode als Zahl vor. Soll `0012` mit führenden Nullen erhalten bleiben?“ |
+| Du | „Ja, behandle den Code als Text und erhalte die führenden Nullen.“ |
+| Agent | „Ich habe die Typzuordnung korrigiert und erneut geprüft. Vorschau B zeigt `0012` unverändert als Text. Bitte prüfe diese Fassung.“ |
+| Du | „Ich habe Vorschau B geprüft und gebe diese CSV-Fassung frei.“ |
+| Agent | „Ich halte deine Freigabe für den gezeigten Prüfstand fest und bereite das Datenblatt zur nächsten Prüfung vor.“ |
+
+Der Korrekturauftrag in der zweiten Zeile ist noch keine Freigabe. Eine
+CSV-Freigabe umfasst weder das spätere Datenblatt noch eine INT-/PROD-Publikation.
+
 ## Installation und Konfiguration
 
 Standard ist `bin/datenportal-agent`: Der Launcher lädt das fertig gebaute Image
@@ -10,38 +328,71 @@ darin. Für diesen Betrieb sind weder ein lokaler Agent-Build noch ein Host-JDK
 nötig. Der Integrator-Checkout bleibt für Launcher, projektlokale MCP-Einträge,
 Konfiguration und Arbeitsdaten erforderlich.
 
-### Erstinitialisierung mit dem veröffentlichten Image
+### Repositories bereitstellen
 
-Voraussetzungen sind eine Bash-Shell, laufendes lokales Docker mit Compose und
-vorhandene Checkouts von Integrator, Themenrepo und Dev-Stack. Bei den
-Standardpfaden liegen sie nebeneinander:
+Für den normalen lokalen Betrieb müssen diese drei Repositories bereits auf
+dem Rechner liegen. Ein Checkout ist die lokale Arbeitskopie eines
+Git-Repositories. `init` klont keine fehlenden Repositories; vorhandene
+Checkouts können weiterverwendet werden.
 
-```text
-arbeitsverzeichnis/
-  datenportal-themenintegrator-agent/
-  datenportal-themenrepo/
-  datenportal-dev-stack/
-```
+| Repository und Bezugsadresse | Zweck | Bereitstellung |
+|---|---|---|
+| [datenportal-themenintegrator-agent](https://github.com/edigonzales/datenportal-themenintegrator-agent) | Launcher, Skill, Konfiguration und Arbeitsdaten | Vor `init` selbst klonen oder vorhandenen Checkout verwenden. |
+| [datenportal-themenrepo](https://github.com/sogis/datenportal-themenrepo) | Fachliche Themen, Datenblätter und Aufgaben | Vor `init` selbst klonen oder vorhandenen Checkout verwenden. |
+| [datenportal-dev-stack](https://codeberg.org/edigonzales/datenportal-dev-stack) | Lokale Publikationsumgebung und ihre Startskripte | Vor `init` selbst klonen oder vorhandenen Checkout verwenden. |
+
+Voraussetzungen sind Git, eine Bash-Shell und laufendes lokales Docker mit
+Compose. Für Downloads müssen die Git-Hosts, Docker Hub und die Bezugsquellen
+der Fachwerkzeuge erreichbar sein. Falls eine verwendete Repository-Variante
+zugriffsbeschränkt ist, müssen passende Git-Zugriffsrechte eingerichtet sein.
+Zugangsdaten nicht in Clone-URLs oder Chatnachrichten einfügen.
 
 macOS benötigt aktiviertes **Settings → Resources → Network → Enable host
 networking** in Docker Desktop ab 4.34; Linux einen lokalen Docker Engine.
 `init` prüft Loopback tatsächlich über einen kurzlebigen Prüfcontainer.
 Fehlende Docker-Einstellungen werden gemeldet, nicht automatisch geändert.
-Beim ersten Start sind Netzwerkzugriff auf Docker Hub und für die von `init`
-bereitgestellten Fachwerkzeuge erforderlich.
 
-Im Integrator-Checkout ausführen:
+Für eine neue Arbeitsumgebung mit den Standardpfaden:
 
 ```sh
-./bin/datenportal-agent init
-./bin/datenportal-agent doctor
+mkdir datenportal-arbeitsbereich
+cd datenportal-arbeitsbereich
+git clone https://github.com/edigonzales/datenportal-themenintegrator-agent.git
+git clone https://github.com/sogis/datenportal-themenrepo.git
+git clone https://codeberg.org/edigonzales/datenportal-dev-stack.git
+cd datenportal-themenintegrator-agent
 ```
 
-Beim ersten Aufruf lädt der Launcher `latest` für die Rechnerarchitektur
-(`linux/amd64` oder `linux/arm64`), prüft den Image-Start und speichert Digest und
-Image-ID unter `.datenportal-integrator/launcher/release-image`. Ein separates
-`docker pull` oder ein eigener `docker run` mit manuellen Mounts ist nicht nötig.
-Der Launcher übernimmt Docker-Socket, Netzwerk, Arbeitsverzeichnis und UID/GID.
+Die Checkouts liegen danach nebeneinander:
+
+```text
+datenportal-arbeitsbereich/
+  datenportal-themenintegrator-agent/
+  datenportal-themenrepo/
+  datenportal-dev-stack/
+```
+
+Separate Quellcheckouts von Datenblatt-MCP und interlis-mcp sowie ein lokaler
+GRETL-Quellbuild sind für diesen Betrieb nicht erforderlich. Ein
+Jenkins-Quellcheckout wird nur benötigt, wenn Jenkins-Images lokal gebaut
+werden sollen. Der normale Betrieb verwendet die vorgesehenen Images.
+
+**Was geschieht automatisch?**
+
+| Bestandteil | Verhalten |
+|---|---|
+| Drei Git-Checkouts | Vorab bereitstellen; kein automatisches Klonen durch `init`. |
+| Agent-Image | Der Launcher lädt es beim ersten Start und speichert den gewählten Stand. |
+| Fach-MCPs, Originalmodelle, ilivalidator und GRETL-Prüfumgebung | `init` bereitet die vorgesehenen Werkzeuge und Images vor und startet die eigenen benötigten Dienste. |
+| Lokale Konfiguration und MCP-Einträge | `init` legt eine fehlende Standardkonfiguration an und erzeugt die OpenCode-2.x-Einträge. Bekannte ältere Integrator-Einträge werden automatisch migriert. |
+| Technische Bereitschaft | `init` führt isolierte synthetische Prüfungen aus; `doctor` zeigt Bereitschaft und fehlende Voraussetzungen. |
+| Publikationsumgebung und Geschäftsdaten | Werden nicht durch `init` publiziert oder initialisiert. Der Publikationsablauf folgt erst im beauftragten, fachlich freigegebenen Vorgang. |
+
+### Erstinitialisierung mit dem veröffentlichten Image
+
+Nach der [Bereitstellung der Repositories](#repositories-bereitstellen) im
+Integrator-Checkout bleiben oder dorthin wechseln. Bei Standardpfaden kann die
+Initialisierung direkt erfolgen. Für abweichende Pfade zuerst konfigurieren:
 
 `init` erzeugt `config/local.toml` aus der Vorlage im Image, sofern die Datei
 fehlt. Die Standardpfade passen zur oben gezeigten Verzeichnisstruktur. Bei
@@ -55,13 +406,31 @@ Dann `topics_repo` und `stack_repo` in `config/local.toml` an die bestehenden
 Checkouts anpassen und `init` ausführen. Relative Pfade beziehen sich auf `root`,
 das wiederum relativ zur Konfigurationsdatei ausgewertet wird. Liegen benötigte
 Verzeichnisse ausserhalb des gemeinsamen Checkout-Elternordners, müssen sie mit
-`--mount-ro` beziehungsweise `--mount-rw` eingebunden werden; Beispiele folgen
-weiter unten. Zugangsdaten gehören in Umgebungsvariablen oder den Credential-Store.
+`--mount-ro` beziehungsweise `--mount-rw` eingebunden werden; siehe
+[Mounts und Aufruf](#mounts-und-aufruf-aus-codex-oder-opencode).
+Zugangsdaten gehören in Umgebungsvariablen oder den Credential-Store.
+
+Danach im Integrator-Checkout ausführen:
+
+```sh
+./bin/datenportal-agent init
+./bin/datenportal-agent doctor
+```
+
+Beim ersten Aufruf lädt der Launcher `latest` für die Rechnerarchitektur
+(`linux/amd64` oder `linux/arm64`), prüft den Image-Start und speichert Digest und
+Image-ID unter `.datenportal-integrator/launcher/release-image`. Ein separates
+`docker pull` oder ein eigener `docker run` mit manuellen Mounts ist nicht nötig.
+Der Launcher übernimmt Docker-Socket, Netzwerk, Arbeitsverzeichnis und UID/GID.
 
 Erfolgreiche Initialisierung meldet `ready=true`. Anschliessend kann der Agent
 über `./bin/datenportal-agent codex` oder den eingerichteten projektlokalen
 MCP-Eintrag verwendet werden. `./bin/datenportal-agent serve` startet den
 stdio-MCP direkt; dabei wartet der Prozess auf einen MCP-Client.
+
+Vor dem Chatstart die
+[MCP-Verbindung](#codex-desktop-codex-cli-und-opencode) prüfen.
+Danach den [Skill auswählen und den fachlichen Auftrag starten](#arbeitsbereich-öffnen-und-skill-auswählen).
 
 Voraussetzung für diesen Startweg ist ein erfolgreich veröffentlichtes Image.
 Der [Abnahmestand](abnahme.md#agent-run-image-und-release-pipeline-vom-9-oktober-2026)
@@ -342,7 +711,76 @@ codex mcp list
 
 Der Java-Helfer `codex` übergibt den MCP-Eintrag ausdrücklich als Konfigurationsoverride. Er verändert die persönliche Konfiguration nicht. Zusätzliche Codex-Argumente werden weitergereicht. Dies hilft auch bei Harness-Versionen, die Projektkonfigurationen noch nicht zuverlässig finden.
 
-Für OpenCode:
+Für OpenCode 2.x stable erzeugt `init` den Integrator-Eintrag direkt unter
+`mcp.servers.datenportal_integrator`. `harness-config` gibt dieselbe V2-Struktur
+mit absoluten Launcherpfaden aus. Ein Beispiel der projektlokalen Konfiguration
+mit Standardpfaden ist:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "servers": {
+      "datenportal_integrator": {
+        "type": "local",
+        "command": ["bin/datenportal-agent", "--config", "config/local.toml", "serve"],
+        "disabled": false,
+        "environment": {
+          "DATENPORTAL_FORWARD_ENV": "DATENPORTAL_LOCAL_USER DATENPORTAL_LOCAL_TOKEN"
+        },
+        "timeout": {
+          "startup": 180000,
+          "catalog": 1800000,
+          "execution": 1800000
+        }
+      }
+    }
+  }
+}
+```
+
+Der Ausschnitt enthält nur Namen von Umgebungsvariablen, keine Zugangsdaten.
+Die Timeout-Werte sind Millisekunden: drei Minuten für den Start und je
+30 Minuten für Katalog und Werkzeugaufrufe. Vorhandene individuelle Werte
+bleiben erhalten; fehlende Felder erhalten diese Standardwerte.
+
+Bei `init` werden bekannte Java- oder Launcher-Einträge aus
+`mcp.datenportal_integrator` automatisch verschoben und der alte Schlüssel
+entfernt. `enabled: false` wird zu `disabled: true`; ein bisheriger numerischer
+Timeout wird für `catalog` und `execution` übernommen. Umgebungszuordnungen,
+zusätzliche Weiterleitungsvariablen, fremde V2-Server und globale Einstellungen
+bleiben erhalten. Der Startbefehl folgt dem aktuellen Launcher-Aufruf,
+einschliesslich gewählter Runtime, Mounts und Konfiguration. Ein erneutes `init`
+erzeugt keinen zusätzlichen alten Eintrag.
+
+Sind alte und neue Integrator-Einträge gleichzeitig vorhanden, werden
+kompatible Angaben zusammengeführt. Bei widersprüchlichen Werten, unbekannten
+Startbefehlen, ungültigen Feldtypen oder fremden Servern im alten direkten
+MCP-Format stoppt `init` mit `harness_conflict`. Die Meldung nennt das betroffene
+Feld, ohne Zugangsdatenwerte auszugeben. Vor Änderungen werden beide
+Konfigurationen geprüft; bei einem erkannten Konflikt bleiben Codex- und
+OpenCode-Datei unverändert. Vor dem Schreiben legt der Integrator Sicherungen
+unter `.datenportal-integrator/harness-backups/` an. Den gemeldeten Konflikt
+bewusst bereinigen und denselben `init`-Aufruf wiederholen.
+
+**Verfügbarkeit der Korrektur:** Bis ein korrigiertes Agent-Image veröffentlicht
+ist, den Code aus diesem Checkout verwenden:
+
+```sh
+./bin/datenportal-agent --runtime docker-build init
+./bin/datenportal-agent --runtime docker-build doctor
+```
+
+Für den normalen Image-Betrieb nach Veröffentlichung ausdrücklich aktualisieren:
+
+```sh
+./bin/datenportal-agent --update-agent --version
+./bin/datenportal-agent init
+./bin/datenportal-agent doctor
+```
+
+Danach OpenCode neu verbinden. Der gespeicherte Image-Stand wird nicht allein
+durch eine Änderung am Checkout aktualisiert. Verbindung prüfen und starten:
 
 ```sh
 cd /pfad/datenportal-themenintegrator-agent
@@ -350,23 +788,26 @@ opencode mcp list
 opencode
 ```
 
-OpenCode startet den Launcher aus `opencode.json`. Im optionalen lokalen Java-Betrieb legt `setup-java` einen ignorierten Symlink auf das tatsächlich verwendete JDK 25 an. `java` muss auf JDK 25 zeigen; bei Desktop-Prozessen gegebenenfalls den absoluten Befehl aus `harness-config` verwenden. Im Chat zum Beispiel: „Verwende den Themenintegrator-Skill. Integriere diese CSV und die XLSX-Metadaten lokal; erkläre zuerst die CSV und halte an den Freigaben an.“ Dateien anhängen oder absolute lokale Pfade nennen.
+OpenCode startet den Launcher aus `opencode.json`. Der aktuelle Verbindungsstatus
+ist mit `opencode mcp list` abrufbar; in der Sitzung öffnet `/mcps` die
+Serverauswahl. Grundlage sind die [OpenCode-2.x-MCP-Anweisungen](https://opencode.ai/v2/docs/mcp-servers/).
+Im optionalen lokalen Java-Betrieb muss `java` auf JDK 25 zeigen; bei
+Desktop-Prozessen gegebenenfalls den absoluten Befehl aus `harness-config`
+verwenden.
 
-In OpenCode Beta liegt der Verbindungsstatus unter **Session details → MCP**.
-Vor dem GUI-Start `init` beziehungsweise nach Quelländerungen `doctor` über den
-Launcher ausführen. Die getestete Beta begrenzt den MCP-Start standardmässig auf
-30 Sekunden; das bisherige numerische `timeout` verlängert nur Katalog- und
-Werkzeugaufrufe. Falls ein kalter Build diesen Start überschreitet, nach dem
-fertigen Build ausschliesslich `datenportal_integrator` im MCP-Panel aus- und
-wieder einschalten. Der bestehende Vorgang bleibt dabei erhalten.
-
-In OpenCode Beta das Integrator-Repository als Projekt öffnen und den Skill mit
-`@datenportal-themenintegrator` auswählen. Die Anhangübernahme erfolgt automatisch
+Das Integrator-Repository als Projekt öffnen und den Skill in OpenCode mit
+`@datenportal-themenintegrator`, in Codex mit `$datenportal-themenintegrator`
+auswählen. Vollständige [Startprompts und Anwendungsszenarien](#mit-dem-agenten-arbeiten)
+stehen am Anfang dieses Handbuchs. Die Anhangübernahme erfolgt automatisch
 nach der Regel [Chat-Anhänge übernehmen](../skills/datenportal-themenintegrator/SKILL.md#chat-anhänge-übernehmen);
 Kopieren und Prüfsummenvergleich müssen nicht im Prompt wiederholt werden.
 Wenn die GUI keinen zugänglichen Originalpfad übermittelt, fragt der Agent gezielt danach.
 
-Die aktuelle technische und menschliche Abnahme ist in [abnahme.md](abnahme.md) dokumentiert. Ein erfolgreicher MCP-Handshake ersetzt keinen vollständigen menschlichen Dialogtest.
+Die aktuelle technische und menschliche Abnahme ist in [abnahme.md](abnahme.md)
+dokumentiert. Dortige Beta-Nachweise bleiben historische Ergebnisse und sind
+keine Abnahme von OpenCode 2.x stable. Die hier anhand der V2-Dokumentation
+beschriebene Bedienung ersetzt keinen durchgeführten GUI-Dialogtest. Ein
+erfolgreicher MCP-Handshake ersetzt keine vollständige fachliche Abnahme.
 
 ## Durchgängiges Thema: CSV, XLSX und XTF
 
@@ -566,6 +1007,7 @@ Eine unbestätigte letzte Änderung blockiert weitere Bearbeitung mit `metadata_
 | `report_missing` | Jenkins-Konsole und bestehenden Lauf prüfen; fehlender Bericht erlaubt keinen sicheren Retry. |
 | `repository_conflict`, `pr_base_conflict`, `pr_changed` | Änderungen vergleichen und erneut prüfen; keine fremden Änderungen überschreiben. |
 | `human_merge_required` | Menschlichen Merge abwarten; Agent mergt nicht. |
+| `harness_conflict` bei `init` | Gemeldeten Konfigurationskonflikt klären, fremde alte MCP-Einträge nach den V2-Regeln umstellen und `init` wiederholen. Keine fachliche Freigabe erforderlich. |
 | `converter_migration_required` | Python-Rezept nach Java mit JUnit portieren. |
 
 `retry_delivery` ist nur für eindeutig fehlgeschlagene, nicht publizierte Versuche vorgesehen. Bei unklarer Publikation wird es abgewiesen. Freigaben sichern den Arbeitsablauf ab; sie sind keine unabhängige menschliche Authentisierung gegenüber einem Agenten mit vollständigem Dateizugriff.

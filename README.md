@@ -53,6 +53,19 @@ vom lokalen Entwicklungsbuild zum veröffentlichten Image.
 
 ## Einstieg
 
+Zum ersten Start: [Repositories bereitstellen](docs/anwenderhandbuch.md#repositories-bereitstellen)
+erklärt die drei nötigen lokalen Checkouts mit Clone-Befehlen und trennt sie von
+den automatischen Downloads durch Launcher und `init`.
+[Mit dem Agenten arbeiten](docs/anwenderhandbuch.md#mit-dem-agenten-arbeiten)
+zeigt die Skill-Auswahl, neun Anwendungsszenarien und kopierbare Beispielprompts.
+`init` erzeugt die MCP-Konfiguration für OpenCode 2.x stable und migriert bekannte
+ältere Integrator-Einträge automatisch. Danach die
+[MCP-Verbindung prüfen](docs/anwenderhandbuch.md#codex-desktop-codex-cli-und-opencode).
+Bis zur Veröffentlichung eines Agent-Images mit dieser Korrektur
+`./bin/datenportal-agent --runtime docker-build init` verwenden. Bei einem bereits
+eingerichteten Image-Betrieb nach der Veröffentlichung ausdrücklich
+`./bin/datenportal-agent --update-agent --version` und danach `init` ausführen.
+
 Docker mit Compose genügt für Build und Java-Betrieb. macOS benötigt Docker
 Desktop ab 4.34 mit aktiviertem **Settings → Resources → Network → Enable host
 networking**; Linux verwendet den lokalen Docker Engine. Der Launcher verwendet
