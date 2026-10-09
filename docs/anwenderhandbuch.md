@@ -64,9 +64,10 @@ MCP-Eintrag verwendet werden. `./bin/datenportal-agent serve` startet den
 stdio-MCP direkt; dabei wartet der Prozess auf einen MCP-Client.
 
 Voraussetzung für diesen Startweg ist ein erfolgreich veröffentlichtes Image.
-Der bisherige [Abnahmestand](abnahme.md#agent-run-image-und-release-pipeline-vom-9-oktober-2026)
-bestätigt die erste Docker-Hub-Publikation noch nicht. Bis diese verfügbar ist,
-kann mit Docker aus dem Checkout initialisiert werden:
+Der [Abnahmestand](abnahme.md#agent-run-image-und-release-pipeline-vom-9-oktober-2026)
+hält Veröffentlichung und erfolgreiche Prüfung getrennt fest. Solange noch kein
+freigegebenes `latest` verfügbar ist, kann mit Docker aus dem Checkout
+initialisiert werden:
 
 ```sh
 ./bin/datenportal-agent --runtime docker-build init

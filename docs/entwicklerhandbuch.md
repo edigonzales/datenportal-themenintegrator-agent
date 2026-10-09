@@ -382,7 +382,12 @@ insbesondere lokale Konfiguration und Vorgangsdaten aus.
 Ein vorhandener Tag muss auf beiden Plattformen dieselbe Version und denselben
 Commit ausweisen; sonst schlägt der Run fehl. Registry-/Netzfehler gelten nicht
 als fehlender Tag. Nach dem Push werden beide Plattformen frisch geladen und
-nochmals geprüft. Eine Wiederholung kann nach einem unklaren Push-Ergebnis den
+nochmals geprüft. Dafür wird jede Plattform anhand ihres eigenen Manifest-Digests
+geladen und inspiziert; `docker image inspect --platform` wird nicht benötigt.
+Mit `bash runtime/publish-image.sh verify` und den Variablen `IMAGE`,
+`AGENT_VERSION` und `GITHUB_SHA` lässt sich ein vorhandenes Release ausschliesslich
+prüfen, ohne Build, Push oder Änderung von `latest`.
+Eine Wiederholung kann nach einem unklaren Push-Ergebnis den
 vorhandenen Stand prüfen, ohne ihn zu überschreiben.
 
 Nur die anschliessende `latest`-Promotion ist serialisiert. Versionspublikationen

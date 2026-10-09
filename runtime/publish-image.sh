@@ -13,15 +13,19 @@ exists() {
   exit 1
 }
 verify_version() {
-  local reference=$1 arch revision version
+  local reference=$1 arch revision version digest platform_reference
   docker buildx imagetools inspect --raw "$reference" > "$manifest"
   for arch in amd64 arm64; do
-    jq -e --arg arch "$arch" '.manifests | any(.platform.os == "linux" and .platform.architecture == $arch)' "$manifest" >/dev/null
-    docker pull --platform "linux/$arch" "$reference" >&2
-    revision=$(docker image inspect --platform "linux/$arch" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$reference")
-    version=$(docker image inspect --platform "linux/$arch" --format '{{index .Config.Labels "org.opencontainers.image.version"}}' "$reference")
+    # Resolve the platform manifest first. Older Docker CLIs cannot select a
+    # platform in image inspect; inspecting a shared tag can select the host one.
+    digest=$(jq -er --arg arch "$arch" '[.manifests[] | select(.platform.os == "linux" and .platform.architecture == $arch)] | if length == 1 then .[0].digest else error("Expected exactly one platform manifest") end' "$manifest")
+    [[ $digest =~ ^sha256:[a-f0-9]{64}$ ]] || { echo 'Invalid platform manifest digest' >&2; exit 1; }
+    platform_reference="$IMAGE@$digest"
+    docker pull --platform "linux/$arch" "$platform_reference" >&2
+    revision=$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$platform_reference")
+    version=$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' "$platform_reference")
     [[ $revision == "$GITHUB_SHA" && $version == "$AGENT_VERSION" ]] || { echo 'Existing version belongs to different build metadata; refusing overwrite.' >&2; exit 1; }
-    bash runtime/image-smoke.sh "$reference" "linux/$arch"
+    bash runtime/image-smoke.sh "$platform_reference" "linux/$arch"
   done
 }
 case "${1:-}" in
@@ -33,6 +37,7 @@ case "${1:-}" in
     fi
     verify_version "$IMAGE:$AGENT_VERSION"
     ;;
+  verify) verify_version "$IMAGE:$AGENT_VERSION" ;;
   latest)
     # Called under the workflow's promotion lock. Compare release numbers, not job order.
     if exists "$IMAGE:latest"; then

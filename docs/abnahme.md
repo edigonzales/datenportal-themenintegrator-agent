@@ -372,3 +372,28 @@ Fehlgeschlagene Vorläufe und offene Abnahme:
 Lokale technische Nachweise liegen unter
 `.datenportal-integrator/image-release-abnahme/`; sie sind keine Registry-
 oder Fachabnahme. Die reproduzierbaren Prüfskripte liegen unter `runtime/`.
+
+### Korrektur der Registry-Prüfung nach der ersten Veröffentlichung
+
+Der erste CI-Run hat `0.1.1` erfolgreich unter dem Manifest-Digest
+`sha256:3c274b4c40b84d2b36a600bb5573056ff5c75a6f11cc45e94d7373c7375fa9e4`
+veröffentlicht. Der anschliessende Prüfschritt scheiterte mit Exit 125, weil die
+Docker-CLI des Runners `docker image inspect --platform` nicht unterstützt.
+Die davon abhängige `latest`-Promotion konnte in diesem Run nicht erfolgen.
+
+Die korrigierte Prüfung löst jeden Plattform-Manifest-Digest aus dem Index auf
+und verwendet ihn für Pull, Inspect und Smoke. Sie benötigt das nicht verfügbare
+Inspect-Flag nicht und prüft trotzdem jede Architektur unabhängig.
+
+Tatsächlich bestanden: `test jar spotlessCheck` mit 156 Unit-Tests sowie die
+reine Registry-Verifikation des bereits vorhandenen `0.1.1` für AMD64 und ARM64.
+Version und Commit-Labels stimmen mit `3e7aee9ec2299d08e6c06c87484d70ac2a06d149`
+überein; CLI, MCP, Ressourcen und Konverter-Smokes bestehen auf beiden Plattformen.
+Es wurde dabei weder neu gebaut noch hochgeladen noch `latest` verändert.
+Nachweis: `.datenportal-integrator/image-release-abnahme/registry-0.1.1-verify.log`.
+
+Simuliert geprüft: Eine CLI, die `image inspect --platform` ablehnt, besteht die
+korrigierten Abläufe; abweichende ARM-Metadaten werden auch auf einem anderen
+Host erkannt. Der zusätzliche Modus `verify` führt keine Publikation aus.
+Die erfolgreiche CI-Ausführung der Korrektur und die anschliessende
+`latest`-Promotion bleiben bis zum neuen Workflow-Ergebnis offen.
