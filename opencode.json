@@ -1,11 +1,14 @@
 {
-  "$schema": "https://opencode.ai/config.json",
-  "mcp": {
-    "datenportal_integrator": {
-      "type": "local",
-      "command": [".datenportal-integrator/tools/java", "-jar", "build/libs/datenportal-integrator.jar", "--config", "config/local.toml", "serve"],
-      "enabled": true,
-      "timeout": 600000
+  "$schema" : "https://opencode.ai/config.json",
+  "mcp" : {
+    "datenportal_integrator" : {
+      "command" : [ "bin/datenportal-agent", "--config", "config/local.toml", "serve" ],
+      "enabled" : true,
+      "environment" : {
+        "DATENPORTAL_FORWARD_ENV" : "DATENPORTAL_LOCAL_USER DATENPORTAL_LOCAL_TOKEN"
+      },
+      "timeout" : 1800000,
+      "type" : "local"
     }
   }
 }

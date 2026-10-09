@@ -8,11 +8,12 @@ import org.tomlj.TomlArray;
 import org.tomlj.TomlTable;
 
 public final class Settings {
-  public final Path root, topics, stack, runs;
+  public final Path file, root, topics, stack, runs;
   public final Map<String, Object> values;
   public final int timeout, stackTimeout;
 
   public Settings(Path config) {
+    file = config.toAbsolutePath().normalize();
     if (!Files.isRegularFile(config))
       throw new Problem(
           "configuration_missing",
@@ -106,6 +107,21 @@ public final class Settings {
       for (String field : List.of("jenkins_url", "portal_url", "manifest_url"))
         url(Json.required(environment, field));
     }
+  }
+
+  /** Private synthetic workspace: no publication profiles and no real repository writes. */
+  Settings(Settings source, Path privateRepo, Path privateRuns) {
+    file = source.file;
+    root = source.root;
+    topics = privateRepo;
+    stack = source.stack;
+    runs = privateRuns;
+    timeout = source.timeout;
+    stackTimeout = source.stackTimeout;
+    values = Json.read(Json.text(source.values));
+    values.put("topics_repo", privateRepo.toString());
+    values.put("state_dir", privateRuns.toString());
+    values.put("environments", Json.map());
   }
 
   public Map<String, Object> mcp(String service) {
@@ -259,6 +275,8 @@ public final class Settings {
 
   public String fingerprint() {
     var files = Json.map();
+    if (AgentRuntime.container())
+      files.put("agent_runtime_image", System.getenv("DATENPORTAL_RUNTIME_IMAGE"));
     try {
       files.put("gretl_runtime", GretlRuntime.recorded(this));
     } catch (Problem p) {

@@ -28,6 +28,11 @@ tasks.register('integrationTest', Test) {
     systemProperty 'integrator.root', projectDir.absolutePath
 }
 test { useJUnitPlatform { excludeTags 'integration' } }
+tasks.withType(Test).configureEach {
+    if (System.getenv('DATENPORTAL_TEST_TMP')) {
+        systemProperty 'java.io.tmpdir', System.getenv('DATENPORTAL_TEST_TMP')
+    }
+}
 jar {
     archiveFileName = 'datenportal-integrator.jar'
     manifest { attributes 'Main-Class': application.mainClass.get() }

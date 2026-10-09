@@ -1,6 +1,62 @@
 # Abnahmestand
 
-Stand: 6. Oktober 2026. Aktueller Durchlauf: 94 Unit-/Funktionstests und sechs echte Integrationstests erfolgreich. Technische Tests, Simulationen und tatsächliche menschliche Abnahmen sind getrennt aufgeführt. Testfreigaben autorisieren keine fachlichen Änderungen im echten Themenrepo und keine INT-/PROD-Publikation.
+## Docker-Einstieg und gemeinsames init vom 9. Oktober 2026
+
+Die folgenden Nachweise betreffen den neuen Docker-Launcher. Frühere Abnahmen
+weiter unten bleiben historische Nachweise ihrer jeweiligen Quellstände.
+
+Tatsächlich auf macOS mit Docker Desktop und aktiviertem Host-Networking geprüft:
+
+- Runtime lokal aus festgelegten Basisimages gebaut; JDK 25, Docker CLI/Compose,
+  Git und `gh` kommen aus dem Container. Ein sauberer Gradle-Build sowie
+  `test jar spotlessCheck` bestehen über denselben Launcher mit 132
+  Unit-/Funktionstests ohne übersprungene Tests.
+- Alle 21 echten Integrationstests bestehen ohne übersprungene Tests über
+  `./bin/datenportal-agent gradle integrationTest`: bestehende Fachabläufe,
+  Datenblatt-Neustarts, GRETL-Prüfcontainer und dauerhafte Compose-Laufzeit.
+  Der Timeout-Test erhielt 15 statt 3 Sekunden für den Start seines absichtlich
+  30 Sekunden laufenden Tasks; der erste Durchlauf scheiterte an dieser zu kurzen
+  Anlaufzeit. Der vollständige Wiederholungslauf bestand in 6 Minuten 42 Sekunden.
+  Log: `.datenportal-integrator/docker-integration-final.log`.
+- Zwei gleichzeitige CLI-Starts serialisieren ihre Builds und liefern reines
+  JSON auf stdout. Der echte MCP-Client initialisiert und findet 28 Werkzeuge.
+  EOF und TERM beenden die Agent-Container ohne zurückbleibende Instanzen.
+  Dabei war `JAVA_HOME=/no-host-jdk` gesetzt. Bericht:
+  `.datenportal-integrator/launcher-acceptance/report.json`.
+- `init` besteht mit den tatsächlich konfigurierten Fachwerkzeugen: privater
+  Datenblatt-Import/-Export, ilivalidator, INTERLIS-Ableitung mit Nachweisen,
+  erfolgreicher GRETL-CSV-Task und gezielt abgewiesener ungültiger CSV.
+  Die synthetischen Freigaben gelten ausschliesslich in der privaten Testkopie.
+  Bericht: `.datenportal-integrator/init.json`; referenzierte Nachweise unter
+  `.datenportal-integrator/smoke/`.
+  Zwei abschliessende `init`-Aufrufe gegen den fertigen JAR-Stand melden beide
+  `ready=true` und referenzieren denselben Smoke-Bericht. Protokolle:
+  `.datenportal-integrator/init-final.log` und `.datenportal-integrator/init-repeat.log`.
+- Eine zusätzliche kalte Einrichtung verwendet ein eigenes Compose-Projekt mit
+  den Standardtransporten HTTP und dauerhaftem GRETL. Fehlende Standardkonfiguration
+  wird erstellt, eine explizit fehlende Datei abgewiesen. Wiederholung erhält die
+  Konfiguration bytegleich und verwendet denselben Smoke-Nachweis. `--skip-smoke`
+  meldet anschliessend ausdrücklich keine vollständige Bereitschaft. Die privaten
+  Dienste und Volumes wurden nach dem Test entfernt. Bericht:
+  `.datenportal-integrator/init-acceptance/698aaacc-d8bd-44dd-a984-a7064927732f/acceptance.json`.
+- Die isolierte Loopback-Prüfung aus dem Agent-Container besteht. Java verwendet
+  für Docker Desktop ausdrücklich den IPv4-Stack. Das vorhandene lokale Portal
+  antwortete aus dem Container mit HTTP 503: Netzwerkzugriff nachgewiesen,
+  erfolgreiche Portal-Anwendungsprüfung damit noch offen.
+
+Simulierte Fehlerfälle sind davon getrennt: Unit-Tests prüfen einen entfernten
+Docker-Kontext, fehlende Mounts, Pfade mit Leerzeichen und Symlinks, unveränderte
+JSON-Argumente, explizite Secret-Variablennamen, geschützte MCP-Konfigurationen
+sowie verweigerte Smoke-Wiederverwendung bei geänderten Nachweisen. Ein gezielt
+eingeschränkter Host-PATH prüft die Diagnose bei fehlendem Docker. Diese Tests
+sind keine tatsächlichen Infrastruktur-Ausfälle.
+
+Offen bleiben native Linux-Abnahme (UID/GID, Socket, Host-Networking), ein
+erfolgreicher lesender Portal-Anwendungstest und menschliche Harness-Dialoge.
+Die Linux-Container auf Docker Desktop ersetzen keine native Linux-Abnahme.
+Es gab keine fachliche MFK-Übernahme und keine INT-/PROD-Publikation.
+
+Stand: 6. Oktober 2026. Damaliger Durchlauf: 94 Unit-/Funktionstests und sechs echte Integrationstests erfolgreich. Technische Tests, Simulationen und tatsächliche menschliche Abnahmen sind getrennt aufgeführt. Testfreigaben autorisieren keine fachlichen Änderungen im echten Themenrepo und keine INT-/PROD-Publikation.
 
 ## Tatsächlich geprüft
 

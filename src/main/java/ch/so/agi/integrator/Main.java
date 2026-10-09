@@ -26,7 +26,7 @@ public final class Main {
       }
       if (args.isEmpty() || args.getFirst().equals("--help")) {
         System.out.println(
-            "Java 25 Themenintegrator\njava -jar build/libs/datenportal-integrator.jar [--config PATH] doctor|serve|schema OP|call OP [--json JSON|--args-file PATH|-]\nWeitere Helfer: setup-tools, setup-mcps [--update], setup-gretl [--update], runtime-up, harness-config, codex");
+            "Java 25 Themenintegrator\nbin/datenportal-agent [--runtime docker|local] [--mount-ro PATH|--mount-rw PATH] [--config PATH] init|doctor|serve|schema OP|call OP [--json JSON|--args-file PATH|-]\ninit [--update-tools] [--skip-smoke]\nbin/datenportal-agent gradle TASK...\nDirekt: java -jar build/libs/datenportal-integrator.jar [--config PATH] COMMAND\nWeitere Helfer: setup-java, setup-tools, setup-mcps [--update], setup-gretl [--update], runtime-up, harness-config, codex");
         return 0;
       }
       String command = args.removeFirst();
@@ -43,7 +43,19 @@ public final class Main {
                 op.schema()));
         return 0;
       }
+      if (command.equals("init")) Initializer.prepareConfig(config);
       Settings s = Settings.load(config);
+      if (command.equals("codex-arguments")) {
+        for (String argument : new Harness(s).codexArguments()) {
+          System.out.write(argument.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+          System.out.write(0);
+        }
+        return 0;
+      }
+      if (command.equals("init")) {
+        print(new Initializer(s).run(args));
+        return 0;
+      }
       if (command.equals("serve")) {
         serve(s);
         return 0;
@@ -118,6 +130,13 @@ public final class Main {
             "stack_repo",
             Files.isDirectory(s.stack));
     try {
+      checks.put("agent_runtime", AgentRuntime.check(s));
+    } catch (Problem p) {
+      checks.put("agent_runtime", p.result());
+      checks.put("initialization", new Initializer(s).status());
+      return checks;
+    }
+    try {
       checks.put("configuration_fingerprint", s.fingerprint());
     } catch (Problem p) {
       checks.put("configuration_fingerprint", p.result());
@@ -167,6 +186,30 @@ public final class Main {
       checks.put("gretl_runtime", p.result());
     }
     checks.put("deprecated_settings", GretlRuntime.deprecated(s));
+    checks.put("initialization", new Initializer(s).status());
+    var publication = Json.map();
+    Json.obj(s.values.get("environments"))
+        .forEach(
+            (name, value) -> {
+              var env = Json.obj(value);
+              boolean credentials =
+                  List.of("username_env", "token_env").stream()
+                      .allMatch(
+                          key -> {
+                            String variable = Json.str(env, key, "");
+                            return !variable.isBlank()
+                                && System.getenv(variable) != null
+                                && !System.getenv(variable).isBlank();
+                          });
+              publication.put(
+                  name,
+                  Json.map(
+                      "enabled",
+                      Json.bool(env, "enabled", false),
+                      "credentials_present",
+                      credentials));
+            });
+    checks.put("publication", publication);
     return checks;
   }
 

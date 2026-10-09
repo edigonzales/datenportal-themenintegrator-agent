@@ -51,6 +51,12 @@ public final class Setup {
 
   Object tools() {
     javaLauncher();
+    Path record = s.root.resolve(".datenportal-integrator/tools/ilivalidator/installed.json");
+    Path installed = record.resolveSibling("ilivalidator-1.15.0.jar");
+    if (Files.isRegularFile(record)
+        && Files.isRegularFile(installed)
+        && Objects.equals(Json.read(record).get("sha256"), Json.sha(installed)))
+      return Json.map("validator_jar", installed.toString(), "reused", true);
     try {
       var r =
           HttpClient.newBuilder()
@@ -82,7 +88,8 @@ public final class Setup {
           }
         }
       }
-      return Json.map("validator_jar", dest.resolve("ilivalidator-1.15.0.jar").toString());
+      Json.atomic(record, Json.map("sha256", Json.sha(installed)));
+      return Json.map("validator_jar", installed.toString());
     } catch (Problem e) {
       throw e;
     } catch (Exception e) {
@@ -95,6 +102,7 @@ public final class Setup {
   }
 
   Object javaLauncher() {
+    if (AgentRuntime.container()) return Json.map("skipped", true, "reason", "container_java");
     Path link = s.root.resolve(".datenportal-integrator/tools/java");
     try {
       Files.createDirectories(link.getParent());
@@ -116,67 +124,16 @@ public final class Setup {
   }
 
   List<String> serverArgs() {
-    return List.of(
-        "-jar",
-        s.root.resolve("build/libs/datenportal-integrator.jar").toString(),
-        "--config",
-        s.root.resolve("config/local.toml").toString(),
-        "serve");
+    return new Harness(s).arguments();
   }
 
   Object harness() {
-    var credentials =
-        List.of(
-            "DATENPORTAL_LOCAL_USER",
-            "DATENPORTAL_LOCAL_TOKEN",
-            "DATENPORTAL_JENKINS_USER",
-            "DATENPORTAL_JENKINS_TOKEN");
-    return Json.map(
-        "codex",
-        Json.map(
-            "mcp_servers",
-            Json.map(
-                "datenportal_integrator",
-                Json.map(
-                    "command",
-                    java(),
-                    "args",
-                    serverArgs(),
-                    "tool_timeout_sec",
-                    600,
-                    "env_vars",
-                    credentials))),
-        "opencode",
-        Json.map(
-            "mcp",
-            Json.map(
-                "datenportal_integrator",
-                Json.map(
-                    "type",
-                    "local",
-                    "command",
-                    concat(List.of(java()), serverArgs()),
-                    "enabled",
-                    true))));
+    return new Harness(s).proposal();
   }
 
   Object codex(List<String> extra) {
-    var command = new ArrayList<>(List.of("codex", "-C", s.root.toString()));
-    var config =
-        Json.map(
-            "mcp_servers.datenportal_integrator.command",
-            java(),
-            "mcp_servers.datenportal_integrator.args",
-            serverArgs(),
-            "mcp_servers.datenportal_integrator.tool_timeout_sec",
-            600,
-            "mcp_servers.datenportal_integrator.env_vars",
-            List.of(
-                "DATENPORTAL_LOCAL_USER",
-                "DATENPORTAL_LOCAL_TOKEN",
-                "DATENPORTAL_JENKINS_USER",
-                "DATENPORTAL_JENKINS_TOKEN"));
-    config.forEach((k, v) -> command.addAll(List.of("-c", k + "=" + Json.text(v))));
+    var command = new ArrayList<>(List.of("codex"));
+    command.addAll(new Harness(s).codexArguments());
     command.addAll(extra);
     try {
       var process = new ProcessBuilder(command).inheritIO().start();

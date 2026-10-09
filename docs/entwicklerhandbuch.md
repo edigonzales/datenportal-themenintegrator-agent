@@ -1,6 +1,71 @@
 # Entwicklerhandbuch
 
+## Docker-Launcher und Initialisierung
+
+`bin/datenportal-agent` verwendet ein über Digest festgelegtes JDK-25-Basisimage
+mit Docker CLI/Compose und Werkzeugen für die vorhandenen externen Skripte.
+Build und Runtime sprechen den Host-Docker über dessen Unix-Socket an.
+Image-Build und Gradle-Build sind serialisiert; Buildausgaben gehen nach stderr.
+CLI/MCP-Ausgaben bleiben auf stdout. Der Buildcache ist ein benanntes Volume;
+der automatische JAR-Build verwendet ein Bridge-Netz. Agent und explizite
+Gradle-Testläufe verwenden Host-Networking mit IPv4 für Java, damit lokale
+Testserver und veröffentlichte Fachdienste auf Docker Desktop erreichbar sind.
+Arbeitsdateien behalten die Host-UID/GID. Bei hart beendetem Image-Build kann eine
+Sperre unter `.datenportal-integrator/launcher/build.lock` verbleiben; zuerst die
+PID und laufende Container klären, erst dann die verwaiste Sperre entfernen.
+
+`Initializer` speichert abgeschlossene Schritte und Fehler atomar. `AgentRuntime`
+prüft Host-Loopback mit einem kurzlebigen, nur an 127.0.0.1 veröffentlichten
+Geschwistercontainer. `Harness` bearbeitet ausschliesslich bekannte MCP-Einträge
+und erhält fremde Einstellungen. `Smoke` verwendet private Repository-/Run-Pfade,
+keine Publikationsprofile und ausdrücklich markierte synthetische Freigaben.
+Der Negativnachweis verlangt einen echten CSV-Validierungsfehler.
+
+Der Smoke-Fingerprint bindet Agent-JAR, Agent-Image, Java-Version,
+Konfigurations-/Werkzeugfingerprint, Fixturedateien und relevante GRETL-Quellen.
+Protokolle und Kandidaten bleiben erhalten, private Arbeitskopien werden nach
+Erfolg entfernt. Der bestehende GRETL-Daemon wird weiterverwendet.
+
+```sh
+./bin/datenportal-agent gradle test jar spotlessCheck
+./bin/datenportal-agent gradle integrationTest
+```
+
+Integrationstests verwenden im Docker-Modus ein hostseitig gemountetes temporäres
+Verzeichnis, damit Docker-Bind-Mounts auch aus Tests gültig sind. Keine neuen
+Python-Quellen: Python im Image ist nur Laufzeit des unveränderten externen
+Dev-Stack-Bootstraps.
+
+Die eigenständigen Java-Prüfprogramme `LauncherAcceptance` und `InitAcceptance`
+laufen nach Gradle. Sie dürfen nicht innerhalb einer laufenden Gradle-Task
+gestartet werden: Der Launcher-Test startet weitere Launcher und würde auf die
+noch gehaltene Build-Sperre warten. Nach dem obigen Build lässt sich die echte
+Abnahme mit dem bereits gebauten Runtime-Image ausführen:
+
+```sh
+repo_dir=$(pwd -P)
+runtime_image=$(cat .datenportal-integrator/launcher/image.id)
+socket_path=$(docker context inspect --format '{{.Endpoints.docker.Host}}')
+socket_path=${socket_path#unix://}
+socket_group=$(docker run --rm --mount "type=bind,source=$socket_path,target=/var/run/docker.sock" "$runtime_image" stat -c '%g' /var/run/docker.sock)
+docker run --rm --network host --user "$(id -u):$(id -g)" --group-add "$socket_group" \
+  --mount "type=bind,source=$(dirname "$repo_dir"),target=$(dirname "$repo_dir")" \
+  --mount "type=bind,source=$socket_path,target=/var/run/docker.sock" \
+  -w "$repo_dir" -e HOME=/tmp -e JAVA_HOME=/no-host-jdk \
+  -e JAVA_TOOL_OPTIONS=-Djava.net.preferIPv4Stack=true \
+  -e DATENPORTAL_CONTAINER_MODE=true -e "DATENPORTAL_RUNTIME_IMAGE=$runtime_image" \
+  "$runtime_image" bash -c '
+    /opt/java/openjdk/bin/java -cp build/classes/java/test:build/libs/datenportal-integrator.jar ch.so.agi.integrator.LauncherAcceptance "$PWD" &&
+    /opt/java/openjdk/bin/java -cp build/classes/java/test:build/libs/datenportal-integrator.jar ch.so.agi.integrator.InitAcceptance "$PWD"
+  '
+```
+
+Die zweite Prüfung erzeugt ein eigenes Compose-Projekt, prüft Ersteinrichtung,
+Wiederholung und `--skip-smoke` und entfernt nur ihre eigenen Dienste/Volumes.
+Ihre Berichte bleiben unter `.datenportal-integrator/init-acceptance/` erhalten.
+
 ## Architektur und Verantwortlichkeiten
+
 
 JDK 25, Gradle-Wrapper und ein ausführbares JAR bilden die Implementierung. `Main` stellt CLI und stdio-MCP bereit. Beide dispatchen über `Operations` in denselben `Workflow`. Das Sprachmodell und die fachliche Kommunikation bleiben im Harness. Es gibt keinen eigenen Modellclient und keinen zusätzlichen Integrator-Webserver.
 

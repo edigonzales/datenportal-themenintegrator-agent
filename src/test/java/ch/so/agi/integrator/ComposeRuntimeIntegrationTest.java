@@ -174,7 +174,9 @@ class ComposeRuntimeIntegrationTest {
 
   Settings shortTimeout() {
     Path config = temp.resolve("short.toml");
-    Json.write(config, configText.replace("timeout_seconds=300", "timeout_seconds=3"));
+    // Docker Desktop and concurrent real tool runs need time to enter the slow task.
+    // The task itself sleeps 30 seconds, so this still exercises an actual timeout.
+    Json.write(config, configText.replace("timeout_seconds=300", "timeout_seconds=15"));
     return new Settings(config);
   }
 

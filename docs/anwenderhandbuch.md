@@ -4,16 +4,71 @@ Der Integrator unterstützt drei Vorgänge: ein Thema integrieren (`topic`), ein
 
 ## Installation und Konfiguration
 
-Benötigt werden JDK 25, Git, Docker mit Compose ab 2.24.4 sowie die Checkouts von Integrator, Themenrepo und Dev-Stack. Die beiden Fach-MCPs kommen als veröffentlichte Images; deren Quellcheckouts und lokale Builds sind nicht erforderlich. Für PRs ist `gh` mit Anmeldung erforderlich. GRETL-Vorprüfungen verwenden Java 17 aus dem Jenkins-Image. Eine lokale Java-17-Installation und ein lokales GRETL-JAR-Bundle sind nicht erforderlich.
+Standard ist `bin/datenportal-agent`: Docker baut und startet den Java-Kern.
+Benötigt werden eine Bash-Shell, lokales Docker mit Compose und die Checkouts von
+Integrator, Themenrepo und Dev-Stack. Ein Host-JDK ist optional. macOS benötigt
+aktiviertes Host-Networking in Docker Desktop ab 4.34; Linux einen lokalen Docker
+Engine. `init` prüft Loopback tatsächlich über einen kurzlebigen Prüfcontainer.
+Fehlende Docker-Einstellungen werden gemeldet, nicht automatisch geändert.
 
 ```sh
-cd /pfad/datenportal-themenintegrator-agent
-export JAVA_HOME="/pfad/zum/jdk-25"
-export PATH="$JAVA_HOME/bin:$PATH"
-java -version
-./gradlew test jar
-cp config/local.example.toml config/local.toml
+./bin/datenportal-agent init
+./bin/datenportal-agent doctor
 ```
+
+`init` ist gesperrt gegen parallele Aufrufe und protokolliert jeden Schritt in
+`.datenportal-integrator/init.json`. Es legt eine fehlende Standardkonfiguration
+an, prüft bestehende Checkouts, bereitet ilivalidator und beide Fach-MCPs sowie
+GRETL vor, aktualisiert bekannte projektlokale MCP-Einträge und führt einen echten
+synthetischen Funktionstest durch. Eine explizit gewählte fehlende Konfiguration
+ist ein Fehler. Bestehende Konfigurationen bleiben erhalten. Fehlende Repos werden
+nicht geklont. Ein Fehler kann nach seiner Behebung mit `init` fortgesetzt werden.
+
+Der Funktionstest importiert/exportiert ein Datenblatt, validiert XTF, leitet ein
+Modell ab und prüft gültige sowie absichtlich ungültige CSV mit GRETL. Er verwendet
+eine private Themenkopie und eigene Testvorgänge ohne Publikationsprofile. Er
+startet weder Seed noch Upload noch Publikationsstack. Testfreigaben sind explizit
+synthetisch; sie gelten für keine Geschäftsdaten. Nachweise liegen unter
+`.datenportal-integrator/smoke/`. Aktuelle Nachweise werden wiederverwendet.
+`init --skip-smoke` meldet keine vollständige Bereitschaft;
+`init --update-tools` aktualisiert bewusst die konfigurierten Werkzeugauswahlen.
+
+`doctor` trennt Agent-Runtime/Mounts/Loopback, Fachwerkzeuge, aktuellen Smoke und
+optionale Publikationszugänge. Ein fehlender Jenkins-Zugang verhindert reine
+Modellierung nicht. Technische Bereitschaft ersetzt keine fachliche Freigabe.
+
+Alle bisherigen CLI-Befehle funktionieren hinter dem Launcher. Zusätzliche
+Eingabeordner müssen ausdrücklich eingebunden werden:
+
+```sh
+./bin/datenportal-agent --mount-ro '/pfad/mit leerzeichen/eingang' doctor
+./bin/datenportal-agent --mount-rw /anderer/arbeitsordner --config /anderer/arbeitsordner/local.toml init
+./bin/datenportal-agent gradle test jar spotlessCheck
+./bin/datenportal-agent gradle integrationTest
+```
+
+Mounts verlangen existierende Verzeichnisse; Symlinks werden aufgelöst. Der
+Checkout-Elternordner wird schreibbar unter identischem absolutem Pfad gemountet.
+Berichte und Vorgänge bleiben hostseitig lesbar; auf Linux schreiben Build und
+Agent mit der aufrufenden UID/GID. Remote-Docker-Kontexte sind nicht unterstützt.
+
+`DATENPORTAL_FORWARD_ENV="DATENPORTAL_LOCAL_USER DATENPORTAL_LOCAL_TOKEN GH_TOKEN GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL"`
+benennt weitergereichte Variablen. Keine Werte angeben. Für GitHub HTTPS und PRs
+`GH_TOKEN` und Git-Autorenangaben in der aufrufenden Umgebung setzen; persönliche
+Credential-Verzeichnisse werden nicht pauschal eingebunden. Die erzeugte
+MCP-Konfiguration berücksichtigt die in den Umgebungsprofilen benannten Variablen.
+
+`./bin/datenportal-agent codex` startet Codex auf dem Host und verbindet den
+Docker-Launcher. `harness-config` gibt einen Vorschlag für benutzerlokale Einträge
+aus; persönliche Konfigurationen werden nicht geändert. Bestehende fremde oder
+mehrdeutige projektlokale Einträge führen zu einem Konflikthinweis. Sicherungen
+liegen privat unter `.datenportal-integrator/harness-backups/`.
+
+Für lokale Java-Entwicklung ausdrücklich `--runtime local` verwenden und JDK 25
+über `JAVA_HOME` oder `DATENPORTAL_JAVA_COMMAND` wählen. Direkte Java-Befehle und
+`setup-*` bleiben als erweiterte Schnittstelle verfügbar; die folgenden Beispiele
+beschreiben auch diesen bisherigen Einstieg. GRETL verwendet ausschliesslich
+Java 17 im Jenkins-Image. Ein Java-Symlink wird im Docker-Modus nicht verändert.
 
 `config/local.toml` ist ignoriert. Relative Pfade beziehen sich auf `root`; `root` selbst bezieht sich auf die Konfigurationsdatei. Werkzeugpfade, Checkout-Pfade sowie MCP-Images und optionale HTTP-Adressen stehen hier. Die Auswahl erfolgt mit `--config`, alternativ `DATENPORTAL_INTEGRATOR_CONFIG`, sonst `config/local.toml` im aktuellen Arbeitsverzeichnis.
 
@@ -98,13 +153,13 @@ java -jar build/libs/datenportal-integrator.jar schema start
 
 ## Codex Desktop, Codex CLI und OpenCode
 
-Im Integrator-Arbeitsbereich liegen `.codex/config.toml`, `opencode.json` und der gemeinsame Skill unter `.agents/skills/`. Der MCP-Befehl ist jetzt `java -jar … serve`; frühere `uv`-Einträge müssen ersetzt werden. Für absolute, benutzerlokale Einträge:
+Im Integrator-Arbeitsbereich liegen `.codex/config.toml`, `opencode.json` und der gemeinsame Skill unter `.agents/skills/`. Der gemeinsame MCP-Befehl ist `bin/datenportal-agent … serve`; `init` migriert bekannte Java-Einträge. Direkte Java-Aufrufe bleiben unterstützt. Für absolute, benutzerlokale Einträge:
 
 ```sh
 java -jar build/libs/datenportal-integrator.jar harness-config
 ```
 
-Die Ausgabe enthält den konkreten JDK-Pfad und absolute JAR-/Konfigurationspfade. Für Codex Desktop den `datenportal_integrator`-Eintrag in der benutzerlokalen `~/.codex/config.toml` aktualisieren und die MCP-Verbindung neu starten. Bereits vorhandene Zugangsdatenumgebung erhalten; die Ausgabe enthält keine Zugangsdatenwerte. Den Integrator-Ordner als Arbeitsbereich öffnen. Desktop kann HTML-Berichte im Dateipanel öffnen; im CLI reicht der lokale Dateilink oder ein Browser.
+Die Ausgabe enthält den absoluten Launcherpfad und den tatsächlich gewählten Konfigurationspfad. Für Codex Desktop den `datenportal_integrator`-Eintrag in der benutzerlokalen `~/.codex/config.toml` aktualisieren und die MCP-Verbindung neu starten. Bereits vorhandene Zugangsdatenumgebung erhalten; die Ausgabe enthält keine Zugangsdatenwerte. Den Integrator-Ordner als Arbeitsbereich öffnen. Desktop kann HTML-Berichte im Dateipanel öffnen; im CLI reicht der lokale Dateilink oder ein Browser.
 
 Für Codex CLI:
 
@@ -125,7 +180,7 @@ opencode mcp list
 opencode
 ```
 
-OpenCode startet den lokalen MCP aus `opencode.json`. `setup-java` legt dafür einen ignorierten Symlink auf das tatsächlich verwendete JDK 25 an; die Projektkonfiguration verwendet diesen JVM-Pfad. `java` muss auf JDK 25 zeigen; bei Desktop-Prozessen gegebenenfalls den absoluten Befehl aus `harness-config` verwenden. Im Chat zum Beispiel: „Verwende den Themenintegrator-Skill. Integriere diese CSV und die XLSX-Metadaten lokal; erkläre zuerst die CSV und halte an den Freigaben an.“ Dateien anhängen oder absolute lokale Pfade nennen.
+OpenCode startet den Launcher aus `opencode.json`. Im optionalen lokalen Java-Betrieb legt `setup-java` einen ignorierten Symlink auf das tatsächlich verwendete JDK 25 an. `java` muss auf JDK 25 zeigen; bei Desktop-Prozessen gegebenenfalls den absoluten Befehl aus `harness-config` verwenden. Im Chat zum Beispiel: „Verwende den Themenintegrator-Skill. Integriere diese CSV und die XLSX-Metadaten lokal; erkläre zuerst die CSV und halte an den Freigaben an.“ Dateien anhängen oder absolute lokale Pfade nennen.
 
 Die aktuelle technische und menschliche Abnahme ist in [abnahme.md](abnahme.md) dokumentiert. Ein erfolgreicher MCP-Handshake ersetzt keinen vollständigen menschlichen Dialogtest.
 
