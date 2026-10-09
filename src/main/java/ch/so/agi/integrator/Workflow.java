@@ -489,7 +489,11 @@ public final class Workflow implements AutoCloseable {
     result.put(
         "review_path",
         Reports.render(
-            settings.root, directory(r).resolve("data-review.html"), "CSV prüfen", report));
+            settings.root,
+            directory(r).resolve("data-review.html"),
+            Reports.Kind.CSV,
+            Json.str(r, "identifier", null),
+            report));
     return result;
   }
 
@@ -664,7 +668,8 @@ public final class Workflow implements AutoCloseable {
         Reports.render(
             settings.root,
             directory(r).resolve("metadata-review.html"),
-            "Datenblatt und Modell prüfen",
+            Reports.Kind.METADATA,
+            Json.str(r, "identifier", null),
             report));
     return result;
   }

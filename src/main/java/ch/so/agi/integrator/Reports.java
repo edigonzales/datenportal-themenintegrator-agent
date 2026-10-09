@@ -18,30 +18,35 @@ public final class Reports {
             .replace("'", "&#39;");
   }
 
-  public static String html(Object value) {
-    if (value instanceof Map<?, ?> m) {
-      var b = new StringBuilder("<table>");
-      m.forEach(
-          (k, v) ->
-              b.append("<tr><th>")
-                  .append(escape(k))
-                  .append("</th><td>")
-                  .append(html(v))
-                  .append("</td></tr>"));
-      return b.append("</table>").toString();
+  public enum Kind {
+    CSV("CSV prüfen"),
+    TRANSFORM("CSV-Transformation prüfen"),
+    METADATA("Datenblatt und Modell prüfen"),
+    MODEL_CANDIDATE("Modellableitung prüfen"),
+    MODEL("INTERLIS-Modell und CSV prüfen"),
+    ORGANIZATION("Organisation und Berechtigungen prüfen");
+    final String title;
+
+    Kind(String title) {
+      this.title = title;
     }
-    if (value instanceof List<?> l) {
-      var b = new StringBuilder("<ol>");
-      l.forEach(v -> b.append("<li>").append(html(v)).append("</li>"));
-      return b.append("</ol>").toString();
-    }
-    return "<pre>" + escape(value) + "</pre>";
   }
 
-  public static String render(Path root, Path output, String title, Object data) {
+  public static String html(Object value) {
+    return ReviewHtml.value(value, "", 0);
+  }
+
+  public static String render(Path root, Path output, Kind kind, String identifier, Object data) {
     String template = Json.contents(AgentResources.resolve(root, "templates/review-java.html"));
-    Json.write(
-        output, template.replace("{{TITLE}}", escape(title)).replace("{{CONTENT}}", html(data)));
+    String body = ReviewHtml.render(kind, identifier, data);
+    // Substitute only template tokens, never text introduced by a previous replacement.
+    var matcher = java.util.regex.Pattern.compile("\\{\\{(TITLE|CONTENT)\\}\\}").matcher(template);
+    String result =
+        matcher.replaceAll(
+            m ->
+                java.util.regex.Matcher.quoteReplacement(
+                    m.group(1).equals("TITLE") ? escape(kind.title) : body));
+    Json.write(output, result);
     return output.toString();
   }
 

@@ -327,6 +327,46 @@ Die echten Tests prüfen stdio-MCP, beide Fachadapter, positive/negative XTF-/Of
 
 Vor/nach der Abnahme Quellstände der externen Komponenten und erlaubte Themenrepo-Änderungen kontrollieren. Versionierte Doku bleibt vollständig in diesem Repo, deutsch und Markdown. Konkrete Ergebnisse, simulierte Nachweise und offene Abnahmen stehen in [abnahme.md](abnahme.md); diese Datei bei tatsächlichen neuen Nachweisen aktualisieren.
 
+## HTML-Prüfberichte
+
+`Reports.Kind` wählt an den sechs Render-Aufrufstellen die Darstellung explizit
+für CSV, Transformation, Metadaten, Modellkandidat, Modellprüfung und
+Organisation. `ReviewHtml` ordnet fachliche Angaben und technische Nachweise;
+`ReportCode` markiert Quelltext serverseitig; `ReportChanges` stellt gespeicherte
+Dateivergleiche dar. Der deutsche Titel ist kein Dispatch-Schlüssel. Die
+Vorlage `templates/review-java.html` enthält sämtliche Styles, native
+`details`-Elemente und Druckregeln. Es werden weder JavaScript noch externe
+Ressourcen geladen. Vorlagenplatzhalter werden nur einmal im Vorlagentext
+ersetzt; eingefügte Daten werden nicht nochmals als Vorlage ausgewertet.
+
+Die Darstellung verändert weder Report-Maps noch CLI-/MCP-Antworten,
+Vorgangsdaten, Fingerprints oder Freigaberegeln. Fehlende Ergebnisse werden
+neutral angezeigt; Modellkandidaten bleiben als solche erkennbar. Die
+Transformation bewertet oben die CSV nach der Umwandlung; frühere Fehler
+bleiben beim Ausgangsstand sichtbar. Unbekannte Felder und vollständige
+Rohdaten bleiben zugänglich.
+
+Syntaxfarben markieren Tokens, ohne SQL, Gradle/Groovy, INTERLIS oder weitere
+Quelltexte umzuformatieren. Alle Daten werden HTML-escaped. JSON in Textfeldern
+wird nur bei vollständigem, strikt parsebarem Objekt oder Array zusätzlich
+strukturiert gezeigt; es gibt keine pauschale Escape-Ersetzung. Der Originaltext
+bleibt erhalten. Der Renderer liest keine in Berichtsdaten genannten Dateien.
+
+`changes.diff` enthält bisher vollständige Texte mit Bestands-/Kandidatenmarkern.
+Der Renderer akzeptiert nur eine eindeutige Trennung mit passenden gespeicherten
+SHA-256-Prüfsummen. Neue Dateien verlangen einen leeren Bestand. Bei fehlenden
+oder widersprüchlichen Nachweisen bleibt der vollständige gespeicherte Vergleich
+sichtbar; aktuelle Repository-Dateien werden nicht nachgeladen. Der Zeilenvergleich
+verwendet Hirschbergs LCS-Verfahren mit linearem Hilfsspeicher. Oberhalb von
+5'000 Zeilen oder 1 MiB pro Datei entfallen Diff-Berechnung und Syntaxfarben.
+Die Suche nach Trennstellen ist zusätzlich begrenzt; bei Überschreiten folgt
+die gekennzeichnete Originaldarstellung.
+
+`ReportsTest` verwendet isolierte synthetische Prüfstände. `ReportExamples`
+im Testquellbaum erzeugt reproduzierbare HTML-Beispiele für alle sechs Phasen,
+ohne Workflows oder Freigaben anzulegen. Vorhandene Berichte werden nicht
+migriert; die Darstellung wird beim nächsten regulären Render-Aufruf verwendet.
+
 ## Bekannte Grenzen
 
 V1 modelliert eine flache CSV. Geometrien, Beziehungen und zusätzliche Constraints benötigen bestätigte Semantik und explizite Fach-MCP-Aufträge; sie werden nicht automatisch aus Datenmustern erfunden. Serien mit unterschiedlichen Verträgen verlangen Klärung. Entwürfe werden nach Prozesswechsel oder eindeutigem Verlust aus bestätigten Snapshots restauriert; unbestätigte Änderungen bleiben ein ausdrücklicher Klärungsschritt. Unklare Uploads und fehlende Berichte verlangen Aufklärung über vorhandene Laufkennungen.

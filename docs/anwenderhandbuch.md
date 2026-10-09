@@ -98,6 +98,42 @@ oder ein allgemeines „Integriere das Thema“ ersetzen kein OK zum konkret
 gezeigten Prüfstand. Kontakte, Benutzerkennungen und fachliche Regeln werden
 bei fehlender Grundlage nachgefragt.
 
+### HTML-Prüfberichte lesen
+
+Die Vorschauen für CSV-Prüfung, Umwandlung, Metadaten, Modellableitung,
+Modellprüfung und Organisation sind lokale HTML-Dateien. Öffne den vom Agenten
+angegebenen Bericht im Browser oder Dateipanel. Die Darstellung benötigt weder
+Internetzugriff noch JavaScript.
+
+Beginne beim **Prüfstand**: Dort stehen das Ergebnis, Fehler, Warnungen und
+vorhandene offene Fragen oder manuelle Prüfpunkte. „Nicht geprüft“ bezeichnet
+fehlende Prüfergebnisse. Ein Modellkandidat benötigt noch die Gesamtprüfung;
+auch „Prüfung bestanden“ ersetzt deine fachliche Freigabe nicht.
+
+Unter **Fachliche Angaben** findest du je nach Phase Spalten und Beobachtungen,
+Vorher-/Nachher-Ergebnisse, Datenblattattribute, Serienausgaben, Modellangaben
+oder Organisationsdaten. SQL, Gradle-Tasks und INTERLIS-Modelle erscheinen in
+eigenen Codeblöcken mit Zeilenumbrüchen und Syntaxfarben. Dabei bleibt der
+Quelltext unverändert. Breite Tabellen und Codeblöcke lassen sich seitlich
+scrollen.
+
+**Vorbereitete Dateien und Änderungen** zeigt jede Datei einzeln. Klappe die
+zeilenweisen Änderungen auf: `+` kennzeichnet hinzugefügte, `−` entfernte Zeilen.
+Die vollständigen Kandidaten- und Bestandstexte bleiben ebenfalls zugänglich.
+Diese Ansicht verwendet ausschliesslich den gespeicherten Vergleich und prüft
+seine Prüfsummen. Bei unklaren älteren Vergleichsdaten erscheint ein Hinweis
+zusammen mit dem vollständigen Originalvergleich. Sehr grosse Dateien werden
+ohne aufwendigen Zeilenvergleich und Syntaxfarben angezeigt.
+
+Unter **Technische Details** und **Vollständige Rohdaten** kannst du Nachweise,
+Prüfsummen und zusätzliche Felder nachlesen. Eingebetteter JSON-Text wird, wenn
+eindeutig lesbar, zusätzlich strukturiert dargestellt; der Originalwert bleibt
+aufklappbar. Die Druckansicht umfasst auch die aufklappbaren Details.
+
+Die neue Darstellung gilt für neu erzeugte Vorschauen. Bereits gespeicherte
+HTML-Dateien bleiben erhalten. Ein Softwareupdate wiederholt keine fachlichen
+Prüfungen und verändert keine Freigaben.
+
 ### 1. CSV verstehen und prüfen
 
 **Ausgangssituation:** Du erhältst `bevoelkerung_2025.csv` und möchtest wissen,

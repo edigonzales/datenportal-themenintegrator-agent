@@ -342,7 +342,8 @@ public final class Models {
         Reports.render(
             w.settings.root,
             w.directory(r).resolve("model-candidate.html"),
-            "Modellableitung prüfen",
+            Reports.Kind.MODEL_CANDIDATE,
+            Json.str(r, "identifier", null),
             Json.map("model_text", text, "model", model, "changes", r.get("changes"))));
   }
 
@@ -628,7 +629,8 @@ public final class Models {
         Reports.render(
             w.settings.root,
             w.directory(r).resolve("model-review.html"),
-            "INTERLIS-Modell und CSV prüfen",
+            Reports.Kind.MODEL,
+            Json.str(r, "identifier", null),
             report));
     return result;
   }

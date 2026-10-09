@@ -29,7 +29,7 @@ tasks.register('integrationTest', Test) {
 }
 test {
     useJUnitPlatform { excludeTags 'integration' }
-    inputs.files(fileTree('bin'), fileTree('runtime') { include '*.sh' }, 'README.md', fileTree('docs'))
+    inputs.files(fileTree('bin'), fileTree('runtime') { include '*.sh' }, 'README.md', fileTree('docs'), fileTree('templates'))
 }
 // Only real integration tests need host-visible paths for sibling Docker bind mounts.
 tasks.named('integrationTest', Test) {

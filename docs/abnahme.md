@@ -1,5 +1,39 @@
 # Abnahmestand
 
+## HTML-Prüfberichte vom 9. Oktober 2026
+
+Tatsächlich ausgeführt:
+
+- `./bin/datenportal-agent gradle test jar spotlessCheck`: 178 Tests bestanden,
+  keine Fehler oder übersprungenen Tests; JAR-Erstellung und Formatprüfung
+  erfolgreich. Nachweis: `.datenportal-integrator/html-reports-unit.log` und
+  JUnit-Berichte unter `build/test-results/test/`.
+- Die sechs synthetischen HTML-Beispiele im Headless-Chromium
+  151.0.7922.34 bei 1280 und 390 Pixeln Breite sowie mit Druckmedium
+  geprüft: 18 erfolgreiche Phasen-/Ansichtsprüfungen, kein Überlaufen des
+  Seitenrands, auch bei aufgeklappten Details. In der Druckansicht sind die
+  sonst zugeklappten Bereiche sichtbar. Keine Netzwerkressourcen geladen.
+- Screenshots aller sechs Phasen visuell kontrolliert; zusätzlich die schmale
+  Metadatenansicht, die Druckdarstellung von Übersicht und SQL sowie den
+  aufgeklappten Gradle-Dateivergleich betrachtet. HTML-Beispiele, Screenshots,
+  erzeugte Druck-PDFs und `visual-check.json` liegen unter
+  `build/reports/review-examples/`.
+
+Isoliert und synthetisch geprüft: `ReportsTest` umfasst zehn Tests, darunter
+alle sechs Berichtstypen mit erfolgreichen, fehlgeschlagenen, unvollständigen
+und leeren Ergebnissen; zeichengetreue Code-Darstellung, strikte Erkennung
+eingebetteten JSONs, HTML-Escaping, unveränderte Eingabedaten, neue/geänderte/
+unveränderte Dateien, widersprüchliche oder mehrdeutige Vergleichsdaten und
+grosse Inhalte. Zufällige Zeilenbeispiele mit festem Seed prüfen die
+Rekonstruktion beider Dateiversionen aus dem Diff. `ReportExamples` erzeugt
+ausschliesslich Darstellungsfixtures, keine Vorgänge oder Freigaben.
+
+Nicht durchgeführt: erneute externe Integrations- oder Publikationsabnahmen,
+Migration alter HTML-Dateien sowie Druckprüfung in anderen Browser-Engines
+oder auf einem physischen Drucker. Die Darstellungsabnahme bestätigt keine
+Fachwerkzeug- oder Publikationsfunktion. Historische Nachweise bleiben
+unverändert bestehen.
+
 ## OpenCode-2.x-Konfiguration und Migration vom 9. Oktober 2026
 
 Tatsächlich geprüft:

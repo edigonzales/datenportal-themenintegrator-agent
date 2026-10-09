@@ -199,7 +199,8 @@ public final class Converters {
         Reports.render(
             w.settings.root,
             w.directory(r).resolve("transform-review.html"),
-            "CSV-Transformation prüfen",
+            Reports.Kind.TRANSFORM,
+            Json.str(r, "identifier", null),
             Json.map(
                 "before",
                 Csv.inspect(

@@ -425,7 +425,8 @@ public final class Organizations {
         Reports.render(
             w.settings.root,
             w.directory(r).resolve("organization-review.html"),
-            "Organisation und Berechtigungen prüfen",
+            Reports.Kind.ORGANIZATION,
+            Json.str(r, "organization", null),
             report));
     return result;
   }
