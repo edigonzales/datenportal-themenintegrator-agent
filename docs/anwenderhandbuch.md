@@ -219,21 +219,39 @@ INTERLIS-Modell überprüfbar werden.
 
 **Agentenunterstützung:** Auf ausdrücklichen Auftrag ein Modell aus CSV und
 bestätigtem Datenblatt ableiten, Modellidentität und offene Fachregeln klären
-und die CSV gegen das Modell prüfen lassen. Standard sind INTERLIS 2.4,
+und die CSV gegen das Modell prüfen lassen. Zur erfolgreichen Modellableitung
+gehört automatisch auch die Vorbereitung von `dataset.gradle` mit Copy- und
+Validierungstask im Themenordner. Standard sind INTERLIS 2.4,
 Profil SO und zunächst eine flache Klasse. Beobachtete Werte von 120 bis
 20'000 begründen keinen fachlichen Wertebereich; zufällige Eindeutigkeit
 begründet keinen Schlüssel.
 
-**Ergebnis:** Modell, Prüfresultate, aktualisierte Modellreferenz im Datenblatt
-und die erforderliche Validierungsaufgabe.
+**Ergebnis:** INTERLIS-Modell (`.ili`), `dataset.gradle`, Prüfresultate und
+aktualisierte Modellreferenz im Datenblatt werden gemeinsam vorbereitet.
+Die erzeugte Taskdatei legt für CSV-Datenlieferungen diese Reihenfolge fest:
+
+```text
+stageThemenCsv (Copy)
+  → validateThemenCsv (CsvValidator)
+    → preparePublicationWorkspace
+```
+
+Der Copy-Task stellt Jenkins-Uploads ohne Dateiendung bytegleich als
+`build/integrator-validation/input.csv` bereit. Der GRETL-CsvValidator prüft
+diese Kopie gegen das Modell. Schlägt die Validierung fehl, stoppt der Ablauf
+vor der Publikationsvorbereitung. Reine Metadatenlieferungen überspringen
+die Copy- und CSV-Validierungstasks.
+
 **Deine Entscheidung:** Modellname, URI, ISO-Version, technischen Kontakt,
 Titel und Kurzbeschreibung sowie unbelegte Regeln klären. Beim Themenvorgang
-Metadaten und Modell gemeinsam prüfen und beide konkreten Stände freigeben.
+Modell, `dataset.gradle`, Datenblatt und Prüfresultate gemeinsam prüfen und
+die konkreten Modell- und Metadatenstände freigeben. Die Taskdatei gehört zur
+Modellfreigabe.
 Eigenständige Modellierung ist auch ohne Datenpublikation möglich.
 
 **Beispielprompt:**
 
-> Verwende den Skill `datenportal-themenintegrator`. Leite im Vorgang `<Vorgangs-ID>` aus der bestätigten CSV und dem Datenblatt ein INTERLIS-Modell ab. Frage die Modellidentität und fachlich nicht belegte Regeln nach. Zeige Modell und Validierungsergebnis gemeinsam mit dem aktualisierten Datenblatt zur Freigabe.
+> Verwende den Skill `datenportal-themenintegrator`. Leite im Vorgang `<Vorgangs-ID>` aus der bestätigten CSV und dem Datenblatt ein INTERLIS-Modell ab. Frage die Modellidentität und fachlich nicht belegte Regeln nach. Zeige die dabei regulär vorbereiteten Dateien `.ili` und `dataset.gradle` mit dem Copy-Task `stageThemenCsv` und dem Validierungstask `validateThemenCsv` gemeinsam mit dem aktualisierten Datenblatt und den Prüfresultaten zur Freigabe.
 
 Technische Details: [INTERLIS-Modellierung](#interlis-modellierung).
 
