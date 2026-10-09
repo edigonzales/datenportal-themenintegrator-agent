@@ -26,7 +26,7 @@ public final class Main {
       }
       if (args.isEmpty() || args.getFirst().equals("--help")) {
         System.out.println(
-            "Java 25 Themenintegrator\nbin/datenportal-agent [--runtime docker|local] [--mount-ro PATH|--mount-rw PATH] [--config PATH] init|doctor|serve|schema OP|call OP [--json JSON|--args-file PATH|-]\ninit [--update-tools] [--skip-smoke]\nbin/datenportal-agent gradle TASK...\nDirekt: java -jar build/libs/datenportal-integrator.jar [--config PATH] COMMAND\nWeitere Helfer: setup-java, setup-tools, setup-mcps [--update], setup-gretl [--update], runtime-up, harness-config, codex");
+            "Java 25 Themenintegrator\nbin/datenportal-agent [--runtime docker|local] [--mount-ro PATH|--mount-rw PATH] [--config PATH] init|doctor|serve|schema OP|call OP [--json JSON|--args-file PATH|-]\ninit [--update-tools] [--skip-smoke]\ncredentials set PROFIL --username USER --token-stdin | --from-env\ncredentials status|remove PROFIL\nacceptance delivery\nbin/datenportal-agent gradle TASK...\nDirekt: java -jar build/libs/datenportal-integrator.jar [--config PATH] COMMAND\nWeitere Helfer: setup-java, setup-tools, setup-mcps [--update], setup-gretl [--update], runtime-up, harness-config, codex");
         return 0;
       }
       String command = args.removeFirst();
@@ -45,6 +45,23 @@ public final class Main {
       }
       if (command.equals("init")) Initializer.prepareConfig(config);
       Settings s = Settings.load(config);
+      if (command.equals("acceptance-prepare") && args.isEmpty()) {
+        System.out.println(new DeliveryAcceptance(s).prepare());
+        return 0;
+      }
+      if (Set.of("acceptance-run", "acceptance-cleanup").contains(command) && args.size() == 1) {
+        var acceptance = new DeliveryAcceptance(s);
+        Path directory = Path.of(args.getFirst());
+        if (command.equals("acceptance-cleanup")) {
+          acceptance.cleanup(directory);
+          print(Json.map("cleaned", true));
+        } else print(acceptance.run(directory));
+        return 0;
+      }
+      if (command.equals("credentials")) {
+        print(new Credentials(s).command(args));
+        return 0;
+      }
       if (command.equals("codex-arguments")) {
         for (String argument : new Harness(s).codexArguments()) {
           System.out.write(argument.getBytes(java.nio.charset.StandardCharsets.UTF_8));
@@ -191,23 +208,9 @@ public final class Main {
     Json.obj(s.values.get("environments"))
         .forEach(
             (name, value) -> {
-              var env = Json.obj(value);
-              boolean credentials =
-                  List.of("username_env", "token_env").stream()
-                      .allMatch(
-                          key -> {
-                            String variable = Json.str(env, key, "");
-                            return !variable.isBlank()
-                                && System.getenv(variable) != null
-                                && !System.getenv(variable).isBlank();
-                          });
-              publication.put(
-                  name,
-                  Json.map(
-                      "enabled",
-                      Json.bool(env, "enabled", false),
-                      "credentials_present",
-                      credentials));
+              var status = new Credentials(s).status(name);
+              status.put("enabled", Json.bool(Json.obj(value), "enabled", false));
+              publication.put(name, status);
             });
     checks.put("publication", publication);
     return checks;

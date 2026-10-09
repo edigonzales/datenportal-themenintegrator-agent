@@ -1,5 +1,46 @@
 # Entwicklerhandbuch
 
+## Docker-Anlieferung und lokale Zugangsdaten
+
+`bin/datenportal-agent acceptance delivery` verwendet `DeliveryAcceptance` für
+private Fixtures und echte MCP-Aufrufe. Der Launcher startet ihre Infrastruktur
+bewusst mit der Host-Compose-CLI; dadurch prüft der Agent auch Mount-Metadaten
+eines hostseitig erzeugten Stacks. Bestehende Jenkins-, Downloads- und
+Garage-Container müssen anhand Identität und Startzeit erhalten bleiben.
+Der Negativfall verwendet die echte Jenkins-Schnittstelle der Fixture, um die
+frühe Integrator-CSV-Sperre gezielt für den Jenkins-Regressionsnachweis zu umgehen.
+Dies erteilt keine Freigabe für einen fachlichen Vorgang.
+
+`Models.task` erzeugt `stageThemenCsv` als Gradle-`Copy`-Task. Er erhält die
+Eingabebytes und ergänzt für den GRETL-Validator die fehlende `.csv`-Endung von
+Jenkins-Dateiparametern. `validateThemenCsv` hängt davon ab und bestätigt die
+Bytegleichheit mit `Files.mismatch` vor der bestehenden Modell-/Bundle-Prüfung.
+Nach der Projektkonfiguration erhält der vorhandene `validateDeliveredCsv`-Task
+zusätzlich den Themenordner als Modellquelle; der festgelegte Modellbestand des
+Images bleibt enthalten. Minimale Prüfprojekte ohne diesen Publikations-Task
+benötigen keine solche Erweiterung.
+Der echte Jenkins-Regressionstest verwendet absichtlich endungslose Uploadpfade
+und vergleicht die SHA-256-Prüfsummen von Quelle und Prüfkopie.
+
+`Credentials` ist der gemeinsame Resolver für HTTP, Bootstrap und `doctor`.
+Der lokale Store wird bei jedem neuen authentifizierten Aufruf gelesen und ist
+an Profil/Jenkins-Basis gebunden. Schreibzugriffe verwenden private temporäre
+Dateien, eine Prozesssperre und atomaren Austausch. `Value` wird nicht in
+Vorgänge oder JSON-Berichte aufgenommen. Der Bootstrap erhält nur seine zwei
+benannten Zugangsdatenvariablen über `ProcessBuilder.environment`; dieser
+Prozesspfad bereinigt Text und Basic-Auth-Werte vor dem Schreiben von Logs.
+Der Jenkins-HTTP-Client erhält für jeden neuen authentifizierten Workflow-Aufruf
+einen eigenen Cookie-Store. Damit bleiben CSRF-Crumb und Session-Cookie innerhalb
+eines POST-Ablaufs zusammen; CSRF wird nicht abgeschaltet. Dies ist insbesondere
+für die ausdrücklich gespeicherten Passwortzugänge der synthetischen JCasC-Fixture
+erforderlich, siehe [Jenkins: Scripted Clients](https://www.jenkins.io/doc/book/security/csrf-protection/#working-with-scripted-clients).
+
+`Stack.inspect` verwendet ein begrenztes Docker-Format statt vollständiger
+Container-Konfigurationen. Eine nicht direkt auflösbare `/host_mnt/`-Quelle wird
+nur bei `OperatingSystem=Docker Desktop` übersetzt und anschliessend mit dem
+realen Themenrepo-Pfad verglichen. Andere Quellen und Betriebsmodi bleiben
+gesperrt; es gibt keine automatische Container-Neuerstellung als Umgehung.
+
 ## Docker-Launcher und Initialisierung
 
 `bin/datenportal-agent` verwendet ein über Digest festgelegtes JDK-25-Basisimage

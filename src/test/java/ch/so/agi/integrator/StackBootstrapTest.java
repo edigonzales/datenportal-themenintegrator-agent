@@ -66,6 +66,12 @@ class StackBootstrapTest {
 
       @Override
       public Result run(List<String> args, Path cwd, int timeout, Path log) {
+        return run(args, cwd, timeout, log, Map.of());
+      }
+
+      @Override
+      public Result run(
+          List<String> args, Path cwd, int timeout, Path log, Map<String, String> environment) {
         calls.add(args);
         observedTimeout = timeout;
         observedLog = log;
@@ -83,7 +89,11 @@ class StackBootstrapTest {
     var fixture = new Fixtures(temp, process, (n, a) -> Json.map(), (n, a) -> Json.map());
     fixture.settings.values.put(
         "compose_files", List.of("compose.yaml", "compose.jenkins-local.yaml"));
-    var result = Json.obj(new Stack(fixture.settings, process).bootstrap(env));
+    var result =
+        Json.obj(
+            new Stack(fixture.settings, process)
+                .bootstrap(
+                    env, new Credentials.Value("synthetic-user", "synthetic-token", "fixture")));
     assertEquals(true, result.get("initialized"));
     assertEquals("first", result.get("release_id"));
     assertEquals(1800, observedTimeout);
@@ -108,7 +118,11 @@ class StackBootstrapTest {
     published = true;
     var process = process();
     var fixture = new Fixtures(temp, process, (n, a) -> Json.map(), (n, a) -> Json.map());
-    var result = Json.obj(new Stack(fixture.settings, process).bootstrap(env));
+    var result =
+        Json.obj(
+            new Stack(fixture.settings, process)
+                .bootstrap(
+                    env, new Credentials.Value("synthetic-user", "synthetic-token", "fixture")));
     assertEquals(false, result.get("initialized"));
     assertTrue(calls.stream().anyMatch(c -> c.contains("--check-only")));
     assertFalse(calls.stream().anyMatch(c -> c.contains("up") || c.contains("scripts/up.sh")));
@@ -121,7 +135,13 @@ class StackBootstrapTest {
     var process = process();
     var fixture = new Fixtures(temp, process, (n, a) -> Json.map(), (n, a) -> Json.map());
     var problem =
-        assertThrows(Problem.class, () -> new Stack(fixture.settings, process).bootstrap(env));
+        assertThrows(
+            Problem.class,
+            () ->
+                new Stack(fixture.settings, process)
+                    .bootstrap(
+                        env,
+                        new Credentials.Value("synthetic-user", "synthetic-token", "fixture")));
     assertEquals("stack_command_failed", problem.code);
     assertEquals(17, problem.details.get("returncode"));
     assertEquals(observedLog.toString(), problem.details.get("log"));
@@ -165,7 +185,11 @@ class StackBootstrapTest {
         "local_only",
         assertThrows(
                 Problem.class,
-                () -> new Stack(fixture.settings, process).bootstrap(Json.map("kind", "prod")))
+                () ->
+                    new Stack(fixture.settings, process)
+                        .bootstrap(
+                            Json.map("kind", "prod"),
+                            new Credentials.Value("synthetic-user", "synthetic-token", "fixture")))
             .code);
     assertTrue(calls.isEmpty());
   }

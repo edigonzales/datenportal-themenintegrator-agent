@@ -36,6 +36,34 @@ export DATENPORTAL_TEST_TMP="$root/.datenportal-integrator/tmp"
 if ((${#launch_options[@]})); then export DATENPORTAL_LAUNCH_OPTIONS; DATENPORTAL_LAUNCH_OPTIONS=$(printf '%s\n' "${launch_options[@]}"); fi
 command_index=0
 if [[ ${args[0]:-} == --config ]]; then command_index=2; fi
+# The disposable acceptance stack is deliberately created by the host Docker CLI.
+# All fixture construction, credential handling and MCP checks remain Java.
+if [[ ${args[$command_index]:-} == acceptance && ${args[$((command_index+1))]:-} == delivery ]]; then
+  [[ $mode == docker && ${#args[@]} == $((command_index+2)) ]] || { echo 'acceptance delivery requires Docker and no extra arguments' >&2; exit 2; }
+  export DATENPORTAL_FORWARD_ENV='' JAVA_HOME=/no-host-jdk
+  prefix=("${args[@]:0:$command_index}")
+  if ! acceptance_fixture=$("$root/bin/datenportal-agent" "${launch_options[@]}" "${prefix[@]}" acceptance-prepare); then
+    printf '%s\n' "$acceptance_fixture" >&2
+    exit 2
+  fi
+  [[ $acceptance_fixture == "$root/.datenportal-integrator/delivery-acceptance/"* && -f $acceptance_fixture/SYNTHETIC_TEST_FIXTURE ]] || { echo 'Invalid delivery acceptance fixture' >&2; exit 2; }
+  acceptance_cleanup() {
+    acceptance_exit=$?
+    trap - EXIT INT TERM
+    "$root/bin/datenportal-agent" "${launch_options[@]}" "${prefix[@]}" acceptance-cleanup "$acceptance_fixture" > "$acceptance_fixture/cleanup-result.json" || acceptance_exit=2
+    exit "$acceptance_exit"
+  }
+  trap acceptance_cleanup EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  echo "SYNTHETIC delivery acceptance: $acceptance_fixture" >&2
+  if ! COMPOSE_PROJECT_NAME="delivery-test-$(basename "$acceptance_fixture")" bash "$acceptance_fixture/datenportal-dev-stack/scripts/up.sh" --infrastructure-only > "$acceptance_fixture/startup.log" 2>&1; then
+    echo "Synthetic stack startup failed; inspect $acceptance_fixture/startup.log" >&2
+    exit 2
+  fi
+  "$root/bin/datenportal-agent" "${launch_options[@]}" "${prefix[@]}" acceptance-run "$acceptance_fixture"
+  exit $?
+fi
 # Codex itself remains a host application. Java emits correctly encoded arguments.
 if [[ ${args[$command_index]:-} == codex ]]; then
   argfile=$(mktemp "$root/.datenportal-integrator/launcher/codex-args.XXXXXX")

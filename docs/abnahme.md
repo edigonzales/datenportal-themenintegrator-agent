@@ -1,5 +1,91 @@
 # Abnahmestand
 
+## Docker-Anlieferung und gemeinsamer Credential-Store vom 9. Oktober 2026
+
+Tatsächlich auf macOS mit Docker Desktop geprüft:
+
+- `./bin/datenportal-agent gradle test jar spotlessCheck`: 146 Unit-/Funktionstests,
+  keine Fehler und keine übersprungenen Tests. Log:
+  `.datenportal-integrator/delivery-unit.log`.
+- `./bin/datenportal-agent gradle integrationTest`: alle 22 Integrationstests
+  erfolgreich, ohne übersprungene Tests. Log:
+  `.datenportal-integrator/delivery-verification-final.log` dokumentiert auch den
+  vollständigen Wiederholungslauf nach der CSRF-Korrektur. Ein echter dauerhaft
+  laufender stdio-MCP erhielt Zugangsdaten erst nach seinem Start. Er verwendete
+  sie beim nächsten Aufruf, meldete ein abgewiesenes Token und akzeptierte die
+  erneute Hinterlegung ohne Neustart. Die HTTP-Gegenstelle dieses zusätzlichen
+  Tests ist synthetisch; die Fachwerkzeuge der übrigen Tests sind tatsächlich
+  konfigurierte Dienste.
+- OpenCode Beta `0.0.0-beta-19723`, GUI: ausschliesslich privates synthetisches
+  Git-Projekt und Vorgang `1b53b2a34e824cd4b91822b080ce509a`. Die GUI bestätigte
+  `credentials_source=local_store`; nach erneuter MCP-Verbindung führte sie
+  echte `datenportal_integrator.status`-Aufrufe aus. Keine GUI-Freigabe und keine
+  GUI-Lieferung. Nachweis:
+  `.datenportal-integrator/delivery-acceptance/73663f0a-b5c8-4be6-a397-edd8cc1d8b64/gui-evidence.json`,
+  GUI-Sitzung `ses_eded40fa0ffeUCqZxSGHL0QX7o`.
+  Der erste MCP-Start überschritt das Beta-Startzeitlimit. Die installierte Beta
+  normalisiert das vorhandene numerische Timeout nur für Katalog/Ausführung,
+  nicht für den Start. Nach abgeschlossenem Build bestand das erneute Verbinden.
+- `init` bestand erneut mit dem abschliessenden JAR und tatsächlichen
+  Fachwerkzeugen, ohne reale Jenkins-Zugangsdaten. `ready=true`, aktueller
+  synthetischer Smoke: `.datenportal-integrator/delivery-init.json`.
+  Der normale laufende Stack wurde von `doctor` im Container als kompatibel
+  erkannt; reine Modellierung und fehlende Publikationszugänge sind getrennt.
+- `./bin/datenportal-agent acceptance delivery` vollständig bestanden, ohne
+  Host-JDK und ohne Jenkins-Zugangsdaten aus der Hostumgebung. Der Host startete
+  das eigene Compose-Projekt; zwei echte Docker-stdio-MCPs wurden aus den
+  erzeugten Codex-/OpenCode-Konfigurationen gestartet, bevor der private Store
+  hinterlegt wurde. Beide Clients wirkten am synthetischen Vorgang mit.
+  Gültige CSV: frühes `validateThemenCsv`, identische geprüfte Modellbytes,
+  erfolgreicher Jenkins-Lauf, Manifest, Portal und Downloads bestätigt.
+  Ungültige CSV über die echte Jenkins-Schnittstelle: numerische Verletzung bei
+  `Jahr`, `validateThemenCsv FAILED`, kein `preparePublicationWorkspace` und
+  unveränderter erfolgreicher Release. IDs und Startzeiten von Jenkins,
+  Downloads-Gateway und Garage blieben gleich. Eigene Container, Volumes und
+  Zugangsdaten wurden entfernt (`cleanup-result.json`: `cleaned=true`).
+  Nachweise und Prüfsummen:
+  `.datenportal-integrator/delivery-acceptance/91984e1c-56ce-4553-b1f9-b02cd7f8be47/`.
+  `report.json`, `manifest.json` und beide bereinigten Konsole-Logs bleiben
+  archiviert; der rohe eingebettete API-Konsolentext wird nicht übernommen.
+
+Simulierte beziehungsweise isolierte Fehlerfälle: Desktop-Mountalias,
+Linux ohne Aliasübersetzung, Leerzeichen/Symlinks, fremder oder fehlender
+Themenmount, unveränderte Container-Wiederverwendung, CSRF-Session-Cookies, teilweise gesetzte
+Zugangsdaten, geänderte Jenkins-Adresse, Dateirechte, Symlinkabwehr, konkurrierende
+Store-Änderungen, stdin-/Umgebungsübernahme und bereinigte Bootstrap-Logs.
+Die vorhandenen Harness-/Launcher-Tests prüfen weiterhin erhaltene fremde
+Einstellungen und ausdrückliche Umgebungsweitergaben.
+
+Tatsächliche fehlgeschlagene Vorläufe werden nicht als erfolgreiche Negativtests
+gewertet: zunächst eine falsche private Modellcache-Grenze, danach ein gelöschtes
+Werkzeug-Image und eine zu wenig freie Docker-VM mit offline geschaltetem
+Jenkins-Knoten. Der anschliessend versuchte private Jenkins-Home-Bind-Mount
+scheiterte beim atomaren Schreiben unter VirtioFS (`Bad file descriptor`). Diese
+Testanpassung wurde zurückgenommen; die Abnahme verwendet wieder das vorhandene
+Jenkins-Volume-Konzept. Nach einem Abbruch verblieb eine leere Build-Sperre; sie
+wurde erst nach Prüfung der wartenden Prozesse und fehlenden Build-Container
+entfernt. Die isolierten Ressourcen dieser Vorläufe wurden bereinigt.
+Ein weiterer Vorlauf zeigte den fehlenden administrativen Root-Build in der
+minimalen Fixture; diese vorhandenen Build-Dateien werden nun mit übernommen.
+Nach erfolgreicher Erstpublikation deckte die echte Abnahme ausserdem den fehlenden
+Session-Cookie im bisherigen Java-CSRF-Ablauf auf. Der HTTP-Client wurde korrigiert
+und die Cookie-/Crumb-Bindung mit einer isolierten HTTP-Gegenstelle regressionsgeprüft.
+Der erste tatsächliche Datenjob erreichte danach `validateThemenCsv`, scheiterte
+aber am endungslosen Jenkins-Dateiparameter. Die erzeugte Task verwendet jetzt
+einen Gradle-`Copy`-Task und direkte Byteprüfung. Im nächsten Datenjob bestand
+diese frühe Validierung; der nachgelagerte Publikationsvalidator fand das lokale
+Modell noch nicht im Image-Modellverzeichnis. Die erzeugte Task ergänzt deshalb
+den Themenordner für diesen vorhandenen Validator. Ein Regressionslauf zeigte,
+dass minimale Prüfprojekte diesen optionalen Publikations-Task nicht besitzen;
+die Ergänzung wird nur bei vorhandener Task angewandt. Fehlerlog:
+`.datenportal-integrator/delivery-verification-optional-task-failed.log`.
+
+Offen bleiben native Linux-Abnahme (insbesondere UID/GID und Socket-Zugriff)
+und ein vollständiger fachlicher GUI-Dialog samt GUI-Publikation. Synthetische
+Testfreigaben gelten nur in den privaten Fixtures. Die bestehenden MFK-Vorgänge
+und vorhandenen fachlichen Arbeitsbaumänderungen wurden nicht fortgesetzt.
+Es erfolgte keine INT-/PROD-Aktion und keine externe Quelländerung.
+
 ## Anhangübernahme im gemeinsamen Skill vom 9. Oktober 2026
 
 Tatsächlich geprüft:

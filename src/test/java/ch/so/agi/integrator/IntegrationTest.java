@@ -224,11 +224,11 @@ class IntegrationTest {
     process.checked(
         List.of("docker", "cp", snapshot + "/.", container + ":" + work + "/"), s.stack, 60);
     process.checked(
-        List.of("docker", "cp", csv.toString(), container + ":" + work + "/input.csv"),
+        List.of("docker", "cp", csv.toString(), container + ":" + work + "/DATA_FILE"),
         s.stack,
         30);
     process.checked(
-        List.of("docker", "cp", invalid.toString(), container + ":" + work + "/invalid.csv"),
+        List.of("docker", "cp", invalid.toString(), container + ":" + work + "/INVALID_DATA_FILE"),
         s.stack,
         30);
     process.checked(
@@ -254,17 +254,31 @@ class IntegrationTest {
         List.of(
             "validateThemenCsv",
             "-Pdataset=ch.so.grundwasser.qualitaet",
-            "-PdataFile=" + work + "/input.csv"));
+            "-PdataFile=" + work + "/DATA_FILE"));
     var positive =
         process.run(positiveArgs, s.stack, 180, temp.resolve("jenkins-csv-positive.log"));
     assertEquals(0, positive.exitCode(), positive.output());
     assertTrue(positive.output().contains("INTEGRATOR_CSV_VALIDATED=true"));
+    String inputHashes =
+        process.checked(
+            List.of(
+                "docker",
+                "exec",
+                container,
+                "sha256sum",
+                work + "/DATA_FILE",
+                work + "/agi/build/integrator-validation/input.csv"),
+            s.stack,
+            30);
+    assertTrue(
+        inputHashes.lines().allMatch(line -> line.startsWith(Json.sha(csv) + " ")),
+        "Jenkins input and validation copy must keep the original bytes");
     var negativeArgs = new ArrayList<>(prefix);
     negativeArgs.addAll(
         List.of(
             "preparePublicationWorkspace",
             "-Pdataset=ch.so.grundwasser.qualitaet",
-            "-PdataFile=" + work + "/invalid.csv"));
+            "-PdataFile=" + work + "/INVALID_DATA_FILE"));
     var negative =
         process.run(negativeArgs, s.stack, 180, temp.resolve("jenkins-csv-negative.log"));
     assertNotEquals(0, negative.exitCode());

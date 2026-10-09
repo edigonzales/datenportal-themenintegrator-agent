@@ -40,6 +40,22 @@ verfügbar. Weitere Verzeichnisse vor dem Befehl mit `--mount-ro /eingang` oder
 weitergereichte Zugangsdatenvariablen. Werte gehören weder in Argumente noch Git.
 Lokales JDK 25 für Entwicklung: `./bin/datenportal-agent --runtime local doctor`.
 
+Lokale Jenkins-Zugangsdaten können einmalig im gemeinsamen, ignorierten
+Credential-Store hinterlegt werden: `credentials set local --username USER --token-stdin`
+liest den Token ausschliesslich von stdin; `credentials set local --from-env`
+übernimmt ausdrücklich die konfigurierten und weitergereichten Variablen.
+`credentials status local` zeigt nur Bereitschaft und Quelle. Codex und OpenCode
+lesen denselben Store auch nach Änderungen ohne MCP-Neustart. Die Datei ist
+unverschlüsselt, ihr Verzeichnis benötigt 0700 und ihre Dateien 0600.
+Vollständige Umgebungszugänge haben Vorrang; INT/PROD verwenden weiterhin die
+expliziten Umgebungsvariablen. Details stehen im Anwenderhandbuch.
+
+`./bin/datenportal-agent acceptance delivery` prüft separat eine vollständige
+synthetische Docker-Anlieferung mit gültiger und ungültiger CSV. Die Abnahme
+erstellt einen eigenen Stack auf dem Host, verwendet anschliessend den echten
+Agent-Container und räumt nur ihre Testcontainer, Volumes und Secrets auf.
+Sie startet weder eine MFK-Anlieferung noch eine INT-/PROD-Publikation.
+
 - [Anwenderhandbuch](docs/anwenderhandbuch.md): Einrichtung, drei Vorgangsarten, Freigaben, Korrekturen und Wiederaufnahme.
 - [Entwicklerhandbuch](docs/entwicklerhandbuch.md): Komponenten, Schnittstellen, Migration, Erweiterungen und Tests.
 - [Abnahmestand](docs/abnahme.md): tatsächlich durchgeführte, simulierte und offene Prüfungen.

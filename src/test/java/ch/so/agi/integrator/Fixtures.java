@@ -109,6 +109,12 @@ final class Fixtures {
     final List<List<String>> invocations = new ArrayList<>();
 
     @Override
+    public Result run(
+        List<String> args, Path cwd, int seconds, Path log, Map<String, String> environment) {
+      return run(args, cwd, seconds, log);
+    }
+
+    @Override
     public Result run(List<String> args, Path cwd, int seconds, Path log) {
       invocations.add(args);
       if (log != null)

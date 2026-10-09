@@ -59,19 +59,15 @@ class ExternalTest {
             calls.add(args);
             if (args.contains("inspect"))
               return Json.text(
-                  List.of(
-                      Json.map(
-                          "Mounts",
-                          List.of(
-                              Json.map(
-                                  "Destination",
-                                  "/workspace/themenrepo",
-                                  "Source",
-                                  temp.resolve("repo").toString())),
-                          "Config",
-                          Json.map("Env", List.of("THEMEN_REPO_MODE=working-tree")),
-                          "State",
-                          Json.map("Running", true, "Health", Json.map("Status", "healthy")))));
+                  Json.map(
+                      "mounts",
+                      List.of(Json.map("type", "bind", "source", temp.resolve("repo").toString())),
+                      "working_tree",
+                      true,
+                      "running",
+                      true,
+                      "health",
+                      "healthy"));
             if (args.contains("-aq")) return "container-id";
             if (args.contains("--format"))
               return Json.text(
@@ -108,14 +104,7 @@ class ExternalTest {
             if (args.contains("-aq")) return "id";
             if (args.contains("inspect"))
               return Json.text(
-                  List.of(
-                      Json.map(
-                          "Mounts",
-                          List.of(),
-                          "Config",
-                          Json.map("Env", List.of("THEMEN_REPO_MODE=managed-git")),
-                          "State",
-                          Json.map("Running", true))));
+                  Json.map("mounts", List.of(), "working_tree", false, "running", true));
             throw new AssertionError("Stack must not start");
           }
         };

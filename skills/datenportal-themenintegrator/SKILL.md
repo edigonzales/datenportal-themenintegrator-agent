@@ -9,6 +9,9 @@ Verwende die Werkzeuge des `datenportal_integrator`-MCP. CLI-Fallback im Integra
 `setup-gretl` bereitet das festgelegte Jenkins-Image für GRETL-Vorprüfungen vor, ohne Publikationsstack-Start oder Host-Java-17. Das lokale Beispiel nutzt dauerhafte Compose-Dienste mit HTTP-MCPs und einem eigenen GRETL-Container; fehlende Dienste starten automatisch. Bestehende stdio-/ephemeral-Konfigurationen bleiben unterstützt. Änderungen am Image nur bewusst vorbereiten und erneut prüfen/freigeben. Bei `gretl_runtime_mismatch` die gemeldete Grenze klären, keinen Host-Fallback und keine stille Stack-Umkonfiguration verwenden.
 Einrichtung und Beispiele stehen im [Anwenderhandbuch](../../docs/anwenderhandbuch.md).
 
+Lokale Jenkins-Zugangsdaten können ausdrücklich mit dem CLI-Helfer `credentials set <profil> --username <user> --token-stdin` beziehungsweise `--from-env` hinterlegt werden. `credentials status <profil>` und `doctor` zeigen nur Quelle/Bereitschaft. Der laufende MCP liest Änderungen ohne Neustart; vollständige benannte Umgebungszugänge haben Vorrang. Zugangsdaten ausschliesslich über die Shell beziehungsweise den Credential-Store hinterlegen lassen, niemals im Chat/MCP einsammeln, aus Harness-Dateien kopieren oder mit Standardpasswörtern ausprobieren. Fehlende Publikationszugänge verhindern keine Modellierung.
+Bei `stack_mount_unavailable`, `stack_mismatch` oder Anmeldungsfehlern die konkrete Betreiberhandlung erklären. Einen passenden laufenden Jenkins-/Downloads-Container nicht zur Umgehung der Prüfung neu erstellen. Nach Korrektur denselben Vorgang fortsetzen; unbestätigte Uploads zunächst aufklären. `acceptance delivery` ist eine separate synthetische Abnahme und autorisiert keine fachlichen Änderungen.
+
 ## Grenzen und Entscheidungen
 
 Dev-Stack, Fach-MCPs, Jenkins-Plugin, GRETL und Portal über vorhandene Schnittstellen verwenden; deren Quellen nicht bearbeiten. Das Themenrepo behält seine Struktur. Nur fachliche Office-/Team-/Org-/Themenänderungen als Kandidaten mit `stage_change` vorbereiten. Erst nach passender Freigabe `apply_local_changes` oder fachlichen PR beauftragen. Keine Integrator-Konfiguration unter `shared/` oder im Themenrepo anlegen.
@@ -50,6 +53,8 @@ CSV und konkrete Datenblatt-XTF benötigen denselben Vertrag. Identität erfrage
 Der Adapter nutzt `authorIliModel` beziehungsweise `applyIliModelChanges`. Mitgelieferte Reviews/Compiler-/Constraint-Nachweise verwenden; nicht reflexartig weitere Low-Level-Prüfungen starten. Kandidaten mit Fehlern oder unvollständigen Proofs nicht übernehmen. Manuelle Reviewpunkte zeigen. Separat veränderte Quellen müssen neu geprüft werden.
 
 Der Integrator setzt die Modellreferenz vor dem finalen Export über den Datenblatt-MCP und bereitet `.ili` und `dataset.gradle` im Themenordner vor. `validate_model` verwendet den vorhandenen GRETL-CsvValidator in einer isolierten Kopie im eigenen Jenkins-Image-Container; derselbe Task stoppt Jenkins vor `preparePublicationWorkspace`. Metadatenlieferungen überspringen die CSV-Task. Kein eigener CSV-zu-XTF-Umbau für diese Prüfung.
+
+Der erzeugte Gradle-`Copy`-Task `stageThemenCsv` stellt endungslose Jenkins-Uploads bytegleich als `.csv` für den Validator bereit. Bei älteren erzeugten Taskdefinitionen ohne diesen Schritt die Modellableitung mit der bestehenden Identität erneut beauftragen, prüfen und die geänderte Task zur erneuten menschlichen Freigabe vorlegen. Keine bereits freigegebenen Repository-Dateien still nachbearbeiten.
 
 Eigenständiger `model`-Vorgang: HTML zeigen, tatsächliches Modell-OK mit `gate=model`, danach lokale Übernahme oder fachlicher PR. Keine Datenpublikation erfinden.
 

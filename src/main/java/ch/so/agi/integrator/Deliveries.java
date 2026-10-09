@@ -35,6 +35,8 @@ public final class Deliveries {
 
   void ready(Map<String, Object> r, String name, Map<String, Object> env, boolean publication) {
     approved(r);
+    // Resolve credentials before any stack changes or new external submission.
+    var credentials = w.credentials.apply(name, env);
     if (Json.str(env, "kind", "").equals("local")) {
       for (String rel : Json.obj(r.get("changes")).keySet()) {
         Path p = Json.inside(w.settings.topics, rel);
@@ -50,7 +52,7 @@ public final class Deliveries {
       var stack = new Stack(w.settings, w.process);
       stack.ensure();
       w.gretl.matchJenkins();
-      if (publication) stack.bootstrap(env);
+      if (publication) stack.bootstrap(env, credentials);
     } else {
       w.require(r, "publish:" + name);
       new Repository(w).requireMerged(r, env);
@@ -113,7 +115,7 @@ public final class Deliveries {
     var deliveries = Json.obj(r.get("deliveries"));
     if (deliveries.containsKey(name)) return advance(r, name, env, Json.obj(deliveries.get(name)));
     ready(r, name, env, true);
-    var jenkins = w.jenkins.apply(env);
+    var jenkins = w.jenkins.apply(name, env);
     var item =
         Json.map(
             "phase",
@@ -140,7 +142,7 @@ public final class Deliveries {
         throw new Problem(
             "submission_unknown", "Seed-Start unbestätigt. Queue zuordnen; nicht erneut starten.");
       if (Set.of("complete", "failed").contains(phase)) return item;
-      var status = w.jenkins.apply(env).seedStatus(Json.obj(item.get("seed")));
+      var status = w.jenkins.apply(name, env).seedStatus(Json.obj(item.get("seed")));
       if (Json.bool(status, "complete", false)) {
         item.put("result", status.get("result"));
         item.put("phase", Objects.equals(status.get("result"), "SUCCESS") ? "complete" : "failed");
@@ -148,7 +150,7 @@ public final class Deliveries {
       return item;
     }
     ready(r, name, env, false);
-    var jenkins = w.jenkins.apply(env);
+    var jenkins = w.jenkins.apply(name, env);
     item =
         Json.map(
             "phase",
@@ -174,7 +176,7 @@ public final class Deliveries {
           "state",
           item);
     if (Set.of("complete", "failed").contains(phase)) return item;
-    var j = w.jenkins.apply(env);
+    var j = w.jenkins.apply(name, env);
     if (phase.equals("seeding")) {
       var status = j.seedStatus(Json.obj(item.get("seed")));
       if (!Json.bool(status, "complete", false)) return item;
@@ -238,12 +240,13 @@ public final class Deliveries {
               status.get("status")));
       return item;
     }
-    outcome(r, env, item);
+    outcome(r, name, env, item);
     item.put("build_url", status.get("consoleUrl"));
     return item;
   }
 
-  void outcome(Map<String, Object> r, Map<String, Object> env, Map<String, Object> item) {
+  void outcome(
+      Map<String, Object> r, String name, Map<String, Object> env, Map<String, Object> item) {
     var context = Json.obj(item.get("verification"));
     if (context.isEmpty()) context = recoverVerification(r, item);
     var sheet = Json.obj(context.get("sheet"));
@@ -256,7 +259,7 @@ public final class Deliveries {
       var frozen = Json.map("id", r.get("id"), "files", Json.map("data", context.get("data")));
       data = w.store.file(frozen, "data");
     }
-    item.putAll(w.jenkins.apply(env).verify(Json.obj(item.get("report")), sheet, data));
+    item.putAll(w.jenkins.apply(name, env).verify(Json.obj(item.get("report")), sheet, data));
     item.put("phase", Json.bool(item, "verified", false) ? "complete" : "failed");
   }
 
@@ -305,7 +308,7 @@ public final class Deliveries {
     var item = Json.obj(Json.obj(r.get("deliveries")).get(name));
     if (!Objects.equals(Json.obj(item.get("report")).get("publication"), "accepted"))
       throw new Problem("publication_unconfirmed", "Keine bestätigte Publikation zum Nachprüfen.");
-    outcome(r, w.settings.environment(name), item);
+    outcome(r, name, w.settings.environment(name), item);
     return item;
   }
 
@@ -330,7 +333,7 @@ public final class Deliveries {
     if (!queue.matches("[0-9]+"))
       throw new Problem("invalid_queue", "Numerische Jenkins-Queue-ID erforderlich.");
     var env = w.settings.environment(name);
-    var j = w.jenkins.apply(env);
+    var j = w.jenkins.apply(name, env);
     var item = Json.obj(Json.obj(r.get("deliveries")).get(name));
     if (seed && !Objects.equals(item.get("phase"), "seed_submitting"))
       item = Json.obj(Json.obj(r.get("seeds")).get(name));

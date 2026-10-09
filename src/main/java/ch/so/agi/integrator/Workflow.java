@@ -10,7 +10,8 @@ public final class Workflow implements AutoCloseable {
   final McpClients.ToolClient datasheets, interlis;
   final Validator validator;
   GretlRuntime gretl;
-  java.util.function.Function<Map<String, Object>, Jenkins> jenkins = Jenkins::new;
+  java.util.function.BiFunction<String, Map<String, Object>, Jenkins> jenkins;
+  java.util.function.BiFunction<String, Map<String, Object>, Credentials.Value> credentials;
 
   public Workflow(Settings s) {
     this(s, new ProcessRunner(), McpClients.datasheet(s), McpClients.interlis(s));
@@ -24,6 +25,8 @@ public final class Workflow implements AutoCloseable {
     interlis = i;
     validator = new Validator(s, p);
     gretl = new GretlRuntime(s, p);
+    credentials = (name, env) -> new Credentials(s).resolve(name, env);
+    jenkins = (name, env) -> new Jenkins(env, credentials.apply(name, env));
   }
 
   @Override

@@ -4,6 +4,12 @@ import java.nio.file.*;
 import java.util.*;
 
 public final class Stack {
+  static final String INSPECT =
+      """
+      {{- $mode := false -}}{{range .Config.Env}}{{if eq . "THEMEN_REPO_MODE=working-tree"}}{{$mode = true}}{{end}}{{end}}
+      {"mounts":[{{ $sep := "" }}{{range .Mounts}}{{if eq .Destination "/workspace/themenrepo"}}{{$sep}}{"type":{{json .Type}},"source":{{json .Source}}}{{$sep = ","}}{{end}}{{end}}],
+      "working_tree":{{$mode}},"running":{{.State.Running}},"health":{{if .State.Health}}{{json .State.Health.Status}}{{else}}"unknown"{{end}}}
+      """;
   final Settings s;
   final ProcessRunner p;
 
@@ -25,6 +31,10 @@ public final class Stack {
   }
 
   private String stackCommand(List<String> args) {
+    return stackCommand(args, Map.of());
+  }
+
+  private String stackCommand(List<String> args, Map<String, String> environment) {
     Path log;
     try {
       Path directory = s.runs.getParent().resolve("stack-logs");
@@ -33,7 +43,10 @@ public final class Stack {
     } catch (java.io.IOException e) {
       throw new Problem("stack_log_unavailable", "Stack-Diagnoselog kann nicht angelegt werden.");
     }
-    var result = p.run(args, s.stack, s.stackTimeout, log);
+    var result =
+        environment.isEmpty()
+            ? p.run(args, s.stack, s.stackTimeout, log)
+            : p.run(args, s.stack, s.stackTimeout, log, environment);
     if (result.exitCode() != 0)
       throw new Problem(
           "stack_command_failed",
@@ -63,42 +76,66 @@ public final class Stack {
       throw new Problem(
           "ambiguous_stack", "Mehrere Jenkins-Container im vorgesehenen Compose-Projekt.");
     try {
-      var containers =
-          Json.list(
-              Json.MAPPER.readValue(
-                  p.checked(List.of("docker", "inspect", ids), s.stack, 60), Object.class));
-      var c = Json.obj(containers.getFirst());
-      var mounts =
-          Json.list(c.get("Mounts")).stream()
-              .map(Json::obj)
-              .filter(m -> Objects.equals(m.get("Destination"), "/workspace/themenrepo"))
-              .toList();
-      boolean mode =
-          Json.strings(Json.obj(c.get("Config")).get("Env"))
-              .contains("THEMEN_REPO_MODE=working-tree");
-      if (mounts.size() != 1
-          || !Path.of(Json.required(mounts.getFirst(), "Source"))
-              .toRealPath()
-              .equals(s.topics.toRealPath())
-          || !mode)
+      var c =
+          Json.read(p.checked(List.of("docker", "inspect", "--format", INSPECT, ids), s.stack, 60));
+      var mounts = Json.list(c.get("mounts")).stream().map(Json::obj).toList();
+      if (mounts.size() != 1)
         throw new Problem(
             "stack_mismatch",
-            "Vorhandene Instanz verwendet einen anderen Themenbestand oder Modus.");
-      var state = Json.obj(c.get("State"));
+            "Jenkins benötigt genau einen Themenrepo-Mount unter /workspace/themenrepo.");
+      if (!Objects.equals(mounts.getFirst().get("type"), "bind"))
+        throw new Problem(
+            "stack_mismatch", "Der Jenkins-Themenrepo-Mount muss ein Bind-Mount sein.");
+      if (!Json.bool(c, "working_tree", false))
+        throw new Problem(
+            "stack_mismatch", "Jenkins verwendet nicht THEMEN_REPO_MODE=working-tree.");
+      Path mounted = mountSource(Json.required(mounts.getFirst(), "source"));
+      if (!mounted.equals(s.topics.toRealPath()))
+        throw new Problem(
+            "stack_mismatch",
+            "Jenkins verwendet einen anderen Themenbestand; vorgesehenen Checkout und Mount prüfen.",
+            "expected",
+            s.topics.toRealPath().toString(),
+            "mounted",
+            mounted.toString());
       return Json.map(
           "present",
           true,
           "compatible",
           true,
           "running",
-          state.get("Running"),
+          c.get("running"),
           "health",
-          Json.str(Json.obj(state.get("Health")), "Status", "unknown"));
+          Json.str(c, "health", "unknown"));
     } catch (Problem e) {
       throw e;
     } catch (Exception e) {
       throw new Problem("stack_unavailable", "Docker-Status kann nicht gelesen werden.");
     }
+  }
+
+  Path mountSource(String value) {
+    Path source = Path.of(value).normalize();
+    if (!source.isAbsolute())
+      throw new Problem(
+          "stack_mount_unavailable", "Docker meldet keine absolute Bind-Mount-Quelle.");
+    try {
+      if (Files.exists(source)) return source.toRealPath();
+      if (source.startsWith(Path.of("/host_mnt"))
+          && p.checked(List.of("docker", "info", "--format", "{{.OperatingSystem}}"), s.stack, 30)
+              .strip()
+              .equalsIgnoreCase("Docker Desktop")) {
+        Path host = Path.of("/").resolve(Path.of("/host_mnt").relativize(source));
+        if (Files.exists(host)) return host.toRealPath();
+      }
+    } catch (java.io.IOException e) {
+      throw new Problem(
+          "stack_mount_unavailable",
+          "Bind-Mount-Quelle kann nicht aufgelöst werden; Themenrepo-Mount prüfen.");
+    }
+    throw new Problem(
+        "stack_mount_unavailable",
+        "Bind-Mount-Quelle ist nicht erreichbar; Themenrepo-Mount und Docker-Desktop-Pfadzuordnung prüfen.");
   }
 
   public Object ensure() {
@@ -153,7 +190,7 @@ public final class Stack {
       throw new Problem("stack_unhealthy", "Stack ist noch nicht bereit.", "services", bad);
   }
 
-  public Object bootstrap(Map<String, Object> env) {
+  public Object bootstrap(Map<String, Object> env, Credentials.Value credentials) {
     if (!Json.str(env, "kind", "").equals("local"))
       throw new Problem("local_only", "Automatischer Erstaufbau ist nur lokal vorgesehen.");
     boolean existing = Jenkins.manifest(env) != null;
@@ -165,7 +202,7 @@ public final class Stack {
       cmd.addAll(List.of("-f", file));
     cmd.addAll(List.of("--timeout", Integer.toString(s.stackTimeout)));
     if (existing) cmd.add("--check-only");
-    stackCommand(cmd);
+    stackCommand(cmd, credentials.bootstrapEnvironment());
     var manifest = Jenkins.manifest(env);
     if (manifest == null)
       throw new Problem("bootstrap_incomplete", "Initialisierung lieferte kein lesbares Manifest.");

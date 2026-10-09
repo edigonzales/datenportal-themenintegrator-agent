@@ -16,6 +16,7 @@ class JenkinsTest {
   String base, metadata, catalog;
   int uploads;
   boolean reload = true, missingLocation = false;
+  boolean requireSessionCookie;
   String multipart;
   Map<String, Object> env;
 
@@ -72,9 +73,19 @@ class JenkinsTest {
   void handle(HttpExchange x) throws java.io.IOException {
     String path = x.getRequestURI().getPath(), body = "{}";
     int status = 200;
-    if (path.endsWith("/crumbIssuer/api/json"))
+    if (path.endsWith("/crumbIssuer/api/json")) {
       body = "{\"crumbRequestField\":\"Jenkins-Crumb\",\"crumb\":\"fixture-crumb\"}";
-    else if (path.endsWith("/gretl-datenportal/build")) {
+      if (requireSessionCookie)
+        x.getResponseHeaders()
+            .add("Set-Cookie", "JSESSIONID=synthetic-session; Path=/jenkins; HttpOnly");
+    } else if (path.endsWith("/gretl-datenportal/build")
+        && requireSessionCookie
+        && (!Objects.toString(x.getRequestHeaders().getFirst("Cookie"), "")
+                .contains("JSESSIONID=synthetic-session")
+            || !"fixture-crumb".equals(x.getRequestHeaders().getFirst("Jenkins-Crumb")))) {
+      status = 403;
+      body = "Session cookie and crumb must match";
+    } else if (path.endsWith("/gretl-datenportal/build")) {
       uploads++;
       multipart = new String(x.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
       if (!missingLocation)
@@ -120,6 +131,19 @@ class JenkinsTest {
   }
 
   @Test
+  void PasswordAuthenticationKeepsTheCrumbSessionCookie() {
+    requireSessionCookie = true;
+    Path data = temp.resolve("synthetic.csv");
+    Json.write(data, "Jahr\n2025\n");
+    assertEquals(
+        "123",
+        client()
+            .submit("agi", "ch.so.fixture", null, data, null, "Synthetic fixture")
+            .get("queue"));
+    assertEquals(1, uploads);
+  }
+
+  @Test
   void multipartUsesExistingContractAndTrustedQueue() {
     Path data = temp.resolve("input.csv");
     Json.write(data, "Jahr\n2025\n");
@@ -155,7 +179,9 @@ class JenkinsTest {
   Fixtures workflow() throws Exception {
     var f = new Fixtures(temp);
     Json.obj(f.settings.values.get("environments")).put("local", env);
-    f.workflow.jenkins = ignored -> client();
+    f.workflow.jenkins = (name, ignored) -> client();
+    f.workflow.credentials =
+        (name, ignored) -> new Credentials.Value("synthetic-user", "synthetic-token", "fixture");
     return f;
   }
 

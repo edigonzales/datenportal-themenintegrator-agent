@@ -14,11 +14,21 @@ public final class Jenkins {
   final HttpClient http =
       HttpClient.newBuilder()
           .followRedirects(HttpClient.Redirect.NEVER)
+          .cookieHandler(new CookieManager(null, CookiePolicy.ACCEPT_ORIGINAL_SERVER))
           .connectTimeout(Duration.ofSeconds(30))
           .build();
 
   public Jenkins(Map<String, Object> env) {
     this(env, System::getenv);
+  }
+
+  Jenkins(Map<String, Object> env, Credentials.Value credentials) {
+    this(
+        env,
+        key ->
+            key.equals(Json.str(env, "username_env", "DATENPORTAL_JENKINS_USER"))
+                ? credentials.username
+                : credentials.token);
   }
 
   Jenkins(Map<String, Object> env, java.util.function.Function<String, String> credentials) {
@@ -57,7 +67,18 @@ public final class Jenkins {
 
   private HttpResponse<byte[]> send(HttpRequest request) {
     try {
-      return http.send(request, HttpResponse.BodyHandlers.ofByteArray());
+      var response = http.send(request, HttpResponse.BodyHandlers.ofByteArray());
+      if (response.statusCode() == 401 || response.statusCode() == 403)
+        throw new Problem(
+            response.statusCode() == 401
+                ? "jenkins_authentication_failed"
+                : "jenkins_access_denied",
+            "Jenkins weist die Anmeldung oder Berechtigung zurück; Zugangsdaten und Rechte prüfen.",
+            "status",
+            response.statusCode());
+      return response;
+    } catch (Problem p) {
+      throw p;
     } catch (Exception e) {
       throw new Problem(
           "jenkins_unavailable",
@@ -277,6 +298,23 @@ public final class Jenkins {
     } catch (Exception e) {
       throw new Problem("remote_read_failed", "Bestand nicht lesbar.", "url", url);
     }
+  }
+
+  byte[] readEvidence(String url) {
+    var response =
+        send(
+            HttpRequest.newBuilder(URI.create(trusted(url)))
+                .timeout(Duration.ofSeconds(60))
+                .header("Authorization", authorization)
+                .GET()
+                .build());
+    if (response.statusCode() != 200)
+      throw new Problem(
+          "jenkins_read_failed",
+          "Jenkins-Prüfnachweis ist nicht lesbar.",
+          "status",
+          response.statusCode());
+    return response.body();
   }
 
   public static String artifact(Map<String, Object> env, String filename) {

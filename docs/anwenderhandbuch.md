@@ -70,6 +70,83 @@ Für lokale Java-Entwicklung ausdrücklich `--runtime local` verwenden und JDK 2
 beschreiben auch diesen bisherigen Einstieg. GRETL verwendet ausschliesslich
 Java 17 im Jenkins-Image. Ein Java-Symlink wird im Docker-Modus nicht verändert.
 
+### Jenkins-Zugangsdaten für Codex und OpenCode
+
+Der gemeinsame Java-Kern kann lokale Zugangsdaten aus
+`.datenportal-integrator/credentials/local.json` lesen. Damit muss eine GUI keine
+Jenkins-Variablen von ihrem Startprozess erben. Der Store ist ignoriert und
+unverschlüsselt; Verzeichnisrechte 0700 und Dateirechte 0600 schützen den Zugriff.
+Symlinks, fremde Eigentümer und weitergehende Rechte werden abgewiesen.
+
+Einmalig Benutzer und Token in einer Shell hinterlegen, ohne den Token in
+Kommandoargumente oder den Chat zu schreiben:
+
+```sh
+printf 'Jenkins-Benutzer: '
+read -r credential_user
+printf 'Jenkins-Token: '
+read -rs credential_token
+printf '\n'
+printf '%s' "$credential_token" | ./bin/datenportal-agent credentials set local --username "$credential_user" --token-stdin
+unset credential_token credential_user
+./bin/datenportal-agent credentials status local
+```
+
+Alternativ ausdrücklich aus der vorhandenen Umgebung übernehmen:
+
+```sh
+DATENPORTAL_FORWARD_ENV="DATENPORTAL_LOCAL_USER DATENPORTAL_LOCAL_TOKEN" \
+  ./bin/datenportal-agent credentials set local --from-env
+./bin/datenportal-agent credentials remove local
+```
+
+Bei abweichender Konfiguration gelten deren Variablennamen und `--config`.
+Ein vollständiges Umgebungspaar hat Vorrang vor dem Store. Teilweise gesetzte
+Werte sind ein Fehler; Benutzer und Token aus verschiedenen Quellen werden nicht
+gemischt. Store-Einträge gelten nur für das gewählte lokale Profil und seine
+Jenkins-Adresse. Eine geänderte Adresse erfordert eine neue Hinterlegung.
+INT/PROD bleiben bei expliziten Umgebungsvariablen.
+
+`doctor` zeigt technische Bereitschaft und Publikationszugänge getrennt.
+Modellierung und `init` benötigen keine Jenkins-Zugangsdaten. Eine neue
+Anlieferung prüft die Zugangsdaten vor Stack-Änderungen; fehlende oder abgewiesene
+Zugänge erlauben keine Passwortversuche oder Container-Neuerstellung.
+
+Nach einem JAR-Update den MCP einmal neu verbinden. Spätere Änderungen am Store
+werden vom laufenden MCP ohne Neustart gelesen. Den vorhandenen Vorgang anhand
+seiner ID fortsetzen; bei unbestätigtem Upload zunächst aufklären.
+
+### Vollständige synthetische Docker-Abnahme
+
+```sh
+./bin/datenportal-agent acceptance delivery
+```
+
+Die explizite Abnahme erzeugt private Themen-/Stack-Kopien und eigene Ports,
+startet die Infrastruktur mit der Host-Docker-CLI und führt Modellierung und
+Anlieferung über die erzeugten Codex-/OpenCode-MCP-Konfigurationen im
+Agent-Container aus. Sie verwendet nur ausdrücklich markierte synthetische
+Freigaben und die Testzugänge des eigenen JCasC-Stacks. `init` führt diese
+Publikationsabnahme nicht automatisch aus.
+
+Der Positivfall muss GRETL-Validierung, Publikation, Manifest, Portal und Download
+bestätigen. Der Negativfall wird gezielt an die echte Jenkins-Schnittstelle der
+Testinstanz geliefert: ein CSV-Validierungsfehler muss vor
+`preparePublicationWorkspace` stoppen, ohne den Release zu ändern. Infrastruktur-
+und Anmeldungsfehler sind keine bestandenen Negativtests.
+
+Die erzeugte CSV-Task verwendet einen abhängigen Gradle-`Copy`-Task mit `from`,
+`into` und `rename`: Jenkins-Uploads ohne Endung werden bytegleich als
+`build/integrator-validation/input.csv` geprüft. Der Upload bleibt unverändert.
+Bereits zuvor erzeugte Taskdefinitionen benötigen eine erneute Modellableitung
+mit der bestehenden Identität, Prüfung und Freigabe der geänderten Task. Alte
+fachliche Kandidaten werden bei einem Softwareupdate nicht automatisch geändert.
+
+Berichte liegen unter `.datenportal-integrator/delivery-acceptance/<UUID>/`.
+Die Abnahme entfernt ausschliesslich ihre eigenen Container, Volumes und Secrets.
+Die vorhandenen Fach-MCPs, der normale Dev-Stack und fachliche Vorgänge bleiben
+ausserhalb dieser Abnahme.
+
 `config/local.toml` ist ignoriert. Relative Pfade beziehen sich auf `root`; `root` selbst bezieht sich auf die Konfigurationsdatei. Werkzeugpfade, Checkout-Pfade sowie MCP-Images und optionale HTTP-Adressen stehen hier. Die Auswahl erfolgt mit `--config`, alternativ `DATENPORTAL_INTEGRATOR_CONFIG`, sonst `config/local.toml` im aktuellen Arbeitsverzeichnis.
 
 ```toml
@@ -116,7 +193,11 @@ read -rs 'DATENPORTAL_LOCAL_TOKEN?Jenkins-Token: '
 export DATENPORTAL_LOCAL_USER DATENPORTAL_LOCAL_TOKEN
 ```
 
-Ein aus dem Finder gestarteter Desktop erbt Shell-Variablen nicht automatisch. Dort die MCP-Umgebung benutzerlokal einrichten oder Codex aus der vorbereiteten Shell starten. Keine Zugangsdaten ins Themenrepo schreiben. `gh auth login` und `gh auth status` prüfen die GitHub-Anmeldung. `command -v java git gh docker codex opencode` prüft den PATH.
+Ein aus dem Finder gestarteter Desktop erbt Shell-Variablen nicht automatisch.
+Für lokale Jenkins-Zugänge deshalb den oben beschriebenen gemeinsamen Store
+verwenden. Für INT/PROD die benannten Variablen ausdrücklich in der Startumgebung
+bereitstellen. Keine Zugangsdaten ins Themenrepo schreiben. `gh auth login` und
+`gh auth status` prüfen die GitHub-Anmeldung.
 
 ```sh
 java -jar build/libs/datenportal-integrator.jar setup-java
@@ -181,6 +262,14 @@ opencode
 ```
 
 OpenCode startet den Launcher aus `opencode.json`. Im optionalen lokalen Java-Betrieb legt `setup-java` einen ignorierten Symlink auf das tatsächlich verwendete JDK 25 an. `java` muss auf JDK 25 zeigen; bei Desktop-Prozessen gegebenenfalls den absoluten Befehl aus `harness-config` verwenden. Im Chat zum Beispiel: „Verwende den Themenintegrator-Skill. Integriere diese CSV und die XLSX-Metadaten lokal; erkläre zuerst die CSV und halte an den Freigaben an.“ Dateien anhängen oder absolute lokale Pfade nennen.
+
+In OpenCode Beta liegt der Verbindungsstatus unter **Session details → MCP**.
+Vor dem GUI-Start `init` beziehungsweise nach Quelländerungen `doctor` über den
+Launcher ausführen. Die getestete Beta begrenzt den MCP-Start standardmässig auf
+30 Sekunden; das bisherige numerische `timeout` verlängert nur Katalog- und
+Werkzeugaufrufe. Falls ein kalter Build diesen Start überschreitet, nach dem
+fertigen Build ausschliesslich `datenportal_integrator` im MCP-Panel aus- und
+wieder einschalten. Der bestehende Vorgang bleibt dabei erhalten.
 
 In OpenCode Beta das Integrator-Repository als Projekt öffnen und den Skill mit
 `@datenportal-themenintegrator` auswählen. Die Anhangübernahme erfolgt automatisch

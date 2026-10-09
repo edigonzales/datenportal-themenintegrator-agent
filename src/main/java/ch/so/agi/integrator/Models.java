@@ -391,7 +391,7 @@ public final class Models {
           "dataset_task_conflict", "Unvollständiger Integrator-Block in dataset.gradle.");
     if (start >= 0)
       original = original.substring(0, start) + original.substring(end + END.length());
-    if (original.contains("validateThemenCsv"))
+    if (original.contains("validateThemenCsv") || original.contains("stageThemenCsv"))
       throw new Problem(
           "dataset_task_conflict", "Vorhandene Taskdefinition muss ausdrücklich geklärt werden.");
     return original.stripTrailing()
@@ -400,10 +400,19 @@ public final class Models {
         + "\n"
         + """
                 def integratorCsvInput = providers.gradleProperty('dataFile').orElse('')
+                // Jenkins file parameters have no extension. CsvValidator requires .csv.
+                def integratorValidationCsv = layout.buildDirectory.file('integrator-validation/input.csv')
+                def integratorStageCsv = tasks.register('stageThemenCsv', Copy) {
+                    onlyIf('CSV-Datenlieferung vorhanden') { !integratorCsvInput.get().trim().isEmpty() }
+                    from(integratorCsvInput.map { value -> value.trim().isEmpty() ? [] : [file(value)] })
+                    into(layout.buildDirectory.dir('integrator-validation'))
+                    rename { 'input.csv' }
+                }
                 def integratorCsvValidator = project.plugins.getPlugin('ch.so.agi.gretl').class.classLoader.loadClass('ch.so.agi.gretl.tasks.CsvValidator')
                 tasks.register('validateThemenCsv', integratorCsvValidator) {
+                    dependsOn(integratorStageCsv)
                     onlyIf('CSV-Datenlieferung vorhanden; Metadatenlieferungen überspringen') { !integratorCsvInput.get().trim().isEmpty() }
-                    dataFiles(integratorCsvInput.map { value -> value.trim().isEmpty() ? [] : [file(value)] })
+                    dataFiles(integratorCsvInput.map { value -> value.trim().isEmpty() ? [] : [integratorValidationCsv.get().asFile] })
                     modelNames(%s)
                     modelDirectories(file(%s).absolutePath)
                     firstLineIsHeader.set(true)
@@ -414,6 +423,7 @@ public final class Models {
                     failOnError.set(true)
                     doFirst {
                         if (!file(integratorCsvInput.get()).isFile()) throw new GradleException('CSV-Lieferdatei fehlt')
+                        if (java.nio.file.Files.mismatch(file(integratorCsvInput.get()).toPath(), integratorValidationCsv.get().asFile.toPath()) != -1L) throw new GradleException('CSV-Prüfkopie ist nicht bytegleich')
                         def expectedModelSha = %s
                         def expectedBundleSha = %s
                         def modelFile = file(%s)
@@ -430,13 +440,21 @@ public final class Models {
                 tasks.configureEach { task ->
                     if (task.name == 'preparePublicationWorkspace') task.dependsOn('validateThemenCsv')
                 }
+                // The publication validator also needs the reviewed topic-local model.
+                gradle.projectsEvaluated {
+                    tasks.matching { it.name == 'validateDeliveredCsv' }.configureEach {
+                        def sharedModels = System.getenv('DATENPORTAL_MODELS_DIR') ?: file('../shared/models').absolutePath
+                        modelDirectories(file(%s).absolutePath + ';' + sharedModels)
+                    }
+                }
                 """
             .formatted(
                 Workspace.groovy(model),
                 Workspace.groovy(identifier),
                 Workspace.groovy(modelSha),
                 Workspace.groovy(bundleSha),
-                Workspace.groovy(identifier + "/" + model + ".ili"))
+                Workspace.groovy(identifier + "/" + model + ".ili"),
+                Workspace.groovy(identifier))
         + END
         + "\n";
   }
