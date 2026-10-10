@@ -1,5 +1,27 @@
 # Abnahmestand
 
+## Image-Smoke-Korrektur vom 10. Oktober 2026
+
+Der CI-Image-Smoke-Test scheiterte beim Kompilieren seines eingebetteten
+Java-Programms: `runtime/image-smoke.sh` verwendete nach der Berichtsumstellung
+noch die alte `Reports.render`-Signatur. Der Aufruf verwendet jetzt den
+expliziten Berichtstyp `CSV` und eine synthetische Themenkennung. Die Prüfung
+verlangt Phase, Kennung und Prüfergebnis im erzeugten HTML.
+
+Tatsächlich lokal ausgeführt: Images mit `runtime/Dockerfile` für `linux/arm64`
+und `linux/amd64` gebaut und jeweils `runtime/image-smoke.sh` erfolgreich
+ausgeführt, ohne Workspace-Mounts und mit deaktiviertem Netzwerk in den
+Testcontainern. Geprüft wurden unter anderem die Kompilierung des eingebetteten
+Java-Programms, Ressourcenauflösung und HTML-Erzeugung, Konfigurationsanlage,
+stdio-MCP-Initialisierung samt Version und Toolkatalog sowie die synthetische
+CSV-Konvertierung. `bash -n runtime/image-smoke.sh` ist ebenfalls erfolgreich.
+Nachweise: `.datenportal-integrator/html-reports-image-arm64.log` und
+`.datenportal-integrator/html-reports-image-amd64.log`.
+
+Die Daten und Verzeichnisse innerhalb der Container sind synthetische Fixtures.
+Ein erneuter GitHub-Actions-Lauf, Registry-Veröffentlichung und der separate
+Netzwerk-Probe-Schritt sind durch diese lokale Prüfung nicht nachgewiesen.
+
 ## HTML-Prüfberichte vom 9. Oktober 2026
 
 Tatsächlich ausgeführt:

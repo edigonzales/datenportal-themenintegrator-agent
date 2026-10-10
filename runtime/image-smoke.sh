@@ -26,8 +26,9 @@ public class ImageSmoke implements CsvConverter {
   public static void main(String[] args) throws Exception {
     Path workspace = Path.of("/tmp/agent");
     if (!AgentResources.jar(workspace).startsWith("/opt/datenportal-agent/")) throw new AssertionError();
-    Reports.render(workspace, workspace.resolve("review.html"), "Image smoke", Map.of("valid", true));
-    if (!Files.readString(workspace.resolve("review.html")).contains("Image smoke")) throw new AssertionError();
+    Reports.render(workspace, workspace.resolve("review.html"), Reports.Kind.CSV, "ch.so.image.smoke", Map.of("valid", true));
+    String review = Files.readString(workspace.resolve("review.html"));
+    if (!review.contains("CSV prüfen") || !review.contains("ch.so.image.smoke") || !review.contains("Prüfung bestanden")) throw new AssertionError("Rendered image report missing phase, identifier or result");
     Initializer.prepareConfig(null);
     if (!Files.exists(Path.of("config/local.toml"))) throw new AssertionError();
     Files.writeString(Path.of("/tmp/input.csv"), "Jahr\n2025\n");
