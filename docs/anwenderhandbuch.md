@@ -395,8 +395,28 @@ Checkouts können weiterverwendet werden.
 | [datenportal-themenrepo](https://github.com/sogis/datenportal-themenrepo) | Fachliche Themen, Datenblätter und Aufgaben | Vor `init` selbst klonen oder vorhandenen Checkout verwenden. |
 | [datenportal-dev-stack](https://codeberg.org/edigonzales/datenportal-dev-stack) | Lokale Publikationsumgebung und ihre Startskripte | Vor `init` selbst klonen oder vorhandenen Checkout verwenden. |
 
-Voraussetzungen sind Git, eine Bash-Shell und laufendes lokales Docker mit
-Compose. Für Downloads müssen die Git-Hosts, Docker Hub und die Bezugsquellen
+Für den Standardbetrieb werden laufendes lokales Docker mit Compose und
+folgende Host-Werkzeuge benötigt:
+
+| Einsatz | Voraussetzungen zusätzlich zu Docker und Compose |
+|---|---|
+| Integrator über Docker | Bash und übliche Unix-Werkzeuge, etwa `sed`, `id`, `mktemp` und `cksum` |
+| Checkouts bereitstellen und aktualisieren | Git |
+| Bedienung über einen KI-Assistenten | Gewählter Client, etwa Codex oder OpenCode |
+| Dev-Stack direkt auf dem Host starten | OpenSSL; beim vollständigen Bootstrap zusätzlich Python 3 |
+| Optionaler Modus `--runtime local` | JDK 25 und die lokal benötigten Laufzeitwerkzeuge |
+
+`gh`, Java, Gradle und die Fachwerkzeuge benötigen im Docker-Betrieb keine
+Host-Installation. Python gehört zum bestehenden Bootstrap
+`scripts/bootstrap.py` im **Dev-Stack-Repository**. Der Java-Integrator ruft
+`scripts/bootstrap.sh` auf; im Docker-Betrieb läuft das Skript mit dem Python
+aus dem Agent-Image. Beim direkten vollständigen Start von
+`../datenportal-dev-stack/scripts/up.sh` auf dem Host werden dort OpenSSL und
+Python 3 benötigt. `--infrastructure-only` überspringt den Python-Bootstrap;
+OpenSSL wird weiterhin für die Einrichtung benötigt.
+
+Die drei Checkouts sind separat bereitzustellen. Für Downloads müssen die
+Git-Hosts, Docker Hub und die Bezugsquellen
 der Fachwerkzeuge erreichbar sein. Falls eine verwendete Repository-Variante
 zugriffsbeschränkt ist, müssen passende Git-Zugriffsrechte eingerichtet sein.
 Zugangsdaten nicht in Clone-URLs oder Chatnachrichten einfügen.
@@ -564,11 +584,11 @@ Checkout-Elternordner wird schreibbar unter identischem absolutem Pfad gemountet
 Berichte und Vorgänge bleiben hostseitig lesbar; auf Linux schreiben Build und
 Agent mit der aufrufenden UID/GID. Remote-Docker-Kontexte sind nicht unterstützt.
 
-`DATENPORTAL_FORWARD_ENV="DATENPORTAL_LOCAL_USER DATENPORTAL_LOCAL_TOKEN GH_TOKEN GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL"`
-benennt weitergereichte Variablen. Keine Werte angeben. Für GitHub HTTPS und PRs
-`GH_TOKEN` und Git-Autorenangaben in der aufrufenden Umgebung setzen; persönliche
-Credential-Verzeichnisse werden nicht pauschal eingebunden. Die erzeugte
-MCP-Konfiguration berücksichtigt die in den Umgebungsprofilen benannten Variablen.
+`DATENPORTAL_FORWARD_ENV` benennt weitergereichte Variablen; die Liste enthält
+nur Namen, keine Zugangsdatenwerte. Die erzeugte MCP-Konfiguration berücksichtigt
+die in den Umgebungsprofilen benannten Variablen und zusätzliche Namen aus
+`DATENPORTAL_FORWARD_ENV` beim Aufruf von `init`. Für GitHub HTTPS und PRs siehe
+[GitHub-Anmeldung im Docker-Betrieb](#github-anmeldung-im-docker-betrieb).
 
 `./bin/datenportal-agent codex` startet Codex auf dem Host und verbindet den
 Docker-Launcher. `harness-config` gibt einen Vorschlag für benutzerlokale Einträge
@@ -581,6 +601,57 @@ Für lokale Java-Entwicklung ausdrücklich `--runtime local` verwenden und JDK 2
 `setup-*` bleiben als erweiterte Schnittstelle verfügbar; die folgenden Beispiele
 beschreiben auch diesen bisherigen Einstieg. GRETL verwendet ausschliesslich
 Java 17 im Jenkins-Image. Ein Java-Symlink wird im Docker-Modus nicht verändert.
+
+### GitHub-Anmeldung im Docker-Betrieb
+
+`gh` ist bereits im Agent-Image installiert. Eine lokale `gh`-Installation oder
+ein `gh auth login` auf dem Host ist für den Docker-Betrieb nicht erforderlich.
+Für GitHub-HTTPS-Zugriffe und Pull Requests verwendet der Container `GH_TOKEN`;
+der Launcher richtet `gh auth git-credential` als Git-Credential-Helper ein.
+Das Token muss die für den Zielvorgang erforderlichen Repository-Rechte besitzen.
+Siehe auch die [GitHub-CLI-Dokumentation zu Umgebungsvariablen](https://cli.github.com/manual/gh_help_environment).
+
+Im Integrator-Root in Bash oder zsh ausführen. Die Token-Eingabe bleibt unsichtbar;
+die Weitergabeliste wird um die GitHub- und Git-Variablen ergänzt, bestehende
+Namen bleiben erhalten:
+
+```sh
+printf 'GitHub-Token: '
+read -rs GH_TOKEN
+printf '\nGit-Autorenname: '
+read -r GIT_AUTHOR_NAME
+printf 'Git-Autoren-E-Mail: '
+read -r GIT_AUTHOR_EMAIL
+export GH_TOKEN GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL
+export GIT_COMMITTER_NAME="$GIT_AUTHOR_NAME"
+export GIT_COMMITTER_EMAIL="$GIT_AUTHOR_EMAIL"
+export DATENPORTAL_FORWARD_ENV="${DATENPORTAL_FORWARD_ENV:+$DATENPORTAL_FORWARD_ENV }GH_TOKEN GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL"
+
+# Die Variablennamen auch in die projektlokale MCP-Konfiguration übernehmen.
+./bin/datenportal-agent init
+```
+
+Die Werte müssen beim späteren Start des Launchers beziehungsweise des
+MCP-Clients ebenfalls in dessen Umgebung vorhanden sein. `init` speichert hier
+nur die zusätzlichen Variablennamen. Nach Änderungen bestehende MCP-Verbindungen
+neu starten. Ein aus dem Finder gestarteter Desktop erbt die Shell-Variablen
+nicht automatisch; seine Startumgebung muss die Werte ausdrücklich bereitstellen.
+Der lokale Jenkins-Credential-Store verwaltet keine GitHub-Tokens.
+
+Nach erfolgreicher Einrichtung die Anmeldung im ausgewählten Agent-Image prüfen:
+
+```sh
+agent_image_id=$(cat .datenportal-integrator/launcher/image.id)
+docker run --rm -e GH_TOKEN --entrypoint gh "$agent_image_id" \
+  auth status --hostname github.com
+```
+
+Dieser Aufruf liest den Anmeldestatus und verwendet das Token ausschliesslich
+aus der Umgebung. Ein erfolgreicher Check bestätigt noch keine Schreibberechtigung
+für das Zielrepository. Eine bestehende Host-Anmeldung und persönliche
+Git-Konfigurationen werden nicht automatisch in den Container übernommen;
+persönliche Credential-Verzeichnisse werden nicht pauschal eingebunden.
+Token-Werte weder in versionierte Dateien noch in Chatnachrichten schreiben.
 
 ### Jenkins-Zugangsdaten für Codex und OpenCode
 
@@ -708,8 +779,8 @@ export DATENPORTAL_LOCAL_USER DATENPORTAL_LOCAL_TOKEN
 Ein aus dem Finder gestarteter Desktop erbt Shell-Variablen nicht automatisch.
 Für lokale Jenkins-Zugänge deshalb den oben beschriebenen gemeinsamen Store
 verwenden. Für INT/PROD die benannten Variablen ausdrücklich in der Startumgebung
-bereitstellen. Keine Zugangsdaten ins Themenrepo schreiben. `gh auth login` und
-`gh auth status` prüfen die GitHub-Anmeldung.
+bereitstellen. Keine Zugangsdaten ins Themenrepo schreiben. Für GitHub gilt der
+Abschnitt [GitHub-Anmeldung im Docker-Betrieb](#github-anmeldung-im-docker-betrieb).
 
 ```sh
 java -jar build/libs/datenportal-integrator.jar setup-java

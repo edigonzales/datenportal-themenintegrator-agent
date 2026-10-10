@@ -66,7 +66,32 @@ Bis zur Veröffentlichung eines Agent-Images mit dieser Korrektur
 eingerichteten Image-Betrieb nach der Veröffentlichung ausdrücklich
 `./bin/datenportal-agent --update-agent --version` und danach `init` ausführen.
 
-Docker mit Compose genügt für Build und Java-Betrieb. macOS benötigt Docker
+Für den Standardbetrieb werden lokales Docker mit Compose und folgende
+Host-Werkzeuge benötigt:
+
+| Einsatz | Voraussetzungen zusätzlich zu Docker und Compose |
+|---|---|
+| Integrator über Docker | Bash und übliche Unix-Werkzeuge, etwa `sed`, `id`, `mktemp` und `cksum` |
+| Checkouts bereitstellen und aktualisieren | Git |
+| Bedienung über einen KI-Assistenten | Gewählter Client, etwa Codex oder OpenCode |
+| Dev-Stack direkt auf dem Host starten | OpenSSL; beim vollständigen Bootstrap zusätzlich Python 3 |
+| Optionaler Modus `--runtime local` | JDK 25 und die lokal benötigten Laufzeitwerkzeuge |
+
+`gh`, Java, Gradle und die Fachwerkzeuge benötigen im Docker-Betrieb keine
+Host-Installation. Das Python-Skript `scripts/bootstrap.py` gehört zum
+Dev-Stack-Repository. Der Java-Integrator ruft dessen Shell-Wrapper auf; dabei
+läuft Python im Agent-Container. Beim direkten vollständigen Start mit
+`../datenportal-dev-stack/scripts/up.sh` läuft der Bootstrap dagegen auf dem
+Host und benötigt dort Python 3. `--infrastructure-only` überspringt diesen
+Bootstrap.
+
+Die drei Checkouts, passende Zugangsrechte und erreichbare Downloadquellen
+werden unter [Repositories bereitstellen](docs/anwenderhandbuch.md#repositories-bereitstellen)
+beschrieben. GitHub-Zugangsdaten werden gemäss
+[GitHub-Anmeldung im Docker-Betrieb](docs/anwenderhandbuch.md#github-anmeldung-im-docker-betrieb)
+übergeben.
+
+macOS benötigt Docker
 Desktop ab 4.34 mit aktiviertem **Settings → Resources → Network → Enable host
 networking**; Linux verwendet den lokalen Docker Engine. Der Launcher verwendet
 Host-Networking und den lokalen Docker-Socket. Remote-Docker-Kontexte werden
