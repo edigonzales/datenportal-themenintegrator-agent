@@ -39,8 +39,19 @@ damit Harness-Argumente ihn auch mit vorangestellten Runtime-Optionen nicht erse
   OpenCode-2.x-Konfigurationskorrektur:
   [erfolgreiche Pipeline](https://github.com/edigonzales/datenportal-themenintegrator-agent/actions/runs/38075843152).
   Er enthält noch den früheren MCP-Pin und nicht die hier korrigierten
-  synthetischen Bereichsangaben. Die Veröffentlichung dieses neuen Agent-Stands
-  wird nach dem Push gesondert verifiziert.
+  synthetischen Bereichsangaben.
+- Agent **0.1.10**, Quellrevision
+  `09ddbc521a7e3924040a50a86e18dc955fa037fa`, ist der veröffentlichte
+  korrigierte Stand mit dem oben genannten MCP-Pin:
+  [Image-Pipeline](https://github.com/edigonzales/datenportal-themenintegrator-agent/actions/runs/38078933475).
+  Unit-Tests/Formatierung, Builds und Image-Smokes für ARM64 und AMD64,
+  einschliesslich eingebettetem Java-Code, sowie Netzwerkprüfung bestanden.
+  Registry-Digest
+  `sha256:9907c0e8914f1e5b64e9b51bb6ef3f332c2d4b69e19b6657d6638299c47e3fe5`
+  enthält beide Plattformen. Das lokal heruntergeladene ARM64-Image bestätigt
+  Version und Quellrevision; `--version` liefert ohne Netzwerk `0.1.10`.
+  Dieser unveränderliche Release ist der Bezugspunkt
+  der Abnahme; spätere reine Dokumentations-Builds ändern diesen Nachweis nicht.
 
 Bestehende Installationen wechseln nur ausdrücklich. Das Handbuch unterscheidet
 Agent-Update, bewusste Änderung des lokalen MCP-Pins und `setup-mcps --update`;
@@ -89,6 +100,12 @@ Alle Daten, automatischen Freigaben und Publikationen dieser Abnahme gehören
 ausschliesslich zu ihrer isolierten synthetischen Fixture. Es wurden keine
 Geschäftsdaten verändert oder publiziert. Eine synthetische MCP-Lieferabnahme
 ist keine menschliche GUI-Freigabe.
+Die eigenen Testcontainer, Volumes und Secrets wurden nach erfolgreicher
+Abnahme mit `acceptance-cleanup` entfernt; Berichte bleiben erhalten.
+Die OpenCode-Testverbindung wurde getrennt und das temporäre Projekt geschlossen.
+Der abschliessende lokale Lauf `test jar spotlessCheck` bestand ebenfalls
+(189 Tests; `.datenportal-integrator/sogis-commit-checks.log`). Abschnittsanker
+und lokale Markdown-Links wurden zusätzlich geprüft.
 
 ### OpenCode 2.x tatsächlich geprüft
 
