@@ -134,7 +134,7 @@ Agent-Container und räumt nur ihre Testcontainer, Volumes und Secrets auf.
 Sie startet weder eine MFK-Anlieferung noch eine INT-/PROD-Publikation.
 
 - [Anwenderhandbuch](docs/anwenderhandbuch.md): Einrichtung, drei Vorgangsarten, Freigaben, Korrekturen und Wiederaufnahme.
-- [Entwicklerhandbuch](docs/entwicklerhandbuch.md): Komponenten, Schnittstellen, Migration, Erweiterungen und Tests.
+- [Entwicklerhandbuch](docs/entwicklerhandbuch.md): Komponenten, Schnittstellen, Migration, Erweiterungen und Tests; mit [Architekturskizze](docs/entwicklerhandbuch.md#zusammenspiel-der-komponenten) und [Sequenzdiagramm zur Themenintegration](docs/entwicklerhandbuch.md#sequenz-einer-themenintegration).
 - [Abnahmestand](docs/abnahme.md): tatsächlich durchgeführte, simulierte und offene Prüfungen.
 - [Gemeinsamer Skill](skills/datenportal-themenintegrator/SKILL.md): Agent-Regeln für Codex und OpenCode.
 

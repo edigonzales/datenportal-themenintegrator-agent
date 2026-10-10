@@ -126,8 +126,210 @@ Ihre Berichte bleiben unter `.datenportal-integrator/init-acceptance/` erhalten.
 
 ## Architektur und Verantwortlichkeiten
 
-
 JDK 25, Gradle-Wrapper und ein ausführbares JAR bilden die Implementierung. `Main` stellt CLI und stdio-MCP bereit. Beide dispatchen über `Operations` in denselben `Workflow`. Das Sprachmodell und die fachliche Kommunikation bleiben im Harness. Es gibt keinen eigenen Modellclient und keinen zusätzlichen Integrator-Webserver.
+
+### Zusammenspiel der Komponenten
+
+Die Skizze zeigt den lokalen Standardbetrieb sowie den Git-Weg zu INT/PROD.
+Die beschrifteten Verbindungen zeigen Aufrufe, Zugriffe und die Bereitstellung
+des lokalen Themencheckouts für Jenkins. Antworten sind der Übersicht halber
+nicht separat eingezeichnet. Menschliche Freigaben gelangen über den Agenten
+zum Integrator und gelten jeweils für den konkret gezeigten Prüfstand.
+
+```mermaid
+flowchart TB
+    subgraph bedienung[Bedienung]
+        direction TB
+        mensch["Mensch"]
+        agent["Codex / OpenCode<br/>Sprachmodell und Skill"]
+        mensch -->|Auftrag und Freigaben| agent
+    end
+
+    subgraph kern[Java-Integrator im Agent-Container]
+        direction TB
+        eingang["Main / Operations<br/>CLI und stdio-MCP"]
+        workflow["Workflow<br/>Kandidaten, Freigaben,<br/>Lieferphasen"]
+        pruefung["Prüfungen und Berichte<br/>CSV, XLSX, XTF / ilivalidator"]
+        state[("Lokaler Store<br/>Artefakte, Prüfstände, Freigaben,<br/>Queue- und Build-Kennungen")]
+        eingang --> workflow
+        workflow --> pruefung
+        workflow -->|Atomar speichern| state
+    end
+
+    subgraph werkzeuge[Fachwerkzeuge]
+        direction TB
+        datenblatt["Datenblatt-MCP<br/>Bearbeitung und XTF-Export"]
+        interlis["INTERLIS-MCP<br/>Modellierung und Review"]
+        gretl["GRETL-Prüfcontainer<br/>Java 17, isolierte Arbeitskopie"]
+        datenblatt ~~~ interlis ~~~ gretl
+    end
+
+    repo[("Themenrepo<br/>Verbindliche fachliche Quelle")]
+    git["Git-Remote / PR für INT/PROD<br/>Mensch prüft und mergt"]
+    start["Dev-Stack-Skripte<br/>Lokaler Start und Bootstrap"]
+
+    subgraph stack[Lokaler Publikationsstack]
+        direction TB
+        jenkins["Jenkins mit GRETL<br/>Seed und Publikation"]
+        garage[("Garage<br/>S3-Publikationsbestand")]
+        downloads["Downloads-Gateway<br/>Manifest und Dateien"]
+        portal["Portal<br/>Katalog und Themenseiten"]
+        jenkins -->|S3-Publikation| garage
+        jenkins -->|HTTP-Reload| portal
+        downloads -->|Objekte lesen| garage
+        portal -->|Manifest und Katalog lesen| downloads
+    end
+
+    agent -->|stdio-MCP<br/>oder CLI-Aufruf| kern
+    kern -->|MCP: HTTP / Docker-stdio<br/>GRETL: Docker / Gradle| werkzeuge
+    kern -->|Lesen und freigegebene<br/>Kandidaten übernehmen| repo
+    kern -->|Git / gh: PR erstellen,<br/>Merge und Ziel prüfen| git
+    kern -->|Bereitschaft sicherstellen| start
+    start -.->|Compose und Bootstrap| stack
+    repo -->|Lokaler Checkout<br/>für Jenkins| stack
+    kern -->|HTTP: Seed,<br/>Upload und Status| stack
+    kern -.->|HTTP: Portal und<br/>Downloads prüfen| stack
+```
+
+Der Launcher startet standardmässig das veröffentlichte Agent-Image mit JDK 25.
+Vorgänge und Artefakte im lokalen Store bleiben im eingebundenen Workspace
+erhalten, unabhängig von der Lebensdauer des Agent-Containers.
+Die beiden Fach-MCPs laufen im lokalen Beispiel als dauerhafte HTTP-Dienste;
+weitere unterstützte Transporte stehen unter [Externe Schnittstellen](#bestehende-externe-schnittstellen).
+Der separate GRETL-Prüfcontainer verwendet das festgelegte Jenkins-Image mit
+Java 17 und dessen Bundle, führt aber keinen Jenkins-Controller aus. Er prüft
+Kandidaten in isolierten Arbeitskopien. Erst die Lieferung an Jenkins führt zur
+Publikation; zuvor gleicht der Integrator die lokale Jenkins-Runtime mit dem
+GRETL-Prüfstand ab.
+
+Der Dev-Stack verantwortet den lokalen Start einschliesslich Garage, Downloads
+und Portal sowie den Erstaufbau. Für INT/PROD verwendet der Integrator bestehende
+Zielinstanzen: Jenkins bezieht das Themenrepo dort im Modus `managed-git` aus dem
+freigegebenen Zielbranch, ohne Git-Rückschreiben. Der PR-Weg in der Skizze gilt
+für diese Zielumgebungen, nicht für die lokale Übernahme von Kandidaten.
+
+### Sequenz einer Themenintegration
+
+Der Ablauf zeigt ein Thema mit CSV und neuen oder geänderten Metadaten.
+Der Teilnehmer **Fach-MCPs** fasst Datenblatt-MCP und INTERLIS-MCP zusammen;
+die Nachrichten benennen den jeweiligen Dienst. **Repo / Git** umfasst den
+lokalen Themencheckout und den optionalen PR im Zielrepository. Der lokale
+Zustand wird beim Integrator gezeigt. Nur erfolgreiche Prüfungen führen zu den
+nachfolgenden Schritten; Korrekturen erfordern neue Prüfstände und Freigaben.
+
+```mermaid
+sequenceDiagram
+    actor M as Mensch
+    participant A as Agent mit Skill
+    participant I as Java-Integrator
+    participant F as Fach-MCPs
+    participant G as GRETL-Prüfcontainer
+    participant R as Repo / Git
+    participant J as Jenkins / GRETL
+    participant P as Portal / Downloads
+
+    M->>A: CSV, Metadaten und Auftrag
+    A->>A: Anhänge unverändert übernehmen<br/>und Prüfsummen vergleichen
+    A->>I: start / attach, baseline
+    I->>P: Angenommenen Bestand lesen
+    opt Thema noch nicht publiziert
+        I->>R: Eindeutiges Datenblatt suchen
+    end
+    Note over I: Store sichert Originale, Baseline<br/>und Vorgangszustand
+    A->>I: analyze<br/>ggf. transform und erneut analyze
+    I-->>A: CSV-Prüfung, Vorschau und Fingerprint
+    A-->>M: CSV erklären,<br/>Prüfstand vorlegen
+    M->>A: CSV-Fassung freigeben
+    A->>I: approve(data)<br/>Fingerprint und Aussage
+
+    opt Metadatenquelle ist XLSX
+        A->>I: xlsx / provenance
+        I-->>A: Quellenzellen und Herkunft
+    end
+    A->>I: metadata: importieren,<br/>bearbeiten, exportieren
+    I->>F: Datenblatt-MCP:<br/>Fachwerkzeuge und XTF-Export
+    F-->>I: Datenblatt und Export-XTF
+    opt INTERLIS-Modell ausdrücklich beauftragt
+        A->>I: derive_model
+        I->>F: INTERLIS-MCP:<br/>Modell und Nachweise erstellen
+        F-->>I: Modellkandidat,<br/>Compiler- und Reviewnachweise
+        I->>F: Datenblatt-MCP:<br/>Modellreferenz und neuer Export
+        A->>I: validate_model
+        I->>G: CSV gegen Modell prüfen<br/>in isolierter Arbeitskopie
+        G-->>I: Prüfergebnis und Log
+    end
+    A->>I: stage_change für Kandidaten,<br/>validate
+    I->>I: Liefer-XTF, Offices, CSV-Vertrag<br/>und ggf. Modellstand prüfen
+    I-->>A: Vorschau, Dateivergleiche<br/>und Fingerprints
+    A-->>M: Metadaten und ggf.<br/>Modell vorlegen
+    M->>A: Fachliche Stände freigeben
+    A->>I: approve(metadata),<br/>ggf. approve(model)<br/>mit Fingerprint und Aussage
+    A->>I: apply_local_changes
+    I->>R: Freigegebene Kandidaten<br/>lokal übernehmen
+
+    A->>I: deliver(local)
+    Note over I,J: Lokalen Stack weiterverwenden oder per Dev-Stack starten,<br/>Runtime abgleichen und Bootstrap sicherstellen
+    I->>I: seed_submitting vor Aufruf speichern
+    I->>J: Seed einmal starten
+    J-->>I: Queue-Kennung speichern
+    loop Weitere deliver(local)-Aufrufe bis Seed erfolgreich
+        A->>I: deliver(local)
+        I->>J: Gespeicherten Seed-Lauf abfragen
+        J-->>I: Queue- / Build-Status
+    end
+    I->>I: Freigaben prüfen,<br/>Lieferkontext einfrieren,<br/>delivery_submitting speichern
+    I->>J: CSV / XTF einmal hochladen
+    J-->>I: Laufkennung speichern
+    Note over J,P: Jenkins publiziert über GRETL nach Garage<br/>und veranlasst den Portal-Reload
+    loop Weitere deliver(local)-Aufrufe bis Lauf beendet
+        A->>I: deliver(local)
+        I->>J: Gespeicherten Lauf abfragen
+        J-->>I: Status, bei Abschluss report.json
+    end
+    I->>P: Manifest, Metadaten, Katalog,<br/>Themenseite und Downloads prüfen
+    I-->>A: Lokales Ergebnis verifiziert,<br/>Portal-URL
+    A-->>M: Lokales Ergebnis zeigen
+
+    opt INT oder PROD ausdrücklich gewünscht
+        Note over J,P: In diesem Abschnitt stehen diese Teilnehmer<br/>für die bestehenden Dienste der Zielumgebung
+        A->>I: publication_plan(Ziel)
+        I->>P: Bestand der Zielumgebung lesen
+        I-->>A: Zieladressen, Branch,<br/>Dateien und Fingerprint
+        A-->>M: Publikationsplan vorlegen
+        M->>A: Publikationsplan freigeben
+        A->>I: approve(publish:Ziel)<br/>Fingerprint und Aussage
+        opt Repository-Änderungen erfordern einen PR
+            A->>I: prepare_pr(Ziel)
+            I->>R: Isolierter Clone,<br/>Commit, Push und PR
+            R-->>I: PR-URL und Head
+            I-->>A: PR-URL
+            A-->>M: PR zur Übernahme vorlegen
+            M->>R: PR prüfen und mergen
+        end
+        A->>I: deliver(Ziel)
+        I->>R: Bei Änderungen Merge / Zielbranch<br/>und exakte Datei-Bytes prüfen
+        I->>P: Freigegebenen Zielbestand prüfen
+        I->>J: Seed und Lieferung phasenweise ausführen<br/>wie lokal, mit gespeicherten Laufkennungen
+        I->>P: Zielpublikation und Downloads prüfen
+        I-->>A: Zielergebnis verifiziert,<br/>Portal-URL
+        A-->>M: Ergebnis zeigen
+    end
+```
+
+Jeder `deliver`-Aufruf führt höchstens eine externe Phase weiter. Die Schleifen
+stehen für weitere Agent-Aufrufe mit derselben Vorgangs-ID; der Integrator
+fragt die gespeicherten Queue-/Build-Kennungen ab. Bei unbestätigtem Start
+(`submission_unknown`) zuerst mit `reconcile_seed` beziehungsweise `reconcile`
+den bestehenden Lauf zuordnen, niemals den Upload blind wiederholen.
+Publikationsannahme und erfolgreicher Reload sind getrennte Ergebnisse;
+`verify_delivery` prüft eine angenommene Publikation erneut ohne Upload.
+
+INT/PROD benötigen einen erfolgreichen lokalen Gesamttest für denselben Stand
+und eine eigene menschliche Zielfreigabe. Ohne Repository-Änderungen entfällt
+der PR. Reine Daten- oder Metadatenlieferungen sowie eigenständige Modell- und
+Organisationsvorgänge sind im [Anwenderhandbuch](anwenderhandbuch.md) beschrieben.
+
+### Verantwortlichkeiten im Java-Kern
 
 | Komponente | Verantwortung |
 |---|---|

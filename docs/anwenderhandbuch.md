@@ -66,6 +66,12 @@ keine durchgeführten Lieferungen. Den geprüften Betriebsstand hält die
 
 ### Ablauf und deine Entscheidungen
 
+Die [Architekturskizze](entwicklerhandbuch.md#zusammenspiel-der-komponenten)
+zeigt die beteiligten Komponenten. Das
+[Sequenzdiagramm](entwicklerhandbuch.md#sequenz-einer-themenintegration)
+zeigt ihre Zusammenarbeit bei einer Themenintegration einschliesslich Freigaben
+und optionaler INT-/PROD-Publikation.
+
 Du kannst einen vollständigen Ablauf oder einen einzelnen Schritt beauftragen.
 Für ein Thema mit CSV und neuen oder geänderten Metadaten gilt:
 
