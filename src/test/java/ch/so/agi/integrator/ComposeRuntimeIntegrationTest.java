@@ -31,7 +31,7 @@ class ComposeRuntimeIntegrationTest {
 
   @BeforeAll
   static void prepare() throws Exception {
-    source = Settings.load(Fixtures.ROOT.resolve("config/local.toml").toString());
+    source = Fixtures.integrationSettings();
     String project = "integrator-test-" + UUID.randomUUID().toString().substring(0, 8);
     configText =
         "root=\".\"\ntopics_repo="
@@ -198,7 +198,7 @@ class ComposeRuntimeIntegrationTest {
                         "timeout"));
     assertEquals("command_timeout", failure.code, Json.pretty(failure.result()));
     assertTrue(
-        Json.contents(workflow.directory(run).resolve("validation/timeout.log"))
+        Json.contents(Path.of(Json.required(failure.details, "log")))
             .contains("COMPOSE_SLOW_STARTED"));
     assertTrue(Json.bool(validate(settings, csv, "after-timeout"), "valid", false));
   }

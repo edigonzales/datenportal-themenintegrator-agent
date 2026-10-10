@@ -19,10 +19,7 @@ class ModelRepairIntegrationTest {
   @ParameterizedTest
   @ValueSource(strings = {"compiler", "csv", "limit"})
   void repairWithActualConfiguredTools(String fault) throws Exception {
-    Settings source =
-        Settings.load(
-            System.getProperty(
-                "integrator.test.config", Fixtures.ROOT.resolve("config/local.toml").toString()));
+    Settings source = Fixtures.integrationSettings();
     try (var datasheet = McpClients.datasheet(source);
         var interlis = McpClients.interlis(source)) {
       int[] calls = {0};

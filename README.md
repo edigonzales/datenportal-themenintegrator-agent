@@ -2,6 +2,15 @@
 
 Java-25-Workflow für Themenanlieferung, INTERLIS-Modellierung und die Anlage neuer Organisationen. CLI und stdio-MCP verwenden denselben ausführbaren JAR und speichern Prüfstände, menschliche Freigaben und externe Laufkennungen lokal.
 
+Neue CSV-Validierungsmodelle verwenden das kommentarfreie Profil `SO-DATA`.
+Das bisherige GIS-Profil `SO` heisst `SO-GIS`; `SO` bleibt Eingabealias.
+[Wertebereiche, Reparaturen und Loglinks](docs/anwenderhandbuch.md#wertebereiche-reparaturen-und-loglinks)
+erklärt die Anwendung. Der [Abnahmestand](docs/abnahme.md) trennt geprüfte
+Quellstände, veröffentlichte Images und noch offene Nachweise.
+Für bestehende Installationen beschreibt [Fachwerkzeuge aktualisieren](docs/anwenderhandbuch.md#fachwerkzeuge-aktualisieren)
+das ausdrückliche Agent- und MCP-Update; eine vorhandene lokale Image-Auswahl
+wird nicht automatisch durch die neuen Beispiel-Pins ersetzt.
+
 Für den lokalen Gesamtstack reichen Integrator, Themenrepo und Dev-Stack als
 Checkouts. `../datenportal-dev-stack/scripts/up.sh` ist der gemeinsame
 vollständige Start: Secrets, Garage, erfolgreicher Seed, Erstpublikation und
@@ -61,9 +70,8 @@ zeigt die Skill-Auswahl, neun Anwendungsszenarien und kopierbare Beispielprompts
 `init` erzeugt die MCP-Konfiguration für OpenCode 2.x stable und migriert bekannte
 ältere Integrator-Einträge automatisch. Danach die
 [MCP-Verbindung prüfen](docs/anwenderhandbuch.md#codex-desktop-codex-cli-und-opencode).
-Bis zur Veröffentlichung eines Agent-Images mit dieser Korrektur
-`./bin/datenportal-agent --runtime docker-build init` verwenden. Bei einem bereits
-eingerichteten Image-Betrieb nach der Veröffentlichung ausdrücklich
+Die OpenCode-Korrektur ist im geprüften Agent-Release `0.1.9` enthalten. Bei einem bereits
+eingerichteten Image-Betrieb ausdrücklich
 `./bin/datenportal-agent --update-agent --version` und danach `init` ausführen.
 
 Für den Standardbetrieb werden lokales Docker mit Compose und folgende

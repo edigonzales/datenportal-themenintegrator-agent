@@ -441,6 +441,7 @@ Das verbindliche Schema wird in `Operations.ALL` definiert; unbekannte Felder un
 | `prepare_organization` | `values*` | Kandidaten; `organization_exists`, `unknown_team`, `empty_team`, `users_unconfirmed`, `team_conflict`, Office-Fehler |
 | `validate_organization` | – | Office-/YAML-/Gradle-Bericht + HTML; `organization_missing` |
 | `derive_model` | `identity*`, `confirmations={}`, `range_proposals={}`, `changes`, `allow_breaking=false`, `repair_of`, `repair_reason` | Ableitungsnachweise oder `NEEDS_INPUT`, Kandidat, Vorschau |
+| `reset_model_repair` | `human_statement*` | Archiviert die bisherige Reparaturserie und ermöglicht einen neuen Versuch nach tatsächlichem menschlichem Neuauftrag |
 | `validate_model` | – | Compiler-/Reviewnachweise + echte GRETL-/XTF-Prüfung; `model_missing`, Kandidaten-/Vertragsfehler |
 | `publication_plan` | `environment*` | Konkretes Ziel mit Fingerprint; `environment_disabled`, `runtime_incompatible` |
 | `prepare_pr` | `environment*` | URL, Head, Branch, Checkout; `pr_base_conflict`, `pr_checkout_exists` |
@@ -476,7 +477,7 @@ Image stehen im [Anwenderhandbuch](anwenderhandbuch.md#codex-desktop-codex-cli-u
 
 Die erste Umsetzung erzeugt eine Topic mit einer flachen Klasse. Keine aus Beispielen erfundenen Schlüssel, Fachwertebereiche, geschlossenen Codelisten oder Geometrien. Neue INTEGER-/DECIMAL-/NUMERIC-Ableitungen benötigen bestätigte Spezifikationen oder `range_proposals`; es gibt keinen pauschalen Modellbereich. Der technische CSV-INTEGER-Vertrag bleibt unverändert. Der Kern prüft Grenzen und Genauigkeit gegen die vollständige Statistik und speichert Begründung, Vorzeichenentscheidung und Herkunft `agent_estimate` ohne fingierte Bestätigung. DATE verwendet INTERLIS.XMLDate. Die Standarddomain INTERLIS.XMLDateTime unterstützt im bestehenden Adapter den CSV-Offset +01:00 nicht; der Integrator meldet diese Grenze ohne Formatänderung. Fachliche Beschreibungen und belegte Einheiten werden übernommen. Zusätzliche Domains/Constraints brauchen eine bestätigte Spezifikation.
 
-Die High-Level-Antwort wird vollständig gesichert. Compiler-Evidenz und automatisches SO-Review müssen erfolgreich sein; unvollständige Proofs bleiben Kandidaten. Manuelle Reviewpunkte bleiben für den Menschen sichtbar. Der Adapter berücksichtigt Compiler-Evidenz auch dann, wenn der Fach-MCP keinen separaten `compilerValid`-Boolean im Review liefert.
+Die High-Level-Antwort wird vollständig gesichert. Compiler-Evidenz und automatisches Review mit dem gewählten Profil müssen erfolgreich sein; unvollständige Proofs bleiben Kandidaten. Manuelle Reviewpunkte bleiben für den Menschen sichtbar. Der Adapter berücksichtigt Compiler-Evidenz auch dann, wenn der Fach-MCP keinen separaten `compilerValid`-Boolean im Review liefert.
 
 Nach erfolgreicher Ableitung setzt der Datenblatt-MCP die Modellreferenz, exportiert erneut, und diese konkrete XTF wird zusammen mit Modell und Task geprüft. Der Ableitungsvertrag bindet Attributsemantik und die Datenbytes; das abschliessende Gate bindet zusätzlich den konkreten finalen Export. Dadurch entsteht kein Zyklus aus „Modell hängt vom Export ab, Export hängt vom Modell ab“.
 
@@ -663,6 +664,10 @@ Die isolierten CI-Smokes ersetzen diese Abnahme nicht.
 ## SO-DATA und dauerhafte Diagnosen
 
 Neue CSV-Modelle verwenden `SO-DATA`; gespeicherte Vorgänge behalten ihr Profil.
+Das bisherige Profil `SO` heisst jetzt `SO-GIS`. Explizite neue Eingaben mit
+`SO` werden auf `SO-GIS` normalisiert. Ein bereits gespeichertes `SO` bleibt im
+Vorgang unverändert und wird nur beim MCP-Aufruf als `SO-GIS` übergeben;
+blosses Lesen oder Prüfen schreibt keine Modellidentität oder Freigabe um.
 Der Integrator entfernt beschreibende Spezifikationsfelder vor dem Authoring und
 prüft die beauftragte Identität auch am zurückgegebenen Modellkopf. Der geplante
 Themen-Dateiname ist `<Modellname>.ili`; interne Prüfsummen-Dateinamen sind keine
@@ -671,6 +676,21 @@ Modellnamen. `range_proposals.<spalte>` enthält `type_spec`, `reason` und
 die dezimale Genauigkeit ergibt sich aus den gleich skalierten Grenzen.
 Bestätigte Spezifikationen gehen vor, widersprüchliche Eingaben sind Fehler.
 Vorschläge und Begründungen gehören zu `model.mapping` und damit zum Fingerprint.
+
+Ein Vorschlag benötigt `baseType.kind=NUM_RANGE`, `min < max`, gleich skalierte
+Grenzen, eine nicht leere `reason` und ein boolesches `negative_values_possible`.
+INTEGER verlangt Genauigkeit 0; die Genauigkeit muss sämtliche beobachteten
+gültigen Zahlen abdecken. `negative_values_possible=true` verlangt eine negative
+Untergrenze, `false` eine nichtnegative. Der Kern übernimmt beobachtete Grenzen
+selbst; übermittelte Beobachtungen ersetzen keine CSV-Auswertung.
+
+| Fehler | Bedeutung / nächster Schritt |
+|---|---|
+| `range_proposal_invalid` | Spalte, Typ, Grenzen, Genauigkeit oder Vorzeichen prüfen |
+| `range_proposal_conflict` | Vorschlag widerspricht einer bestehenden Typspezifikation; fachlich klären |
+| `confirmed_semantics_conflict` | Bereits bestätigte Fachsemantik nicht still ersetzen |
+| `repair_reference` | Aktive Serie und letzte `check_id` über `status` lesen, konkrete Korrektur begründen |
+| `repair_limit_reached` | Keine weitere automatische Korrektur; menschlicher Neuauftrag erforderlich |
 
 `diagnostic_history`, `model_repair` und `model_repair_history` liegen dagegen auf
 Vorgangsebene ausserhalb dieses Fingerprints. Jeder Nachweis besitzt eine UUID,
@@ -690,14 +710,21 @@ als zusätzliche Korrekturen. Nach drei Versuchen folgt `repair_limit_reached`.
 menschlichen Auftrag voraus und archiviert den alten Stand. Testfreigaben und
 Reset-Aussagen sind ausschliesslich in isolierten Fixtures synthetisch.
 
-Für die gemeinsame Entwicklungsabnahme können `IntegrationTest` und
-`ModelRepairIntegrationTest` mit `-PintegrationConfig=/absoluter/pfad/test.toml`
+Für die gemeinsame Entwicklungsabnahme können die Fachintegrationstests
+mit `-PintegrationConfig=/absoluter/pfad/test.toml`
 eine eigene Konfiguration auswählen, beispielsweise:
 
 ```sh
 ./bin/datenportal-agent gradle integrationTest -PintegrationConfig=/absoluter/pfad/test.toml --tests ch.so.agi.integrator.ModelRepairIntegrationTest
 ```
 
-Andere Integrationstestklassen verwenden weiterhin `config/local.toml`.
-Dies ändert weder diese Datei noch veröffentlichte Image-Pins. Erst nach
-MCP-Veröffentlichung wird dessen Registry-Digest in allen Integrator-Pins ersetzt.
+Ohne diese Option verwenden die Fachintegrationstests `config/local.toml`; vollständig isolierte Tests erzeugen ihre eigene Konfiguration.
+Dies ändert weder diese Datei noch veröffentlichte Image-Pins. Die aktuellen
+Pins verwenden den geprüften Registry-Digest von INTERLIS-MCP `0.0.572-1`;
+Quellrevision, Plattformen und tatsächliche Prüfergebnisse stehen im Abnahmestand.
+
+Die technische Init-Prüfung und `acceptance delivery` verwenden ausdrücklich
+synthetische `SO-DATA`-Modelle mit einem begründeten Jahresbereich 1900..2100.
+Dieser Bereich ist ausschliesslich eine Testvorgabe. `IntegrationTest` führt
+auch die echte `Smoke.run()`-Prüfung aus; die vollständige Lieferabnahme prüft
+zusätzlich den eigenen Weg über Jenkins und Portal.

@@ -19,7 +19,7 @@ class DatasheetRestartIntegrationTest {
   @TempDir Path temp;
 
   Settings source() {
-    return Settings.load(Fixtures.ROOT.resolve("config/local.toml").toString());
+    return Fixtures.integrationSettings();
   }
 
   Fixtures fixture(Settings s, McpClients.ToolClient client) throws Exception {
@@ -233,6 +233,10 @@ class DatasheetRestartIntegrationTest {
     String name = docker.name("http-test");
     String image = Json.required(docker.selected("datasheet", true), "image_id");
     var process = new ProcessRunner();
+    int port;
+    try (var socket = new java.net.ServerSocket(0)) {
+      port = socket.getLocalPort();
+    }
     try {
       process.checked(
           List.of(
@@ -245,14 +249,18 @@ class DatasheetRestartIntegrationTest {
               "--label",
               "datenportal.integrator.owner=" + docker.owner(),
               "-p",
-              "127.0.0.1::8000",
+              "127.0.0.1:" + port + ":8000",
               "-e",
               "SPRING_PROFILES_ACTIVE=http",
+              "-e",
+              "DATASHEET_HOST=0.0.0.0",
+              "-e",
+              "DATASHEET_PORT=8000",
               image),
           s.root,
           30);
-      String port =
-          process.checked(List.of("docker", "port", name, "8000/tcp"), s.root, 30).split(":")[1];
+      // Explicit publication is reachable from Docker Desktop host-network test containers too.
+      // Docker-assigned dynamic host ports can be reachable only from the macOS host.
       String url = "http://127.0.0.1:" + port;
       var http = HttpClient.newHttpClient();
       long deadline = System.nanoTime() + Duration.ofSeconds(30).toNanos();

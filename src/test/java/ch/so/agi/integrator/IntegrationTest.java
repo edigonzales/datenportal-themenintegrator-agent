@@ -14,6 +14,14 @@ import org.junit.jupiter.api.io.TempDir;
 
 @Tag("integration")
 class IntegrationTest {
+  @Test
+  void realInitSmokeUsesCompleteNumericSpecification() {
+    var result = new Smoke(Fixtures.integrationSettings()).run();
+    assertTrue(Json.bool(result, "valid", false), Json.pretty(result));
+    assertEquals(
+        Json.required(result, "report_sha256"), Json.sha(Path.of(Json.required(result, "report"))));
+  }
+
   final List<McpClients.ToolClient> clients = new ArrayList<>();
 
   McpClients.ToolClient own(McpClients.ToolClient client) {
@@ -75,10 +83,7 @@ class IntegrationTest {
 
   @Test
   void realValidatorDatasetSeriesAndUnknownOffice() throws Exception {
-    Settings s =
-        Settings.load(
-            System.getProperty(
-                "integrator.test.config", Fixtures.ROOT.resolve("config/local.toml").toString()));
+    Settings s = Fixtures.integrationSettings();
     var v = new Validator(s, new ProcessRunner());
     for (String kind : List.of("dataset", "series")) {
       var positive =
@@ -103,10 +108,7 @@ class IntegrationTest {
 
   @Test
   void bothRealMcpAdaptersAndGretlEarlyValidation() throws Exception {
-    Settings s =
-        Settings.load(
-            System.getProperty(
-                "integrator.test.config", Fixtures.ROOT.resolve("config/local.toml").toString()));
+    Settings s = Fixtures.integrationSettings();
     var data = own(McpClients.datasheet(s));
     var schema = data.call("describe_schema", Json.map());
     assertFalse(schema.isEmpty());
@@ -303,10 +305,7 @@ class IntegrationTest {
 
   @Test
   void realEmptyOrganizationGradleAndOfficeValidation() throws Exception {
-    Settings s =
-        Settings.load(
-            System.getProperty(
-                "integrator.test.config", Fixtures.ROOT.resolve("config/local.toml").toString()));
+    Settings s = Fixtures.integrationSettings();
     var f = new Fixtures(temp, new ProcessRunner(), (n, a) -> Json.map(), (n, a) -> Json.map());
     Workspace.copy(s.topics, f.repo);
     f.settings.values.put("validator_command", s.strings("validator_command", List.of()));
@@ -339,10 +338,7 @@ class IntegrationTest {
 
   @Test
   void realTypedCsvModel() throws Exception {
-    Settings s =
-        Settings.load(
-            System.getProperty(
-                "integrator.test.config", Fixtures.ROOT.resolve("config/local.toml").toString()));
+    Settings s = Fixtures.integrationSettings();
     var f =
         new Fixtures(
             temp, new ProcessRunner(), own(McpClients.datasheet(s)), own(McpClients.interlis(s)));

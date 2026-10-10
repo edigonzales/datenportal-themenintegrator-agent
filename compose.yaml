@@ -15,7 +15,7 @@ services:
       datenportal.integrator.root: ${PWD}
 
   interlis:
-    image: sogis/interlis-mcp@sha256:b3ed1e738ccfe670f92ecebcbb014cf67aade5f0609e15be1f75948e15e899ff
+    image: sogis/interlis-mcp@sha256:eb348cd3cc6da8fedf9da2dbf564f1c8ee0d3827fb0c8e9447b3b44f013d338b
     pull_policy: never
     restart: unless-stopped
     environment:

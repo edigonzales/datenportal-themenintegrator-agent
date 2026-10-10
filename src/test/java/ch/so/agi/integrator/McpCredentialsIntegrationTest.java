@@ -13,11 +13,24 @@ import java.nio.file.*;
 import java.time.Duration;
 import java.util.*;
 import org.junit.jupiter.api.*;
-import org.junit.jupiter.api.io.TempDir;
 
 @Tag("integration")
 class McpCredentialsIntegrationTest {
-  @TempDir Path temp;
+  // This test needs no sibling Docker mounts. Container-local storage avoids host UID mapping.
+  final Path temp = createPrivateTemp();
+
+  private static Path createPrivateTemp() {
+    try {
+      return Files.createTempDirectory(Path.of("/tmp"), "integrator-credentials-");
+    } catch (java.io.IOException e) {
+      throw new java.io.UncheckedIOException(e);
+    }
+  }
+
+  @AfterEach
+  void cleanup() {
+    Smoke.remove(temp);
+  }
 
   @Test
   void liveStdioProcessReadsNewStoreAndRotatedToken() throws Exception {
@@ -93,7 +106,7 @@ class McpCredentialsIntegrationTest {
         credentials.save("local", "fixture-user", expected[0]);
         var first =
             client.callTool(new McpSchema.CallToolRequest("deliver", Json.map("run_id", id)));
-        assertFalse(Boolean.TRUE.equals(first.isError()));
+        assertFalse(Boolean.TRUE.equals(first.isError()), Json.text(first.structuredContent()));
         expected[0] = "rotated-fixture-secret";
         var rejected =
             client.callTool(new McpSchema.CallToolRequest("deliver", Json.map("run_id", id)));

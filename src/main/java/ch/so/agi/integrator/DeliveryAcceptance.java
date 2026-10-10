@@ -163,11 +163,11 @@ final class DeliveryAcceptance {
     Files.createDirectories(root.resolve("bin"));
     Json.write(
         root.resolve("bin/datenportal-agent"),
-        "#!/usr/bin/env bash\nset -e\nif [[ ${1:-} == --config ]]; then shift 2; fi\nexec "
+        "#!/usr/bin/env bash\nset -e\nexec "
             + quote(source.root.resolve("bin/datenportal-agent").toString())
-            + " --config "
+            + " \"$@\" --config "
             + quote(root.resolve("config/local.toml").toString())
-            + " \"$@\"\n");
+            + "\n");
     root.resolve("bin/datenportal-agent").toFile().setExecutable(true);
     Files.createDirectories(root.resolve(".agents/skills"));
     Files.createSymbolicLink(
@@ -283,6 +283,8 @@ final class DeliveryAcceptance {
               Json.map(
                   "run_id",
                   id,
+                  "range_proposals",
+                  Smoke.yearRangeProposals(),
                   "identity",
                   Json.map(
                       "name",
@@ -291,6 +293,8 @@ final class DeliveryAcceptance {
                       "https://example.org/models",
                       "version",
                       "2026-10-09",
+                      "rule_profile",
+                      "SO-DATA",
                       "technical_contact",
                       "fixture@example.org",
                       "title",

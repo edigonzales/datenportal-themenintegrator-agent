@@ -6,6 +6,12 @@ import java.util.*;
 final class Fixtures {
   static final Path ROOT = Path.of(System.getProperty("integrator.root", ".")).toAbsolutePath();
   static final Path FIXTURES = ROOT.resolve("tests/fixtures");
+
+  static Settings integrationSettings() {
+    return Settings.load(
+        System.getProperty("integrator.test.config", ROOT.resolve("config/local.toml").toString()));
+  }
+
   final Path temp, repo;
   final Settings settings;
   final Workflow workflow;

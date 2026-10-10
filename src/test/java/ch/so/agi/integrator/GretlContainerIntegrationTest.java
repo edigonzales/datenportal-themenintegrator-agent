@@ -13,7 +13,7 @@ class GretlContainerIntegrationTest {
 
   @Test
   void preparesAndRunsWithoutStackOrHostJava17OrLocalJars() throws Exception {
-    Settings source = Settings.load(Fixtures.ROOT.resolve("config/local.toml").toString());
+    Settings source = Fixtures.integrationSettings();
     Path config = temp.resolve("local.toml");
     Json.write(
         config,

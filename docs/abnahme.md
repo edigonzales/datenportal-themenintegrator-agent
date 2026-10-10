@@ -1,5 +1,117 @@
 # Abnahmestand
 
+## SO-GIS, vervollständigte Dokumentation und veröffentlichte MCP-Pins vom 10. Oktober 2026
+
+Dieser Abschnitt beschreibt den aktuellen Stand. Die nachfolgenden Abschnitte
+bleiben historische Nachweise ihrer jeweiligen Quellstände; damalige offene
+Punkte sind nur dann weiterhin offen, wenn sie hier ausdrücklich genannt werden.
+
+Das GIS-Profil heisst `SO-GIS`. `SO` bleibt kompatibler Eingabealias; neue
+explizite Eingaben werden normalisiert, bereits gespeicherte Vorgänge beim Lesen
+nicht umgeschrieben. `SO-DATA` bleibt der Standard für neue CSV-Validierungsmodelle.
+Skill, Handbücher, API-Tabelle und MCP-Referenzen sind entsprechend nachgeführt,
+einschliesslich `reset_model_repair`, `repair_of` und `REMOVE_COMMENTS`.
+
+Die technische Init-Prüfung und die synthetische Lieferabnahme liefern jetzt den
+begründeten numerischen Jahresbereich mit, den der Modellkern verlangt. Alle
+Fachintegrationstests unterstützen eine eigene `-PintegrationConfig`; die
+Credential-Prüfung verwendet privaten containerlokalen Speicher. Die
+Compose-Abbruchprüfung liest den tatsächlich zurückgegebenen unveränderlichen
+Logpfad; die eigenständige HTTP-Testinstanz bindet ausdrücklich an `0.0.0.0`
+im Container, bei ausschliesslich lokal veröffentlichtem Hostport. Der Port wird
+explizit reserviert und veröffentlicht: Docker-Desktop-Ports aus automatischer
+Docker-Zuweisung waren nur vom Host, nicht vom Testcontainer erreichbar.
+Der private Lieferlauncher setzt den absoluten Fixture-Konfigurationspfad zuletzt,
+damit Harness-Argumente ihn auch mit vorangestellten Runtime-Optionen nicht ersetzen.
+
+### Veröffentlichte und verifizierte Images
+
+- INTERLIS-MCP **0.0.572-1**, Quellrevision
+  `44ea8449b819aa1cb009388fd7650a85285a03d3`:
+  [erfolgreiche Pipeline](https://github.com/edigonzales/interlis-mcp/actions/runs/38076945421).
+  Application-, ARM64-, AMD64- und Publish-Job erfolgreich, einschliesslich
+  Maven-Verbrauchertest und Image-Smokes. Registry-Digest
+  `sha256:eb348cd3cc6da8fedf9da2dbf564f1c8ee0d3827fb0c8e9447b3b44f013d338b`
+  enthält beide Plattformen; das heruntergeladene ARM64-Image weist dieselbe
+  Quellrevision und Version aus. Compose, Beispielkonfiguration und Handbuch
+  verwenden konsistent diesen Digest.
+- Agent **0.1.9** ist als früherer Stand bereits veröffentlicht und enthält die
+  OpenCode-2.x-Konfigurationskorrektur:
+  [erfolgreiche Pipeline](https://github.com/edigonzales/datenportal-themenintegrator-agent/actions/runs/38075843152).
+  Er enthält noch den früheren MCP-Pin und nicht die hier korrigierten
+  synthetischen Bereichsangaben. Die Veröffentlichung dieses neuen Agent-Stands
+  wird nach dem Push gesondert verifiziert.
+
+Bestehende Installationen wechseln nur ausdrücklich. Das Handbuch unterscheidet
+Agent-Update, bewusste Änderung des lokalen MCP-Pins und `setup-mcps --update`;
+eine vorhandene `config/local.toml` bleibt erhalten.
+
+### Tatsächliche Prüfungen
+
+- INTERLIS-MCP mit JDK 21: `test check e2eTest bootJar` und lokale
+  Verification-Maven-Veröffentlichung erfolgreich; 595 JUnit-Tests und 24 echte
+  MCP-End-to-End-Tests. STDIO prüft `SO-GIS` und den Alias `SO` durch das
+  tatsächliche Werkzeugschema. Benchmark- und Workflow-Prüfungen ebenfalls grün.
+- Vorlauf des Integrators: 189 Unit-Tests, JAR und Formatprüfung erfolgreich.
+  Die echte `Smoke.run()`-Init-Prüfung und der Credential-STDIO-Test bestanden.
+  Der erste vollständige Entwicklungslauf bestand 23 von 26 Integrationstests;
+  drei veraltete Testannahmen wurden danach korrigiert. Dieser Vorlauf ersetzt
+  nicht die gemeinsame Prüfung mit dem veröffentlichten MCP.
+
+- Gemeinsame Integrator-Abnahme mit veröffentlichtem MCP `0.0.572-1`,
+  Datenblatt-MCP, GRETL und eigenem synthetischem Jenkins: Gesamtlauf
+  `test jar spotlessCheck integrationTest` mit 189 bestandenen Unit-Tests und
+  25 von 26 bestandenen Integrationstests. Der einzige Fehler war die oben
+  beschriebene automatische Portzuweisung im HTTP-Test. Nach deren Korrektur
+  wurde dieser Integrationstest erfolgreich erneut ausgeführt, zusammen mit
+  `test jar spotlessCheck`. Damit sind alle 26 Integrationsfälle nachgewiesen;
+  es wird kein einzelner fehlerfreier Gesamtlauf behauptet.
+  Nachweise: `.datenportal-integrator/sogis-release-checks.log`,
+  `.datenportal-integrator/sogis-release-results/` und
+  `.datenportal-integrator/sogis-http-final.log`.
+- Die echte `Smoke.run()`-Init-Prüfung, Wiederaufnahme, Credential-Rotation,
+  Containerabbruch, MCP-Neustarts und alle drei Reparaturszenarien sind darin
+  eingeschlossen. Compilerfehler und CSV-Bereichsfehler wurden mit echten
+  Werkzeugen repariert; drei erfolglose Korrekturen führen dauerhaft zu
+  `repair_limit_reached`.
+- Vollständiges `acceptance-run` erfolgreich, mit beiden erzeugten
+  Codex-/OpenCode-MCP-Konfigurationen und dem privaten Credential-Store.
+  Kommentarfreies `SO-DATA`-Modell, Datenblatt und `dataset.gradle` wurden
+  gemeinsam geprüft. Die positive Lieferung ist verifiziert; der tatsächliche
+  negative Jenkins-Lauf stoppt bei `validateThemenCsv` vor
+  `preparePublicationWorkspace`, ohne den Release zu verändern. Vorhandene
+  Fixture-Infrastruktur wurde weiterverwendet. Nachweise:
+  `.datenportal-integrator/sogis-delivery-final.log` und
+  `.datenportal-integrator/delivery-acceptance/5c6a64b0-9328-46c5-be78-1511546ca63c/report.json`
+  samt positiver/negativer Jenkins-Konsole.
+
+Alle Daten, automatischen Freigaben und Publikationen dieser Abnahme gehören
+ausschliesslich zu ihrer isolierten synthetischen Fixture. Es wurden keine
+Geschäftsdaten verändert oder publiziert. Eine synthetische MCP-Lieferabnahme
+ist keine menschliche GUI-Freigabe.
+
+### OpenCode 2.x tatsächlich geprüft
+
+Die vorhandene Desktop-Installation ist `2.0.26`; ihre gebündelte CLI unter
+`/Applications/OpenCode.app/Contents/Resources/opencode-cli` meldet ebenfalls
+`2.0.26`. Die normale Shell-CLI ist separat weiterhin `1.18.22`.
+Im isolierten Fixture-Projekt ist `@datenportal-themenintegrator` im Composer
+und unter den Projekt-Skills sichtbar. Die erzeugte V2-Konfiguration wird unter
+„More options → Edit project → Extensions → MCPs“ erkannt. Nach Verbindung
+über die gebündelte CLI-API meldet `mcp list` tatsächlich `connected`; der
+Desktop zeigt denselben Eintrag eingeschaltet. Es wurde kein fachlicher Auftrag
+an ein Sprachmodell gesendet. Nachweis:
+`.datenportal-integrator/sogis-opencode-evidence.json`.
+
+### Gesonderte Grenzen
+
+Ein vollständiger fachlicher Dialog mit tatsächlichen menschlichen Freigaben
+in beiden GUIs bleibt eine gesonderte Abnahme. Der Verbindungstest und die
+synthetischen Lieferfreigaben ersetzen diesen Nachweis nicht.
+Die im MCP-Abnahmedokument beschriebene Compilerbeobachtung bei wiederholten
+Prüfungen von `INTERLIS.MissingSyntheticType` ist weiterhin offen; die
+modelllokalen Negativfälle dieser Reparaturabnahme belegen ihre Behebung nicht.
+
 ## SO-DATA, Wertebereiche und Reparaturen vom 10. Oktober 2026
 
 Entwicklungsstand in Integrator und `../interlis-mcp`: neue CSV-Modelle verwenden

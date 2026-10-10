@@ -761,8 +761,28 @@ image = "sogis/datenportal-datenblatt-mcp@sha256:b391421578f8c4652fb7a6446518774
 transport = "http"
 managed = true
 url = "http://127.0.0.1:8080/mcp"
-image = "sogis/interlis-mcp@sha256:b3ed1e738ccfe670f92ecebcbb014cf67aade5f0609e15be1f75948e15e899ff"
+image = "sogis/interlis-mcp@sha256:eb348cd3cc6da8fedf9da2dbf564f1c8ee0d3827fb0c8e9447b3b44f013d338b"
 ```
+
+### Fachwerkzeuge aktualisieren
+
+Das INTERLIS-Beispiel verwendet den veröffentlichten Stand `0.0.572-1` mit
+`CORE`, `SO-GIS` und `SO-DATA`. Bestehende `config/local.toml` werden beim
+Agent-Update nicht überschrieben: für diese Erweiterung den Wert
+`[interlis].image` bewusst auf den obigen Digest setzen und danach ausführen:
+
+```sh
+./bin/datenportal-agent --update-agent --version
+./bin/datenportal-agent setup-mcps --update
+./bin/datenportal-agent init
+./bin/datenportal-agent doctor
+```
+
+Das Agent-Update benötigt den veröffentlichten korrigierten Agent-Build; dessen
+geprüfter Stand ist im [Abnahmestand](abnahme.md) festgehalten. Für einen noch
+nicht veröffentlichten Quellstand bei den Befehlen `--runtime docker-build`
+verwenden und den Image-Update-Befehl weglassen. Ein Runtime-Wechsel kann
+neue Prüfungen und Freigaben bestehender Kandidaten erfordern.
 
 `stack_timeout_seconds` beträgt standardmässig 1800 Sekunden und gilt nur
 für Stackstart, Bootstrap, Compose-Service-Starts und deren Bereitschaft. `timeout_seconds` bleibt mit
@@ -895,15 +915,15 @@ OpenCode-Datei unverändert. Vor dem Schreiben legt der Integrator Sicherungen
 unter `.datenportal-integrator/harness-backups/` an. Den gemeldeten Konflikt
 bewusst bereinigen und denselben `init`-Aufruf wiederholen.
 
-**Verfügbarkeit der Korrektur:** Bis ein korrigiertes Agent-Image veröffentlicht
-ist, den Code aus diesem Checkout verwenden:
+**Verfügbarkeit der OpenCode-Korrektur:** Im geprüften Agent-Release `0.1.9`
+enthalten. Für die Entwicklung direkt aus einem geänderten Checkout:
 
 ```sh
 ./bin/datenportal-agent --runtime docker-build init
 ./bin/datenportal-agent --runtime docker-build doctor
 ```
 
-Für den normalen Image-Betrieb nach Veröffentlichung ausdrücklich aktualisieren:
+Einen bestehenden Image-Betrieb ausdrücklich aktualisieren:
 
 ```sh
 ./bin/datenportal-agent --update-agent --version
@@ -920,9 +940,16 @@ opencode mcp list
 opencode
 ```
 
-OpenCode startet den Launcher aus `opencode.json`. Der aktuelle Verbindungsstatus
-ist mit `opencode mcp list` abrufbar; in der Sitzung öffnet `/mcps` die
-Serverauswahl. Grundlage sind die [OpenCode-2.x-MCP-Anweisungen](https://opencode.ai/v2/docs/mcp-servers/).
+OpenCode startet den Launcher aus `opencode.json`. Die Terminalbefehle setzen
+eine OpenCode-2.x-CLI voraus: `opencode mcp list` zeigt den Verbindungsstatus,
+`/mcps` öffnet die Serverauswahl in der Terminalsitzung. Grundlage sind die
+[OpenCode-2.x-MCP-Anweisungen](https://opencode.ai/v2/docs/mcp-servers/).
+Im Desktop `2.0.26` ist der projektspezifische Eintrag unter dem Projektmenü
+„More options → Edit project → Extensions → MCPs“ sichtbar. Die globalen
+Settings zeigen dagegen die projektübergreifenden Erweiterungen. Desktop und
+Shell-CLI können unterschiedliche Versionen haben; `opencode --version` prüft
+nur die CLI. Im Desktop wird der Skill über `@datenportal-themenintegrator`
+angeboten; `/mcps` ist dort kein entsprechender Composer-Befehl.
 Im optionalen lokalen Java-Betrieb muss `java` auf JDK 25 zeigen; bei
 Desktop-Prozessen gegebenenfalls den absoluten Befehl aus `harness-config`
 verwenden.
@@ -1060,6 +1087,11 @@ Beim eigenständigen Modellvorgang: Modellvorschau prüfen, `gate: model` bestä
 
 ### Wertebereiche, Reparaturen und Loglinks
 
+Die verfügbaren Profile sind `CORE`, `SO-GIS` und `SO-DATA`. `SO-GIS` ist der
+neue Name des bisherigen Profils `SO` mit unveränderten GIS-Regeln.
+Neue Aufträge verwenden `SO-GIS`; `SO` bleibt als Eingabealias erhalten.
+Ein gespeicherter Vorgang mit `SO` wird beim Lesen nicht umgeschrieben.
+
 Für `SO-DATA` müssen Modellname, Datum und Themen-Dateiname zusammenpassen:
 `SO_Messwerte_20261010`, `VERSION "2026-10-10"` und `SO_Messwerte_20261010.ili`.
 Die AT-URI ist absolut. Datenblattbeschreibungen und Einheiten bleiben erhalten.
@@ -1098,6 +1130,19 @@ Frühere Logs bleiben auch nach Erfolg und Wiederaufnahme erreichbar. Bei
 `repair_limit_reached` braucht es einen ausdrücklichen menschlichen Neuauftrag;
 `reset_model_repair` speichert dessen tatsächliche Aussage. Infrastrukturfehler
 und ungeklärte Fachfragen verlangen Klärung. Die Originaldaten bleiben unverändert.
+
+Für einen Reparaturaufruf übernimmt der Agent `model_repair.last_failure` aus
+`status` als `repair_of` und ergänzt `repair_reason` in den vollständigen
+`derive_model`-Auftrag. Diese Referenz ist eine Prüfkennung, kein Logpfad.
+Beispiel für die zusätzlichen Felder:
+
+```json
+{"repair_of": "PRUEFKENNUNG_AUS_STATUS", "repair_reason": "Unbekannte Domain durch den fachlich bestätigten Zahlentyp ersetzen."}
+```
+
+Nach ausgeschöpfter Serie kann ausschliesslich ein tatsächlicher neuer Auftrag
+mit `reset_model_repair` und den Feldern `run_id` und `human_statement` erfasst
+werden. Der bisherige Verlauf bleibt erhalten; der Reset ist keine Modellfreigabe.
 
 ### Verfügbarkeit des neuen Profils
 

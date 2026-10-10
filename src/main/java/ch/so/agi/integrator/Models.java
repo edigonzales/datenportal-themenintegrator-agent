@@ -13,6 +13,10 @@ public final class Models {
     this.w = w;
   }
 
+  static String wireProfile(String storedProfile) {
+    return storedProfile.equals("SO") ? "SO-GIS" : storedProfile;
+  }
+
   static String name(Map<String, Object> m, String key, String fallback) {
     String s = Json.str(m, key, fallback);
     if (s == null || !s.matches("[A-Za-z][A-Za-z0-9_]*"))
@@ -38,7 +42,8 @@ public final class Models {
     String profile =
         Json.str(
             identity, "rule_profile", Json.str(Json.obj(r.get("model")), "profile", "SO-DATA"));
-    if (!Set.of("CORE", "SO", "SO-DATA").contains(profile))
+    if (identity.containsKey("rule_profile") && profile.equals("SO")) profile = "SO-GIS";
+    if (!Set.of("CORE", "SO", "SO-GIS", "SO-DATA").contains(profile))
       throw new Problem("model_profile", "Unbekanntes Regelprofil.");
     identity.put("rule_profile", profile);
 
@@ -163,10 +168,12 @@ public final class Models {
         questions.add(
             column
                 + ": konkreten numerischen Wertebereich und Genauigkeit bestätigen. INTERLIS verlangt min/max für einen instanziierbaren Zahlentyp; beobachtete Grenzen werden nicht automatisch übernommen.");
-      if (type.equals("TEXT") && typeSpec.isEmpty() && Set.of("SO", "SO-DATA").contains(profile))
+      if (type.equals("TEXT")
+          && typeSpec.isEmpty()
+          && Set.of("SO", "SO-GIS", "SO-DATA").contains(profile))
         questions.add(
             column
-                + ": maximale Textlänge für das SO-Regelprofil bestätigen; beobachtete Längen sind keine fachliche Grenze.");
+                + ": maximale Textlänge für das gewählte Regelprofil bestätigen; beobachtete Längen sind keine fachliche Grenze.");
       if (type.equals("DATETIME") && typeSpec.isEmpty())
         questions.add(
             column
@@ -284,7 +291,8 @@ public final class Models {
       Path candidate = w.repoFile(r, w.topic(r) + "/" + modelName + ".ili");
       if (Files.isRegularFile(candidate)) existing = candidate;
     }
-    Map<String, Object> callArgs = Json.map("modelPurpose", purpose, "ruleProfile", profile);
+    Map<String, Object> callArgs =
+        Json.map("modelPurpose", purpose, "ruleProfile", wireProfile(profile));
     if (existing != null) {
       if (Json.list(args.get("changes")).isEmpty())
         return Json.map(
@@ -587,7 +595,7 @@ public final class Models {
                     "modelPurpose",
                     model.get("purpose"),
                     "ruleProfile",
-                    model.get("profile")));
+                    wireProfile(Json.str(model, "profile", "SO-GIS"))));
       } catch (Problem error) {
         error.details.put(
             "diagnostics", Diagnostics.record(w, r, "ili2c", "ERROR", error.result(), false));

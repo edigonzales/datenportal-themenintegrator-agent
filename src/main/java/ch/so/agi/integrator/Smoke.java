@@ -75,13 +75,25 @@ final class Smoke {
               "https://example.org/models",
               "version",
               "2026-10-09",
+              "rule_profile",
+              "SO-DATA",
               "technical_contact",
               "fixture@example.org",
               "title",
               "Synthetischer Funktionstest",
               "short_description",
               "Isolierte technische Init-Testfixture");
-      var derived = Json.obj(w.call("derive_model", Json.map("run_id", id, "identity", identity)));
+      var derived =
+          Json.obj(
+              w.call(
+                  "derive_model",
+                  Json.map(
+                      "run_id",
+                      id,
+                      "identity",
+                      identity,
+                      "range_proposals",
+                      yearRangeProposals())));
       if (Json.bool(derived, "candidate", true)) fail("Modellableitung unvollständig", derived);
       var positive = Json.obj(w.call("validate_model", Json.map("run_id", id)));
       if (!Json.bool(positive, "valid", false)) fail("Positivprüfung fehlgeschlagen", positive);
@@ -139,6 +151,21 @@ final class Smoke {
     return log.contains("validateThemenCsv FAILED")
         && log.contains("not-a-number")
         && log.contains("is not a number in attribute Jahr");
+  }
+
+  /**
+   * Explicit specification for the synthetic observation-year fixture, never a business default.
+   */
+  static Map<String, Object> yearRangeProposals() {
+    return Json.map(
+        "Jahr",
+        Json.map(
+            "type_spec",
+            Json.map("baseType", Json.map("kind", "NUM_RANGE", "min", 1900, "max", 2100)),
+            "reason",
+            "Synthetische moderne Beobachtungsjahre; Reserve bis 2100 für die technische Testfixture.",
+            "negative_values_possible",
+            false));
   }
 
   static void fail(String message, Map<String, Object> evidence) {
