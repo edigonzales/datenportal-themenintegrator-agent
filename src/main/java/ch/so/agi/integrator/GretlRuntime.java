@@ -335,8 +335,10 @@ public class GretlRuntime {
       List<String> properties,
       String logName) {
     var runtime = selected(true);
-    Path log = w.directory(run).resolve("validation").resolve(logName + ".log");
-    Path reports = w.directory(run).resolve("validation").resolve(logName + "-reports");
+    Path checkDirectory =
+        w.directory(run).resolve("validation").resolve(UUID.randomUUID().toString());
+    Path log = checkDirectory.resolve(logName + ".log");
+    Path reports = checkDirectory.resolve(logName + "-reports");
     boolean persistent = mode(settings).equals("compose");
     var compose = new ComposeRuntime(settings, process);
     String name = persistent ? compose.ensure("gretl") : start(Json.required(runtime, "image_id"));

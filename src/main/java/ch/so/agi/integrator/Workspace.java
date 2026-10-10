@@ -65,7 +65,20 @@ public final class Workspace {
       String task,
       List<String> properties,
       String logName) {
-    return w.gretl.gradle(w, run, snapshot, task, properties, logName);
+    try {
+      return w.gretl.gradle(w, run, snapshot, task, properties, logName);
+    } catch (Problem error) {
+      error.details.put(
+          "diagnostics",
+          Diagnostics.record(
+              w,
+              run,
+              task.equals("validateThemenCsv") ? "gretl-csv" : "gretl",
+              "ERROR",
+              error.result(),
+              false));
+      throw error;
+    }
   }
 
   public static String groovy(String value) {

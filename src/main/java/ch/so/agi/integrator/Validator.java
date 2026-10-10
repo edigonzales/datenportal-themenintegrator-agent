@@ -45,8 +45,14 @@ public final class Validator {
               "--refdata",
               reference.toString()));
     args.add(file.toString());
-    Path log = out.resolve(name + ".log");
-    var result = process.run(args, settings.root, settings.timeout, log);
+    Path log = out.resolve(UUID.randomUUID().toString()).resolve(name + ".log");
+    ProcessRunner.Result result;
+    try {
+      result = process.run(args, settings.root, settings.timeout, log);
+    } catch (Problem error) {
+      if (Files.isRegularFile(log)) error.details.put("log", log.toString());
+      throw error;
+    }
     return Json.map(
         "name",
         name,

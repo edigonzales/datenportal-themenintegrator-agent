@@ -51,7 +51,7 @@ class IntegrationTest {
     transport.setStdErrorHandler(line -> {});
     try (var client = McpClient.sync(transport).requestTimeout(Duration.ofSeconds(30)).build()) {
       client.initialize();
-      assertEquals(28, client.listTools().tools().size());
+      assertEquals(29, client.listTools().tools().size());
       var result =
           client.callTool(
               new McpSchema.CallToolRequest(
@@ -75,7 +75,10 @@ class IntegrationTest {
 
   @Test
   void realValidatorDatasetSeriesAndUnknownOffice() throws Exception {
-    Settings s = Settings.load(Fixtures.ROOT.resolve("config/local.toml").toString());
+    Settings s =
+        Settings.load(
+            System.getProperty(
+                "integrator.test.config", Fixtures.ROOT.resolve("config/local.toml").toString()));
     var v = new Validator(s, new ProcessRunner());
     for (String kind : List.of("dataset", "series")) {
       var positive =
@@ -100,7 +103,10 @@ class IntegrationTest {
 
   @Test
   void bothRealMcpAdaptersAndGretlEarlyValidation() throws Exception {
-    Settings s = Settings.load(Fixtures.ROOT.resolve("config/local.toml").toString());
+    Settings s =
+        Settings.load(
+            System.getProperty(
+                "integrator.test.config", Fixtures.ROOT.resolve("config/local.toml").toString()));
     var data = own(McpClients.datasheet(s));
     var schema = data.call("describe_schema", Json.map());
     assertFalse(schema.isEmpty());
@@ -169,7 +175,15 @@ class IntegrationTest {
                     List.of(
                         Json.map("kind", "ATTRIBUTE", "name", "Jahr"),
                         Json.map("kind", "NUMERIC", "value", 1900))))));
-    var derived = f.call("derive_model", "run_id", id, "identity", identity);
+    var proposals = ModelsTest.proposals();
+    Json.obj(Json.obj(Json.obj(proposals.get("Jahr")).get("type_spec")).get("baseType"))
+        .put("min", 1800);
+    Json.obj(proposals.get("Jahr"))
+        .put(
+            "reason",
+            "Synthetischer Typbereich 1800–2100; separater Constraint begrenzt Lieferwerte auf Jahre ab 1900.");
+    var derived =
+        f.call("derive_model", "run_id", id, "identity", identity, "range_proposals", proposals);
     assertFalse(
         Json.list(Json.obj(Json.obj(derived.get("model")).get("evidence")).get("constraintProofs"))
             .isEmpty());
@@ -289,7 +303,10 @@ class IntegrationTest {
 
   @Test
   void realEmptyOrganizationGradleAndOfficeValidation() throws Exception {
-    Settings s = Settings.load(Fixtures.ROOT.resolve("config/local.toml").toString());
+    Settings s =
+        Settings.load(
+            System.getProperty(
+                "integrator.test.config", Fixtures.ROOT.resolve("config/local.toml").toString()));
     var f = new Fixtures(temp, new ProcessRunner(), (n, a) -> Json.map(), (n, a) -> Json.map());
     Workspace.copy(s.topics, f.repo);
     f.settings.values.put("validator_command", s.strings("validator_command", List.of()));
@@ -322,7 +339,10 @@ class IntegrationTest {
 
   @Test
   void realTypedCsvModel() throws Exception {
-    Settings s = Settings.load(Fixtures.ROOT.resolve("config/local.toml").toString());
+    Settings s =
+        Settings.load(
+            System.getProperty(
+                "integrator.test.config", Fixtures.ROOT.resolve("config/local.toml").toString()));
     var f =
         new Fixtures(
             temp, new ProcessRunner(), own(McpClients.datasheet(s)), own(McpClients.interlis(s)));
@@ -416,7 +436,16 @@ class IntegrationTest {
                 Json.map(
                     "baseType", Json.map("kind", "NUM_RANGE", "min", -9999.99, "max", 9999.99))));
     var derived =
-        f.call("derive_model", "run_id", id, "identity", identity, "confirmations", confirmations);
+        f.call(
+            "derive_model",
+            "run_id",
+            id,
+            "identity",
+            identity,
+            "confirmations",
+            confirmations,
+            "range_proposals",
+            ModelsTest.proposals());
     assertFalse(Json.bool(derived, "candidate", true), Json.pretty(derived));
     var report = f.call("validate_model", "run_id", id);
     assertFalse(Json.bool(report, "valid", true), Json.pretty(report));
@@ -459,7 +488,9 @@ class IntegrationTest {
             "identity",
             identity,
             "confirmations",
-            confirmations);
+            confirmations,
+            "range_proposals",
+            ModelsTest.proposals());
     assertFalse(Json.bool(positive, "candidate", true), Json.pretty(positive));
     assertTrue(Json.bool(f.call("validate_model", "run_id", positiveId), "valid", false));
   }

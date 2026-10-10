@@ -1,5 +1,66 @@
 # Abnahmestand
 
+## SO-DATA, Wertebereiche und Reparaturen vom 10. Oktober 2026
+
+Entwicklungsstand in Integrator und `../interlis-mcp`: neue CSV-Modelle verwenden
+`SO-DATA`; CORE/SO bleiben verfügbar. Kommentarprüfung, Kommentarentfernung,
+Datumsidentität, native Constraint-Namen, begründete numerische Vorschläge,
+persistente Reparaturgrenzen und verifizierte Loglinks sind implementiert.
+Die Regeln für reale Freigaben und Publikationen bleiben bestehen.
+
+Tatsächlich lokal ausgeführt:
+
+- Integrator: `./bin/datenportal-agent gradle test jar spotlessCheck`, 188 Tests
+  bestanden, einschliesslich `DocumentationTest`; JAR und Formatprüfung erfolgreich.
+  Nachweis: `.datenportal-integrator/sodata-unit.log`.
+- INTERLIS-MCP mit JDK 21: `test check e2eTest bootJar` und
+  `:interlis-mcp-module:publishMavenJavaPublicationToVerificationRepository` erfolgreich;
+  595 JUnit-Tests und 24 MCP-End-to-End-Tests. Die vorhandenen Benchmark- und
+  Workflow-Prüfungen wurden ebenfalls ausgeführt. Die Maven-Veröffentlichung hier
+  bezeichnet ausschliesslich das lokale Verification-Repository.
+- Beide Agent-Images für ARM64 und AMD64 lokal gebaut und mit
+  `runtime/image-smoke.sh` geprüft, einschliesslich des eingebetteten Java-Codes.
+  Nachweise: `.datenportal-integrator/sodata-image-arm64.log` und
+  `.datenportal-integrator/sodata-image-amd64.log`.
+- Neues MCP-JVM-Image `interlis-mcp-sodata:local` gebaut. Die gemeinsame Abnahme
+  verwendet dieses Image mit JDK 21 an einem eigenen lokalen HTTP-Port,
+  die vorhandenen Datenblatt-/GRETL-Images und eine eigene Testkonfiguration.
+  Es wurden keine Geschäftsdaten geändert oder publiziert.
+- Drei isolierte Reparaturszenarien mit tatsächlichem MCP-Compiler, Datenblatt-MCP,
+  GRETL-CsvValidator und ilivalidator bestanden: Compilerfehler korrigieren,
+  CSV-Bereichsfehler korrigieren und drei erfolglose Korrekturen mit anschliessendem
+  `repair_limit_reached`. Nur die fehlerhafte Eingabespezifikation wird in der
+  Testfixture injiziert; Werkzeugantworten und Diagnosen stammen aus den echten
+  Werkzeugen. Die Prüfung kontrolliert auch die gespeicherten Artefaktprüfsummen.
+  Nachweis: `.datenportal-integrator/sodata-repair-integration.log`; erhaltene
+  Testvorgänge und `SYNTHETIC_ACCEPTANCE.json` unter `.datenportal-integrator/tmp/`.
+
+Mit synthetischen Fixtures geprüft: erfolgreiche und fehlgeschlagene Ableitungen,
+Reparaturgrenze und Wiederaufnahme, CSV-Reparatur, echte Schema-Serialisierung,
+Kommentarzeichen in Strings, gültige Datumsangaben, erhaltene SO-Regeln,
+Wertebereiche/Genauigkeit/Vorzeichen, Vorrang bestätigter Spezifikationen,
+unveränderliche Diagnosekopien, blockierte fremde/manipulierte Loglinks und
+weiter gültige Freigaben nach einer unveränderten Wiederholungsprüfung.
+Automatische Freigabe- und Reset-Aussagen in diesen Tests gelten nur dort.
+
+Die reguläre Gesamt-Integration ist nicht grün: 17 Tests, davon 16 fehlgeschlagen.
+Für 15 Tests fehlt `config/local.toml`; ausserdem scheitert der separate
+Credential-Integrationstest. Im isolierten
+Fachwerkzeuglauf funktionieren Modellableitung, CSV-Validierung, XTF-Prüfung und
+der Stopp vor Publikationsvorbereitung bei einer ungültigen CSV. Der anschliessende
+Vergleich mit dem bereits laufenden Jenkins bleibt mangels Jenkins-Container offen.
+Nachweise: `.datenportal-integrator/sodata-integration-default.log` und
+`.datenportal-integrator/sodata-integration-isolated.log`. Dies ist keine
+Publikations- oder Jenkins-Abnahme.
+
+Registry-Veröffentlichung und neue Integrator-Pins sind **offen**. Ein lokaler
+Image-Digest ist kein veröffentlichter Registry-Digest. Die bestehenden Pins
+bleiben deshalb unverändert. Zuerst den geprüften MCP veröffentlichen, dann dessen
+verifizierten Registry-Digest konsistent in Compose, Beispielkonfiguration und
+Runtime-Defaults übernehmen und den Integrator-Build prüfen/veröffentlichen.
+Erst das ausdrückliche Update wechselt bestehende Installationen. Der normale
+Image-Betrieb der alten Pins enthält diese Erweiterung noch nicht.
+
 ## Image-Smoke-Korrektur vom 10. Oktober 2026
 
 Der CI-Image-Smoke-Test scheiterte beim Kompilieren seines eingebetteten

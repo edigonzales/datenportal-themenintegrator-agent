@@ -184,6 +184,11 @@ public final class Csv {
             }
             if (accepts(v, "DECIMAL")) {
               var number = new BigDecimal(v);
+              st.put(
+                  "observed_scale",
+                  Math.max(
+                      Json.number(st, "observed_scale", 0),
+                      Math.max(0, number.stripTrailingZeros().scale())));
               if (!st.containsKey("numeric_min")
                   || number.compareTo((BigDecimal) st.get("numeric_min")) < 0)
                 st.put("numeric_min", number);

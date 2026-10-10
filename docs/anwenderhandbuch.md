@@ -258,7 +258,7 @@ bestätigtem Datenblatt ableiten, Modellidentität und offene Fachregeln klären
 und die CSV gegen das Modell prüfen lassen. Zur erfolgreichen Modellableitung
 gehört automatisch auch die Vorbereitung von `dataset.gradle` mit Copy- und
 Validierungstask im Themenordner. Standard sind INTERLIS 2.4,
-Profil SO und zunächst eine flache Klasse. Beobachtete Werte von 120 bis
+Profil `SO-DATA` ohne Kommentare und zunächst eine flache Klasse. Beobachtete Werte von 120 bis
 20'000 begründen keinen fachlichen Wertebereich; zufällige Eindeutigkeit
 begründet keinen Schlüssel.
 
@@ -278,8 +278,9 @@ diese Kopie gegen das Modell. Schlägt die Validierung fehl, stoppt der Ablauf
 vor der Publikationsvorbereitung. Reine Metadatenlieferungen überspringen
 die Copy- und CSV-Validierungstasks.
 
-**Deine Entscheidung:** Modellname, URI, ISO-Version, technischen Kontakt,
-Titel und Kurzbeschreibung sowie unbelegte Regeln klären. Beim Themenvorgang
+**Deine Entscheidung:** Modellname mit Datumssuffix, absolute URI, passendes
+ISO-Versionsdatum sowie unbelegte Regeln klären. Numerische Vorschläge mit
+Begründung und Spielraum für künftige Lieferungen im Modellreview prüfen. Beim Themenvorgang
 Modell, `dataset.gradle`, Datenblatt und Prüfresultate gemeinsam prüfen und
 die konkreten Modell- und Metadatenstände freigeben. Die Taskdatei gehört zur
 Modellfreigabe.
@@ -1033,9 +1034,7 @@ Modellierung ausdrücklich beauftragen. Sie ist optional im Themenvorgang oder m
     "name": "SO_Beispiel_20261006",
     "uri": "https://example.org/models",
     "version": "2026-10-06",
-    "technical_contact": "modellverantwortlicher@example.org",
-    "title": "Bestätigter Modelltitel",
-    "short_description": "Bestätigter Zweck und Inhalt"
+    "rule_profile": "SO-DATA"
   }
 }
 ```
@@ -1045,13 +1044,63 @@ java -jar build/libs/datenportal-integrator.jar call derive_model --args-file de
 java -jar build/libs/datenportal-integrator.jar call validate_model --json '{"run_id":"VORGANGS_ID"}'
 ```
 
-Standard: INTERLIS 2.4, Profil `SO`, Zweck `VALIDATION`. Fehlende Identität, Beschreibungen oder Semantik erscheinen als `NEEDS_INPUT`. Spaltennamen, Typen, Pflichtigkeit, Beschreibungen und Einheiten stammen aus dem Datenblatt. Führende Nullen benötigen eine bewusste Typentscheidung. Beobachtete Werte begründen weder geschlossene Codelisten noch Schlüssel oder Fachbereiche. Zusätzliche Domains, Einheiten und Constraints nur mit `identity.semantics_confirmed: true` und fachlicher Grundlage beauftragen. Bei TEXT die maximale Länge bestätigen, bei DECIMAL/NUMERIC einen konkreten Wertebereich und die Genauigkeit. Der bestehende Adapter akzeptiert DATETIME mit +01:00 nicht als INTERLIS.XMLDateTime; diese Grenze wird erklärt und blockiert eine ungeprüfte Übernahme. Spaltenbezogene bestätigte Typen können unter `confirmations.<spalte>.type_spec` angegeben werden; `confirmed: true` hält die Entscheidung fest.
+Standard für neue CSV-Validierungsmodelle: INTERLIS 2.4, Profil `SO-DATA`, Zweck `VALIDATION`. Fehlende Identität oder notwendige Fachsemantik erscheinen als `NEEDS_INPUT`. Das Modell enthält keine Kommentare; technische Kontakte, Titel und Beschreibungen sind keine zusätzlichen Modellpflichtangaben. Spaltennamen, Typen, Pflichtigkeit, Beschreibungen und Einheiten stammen aus dem Datenblatt. Führende Nullen benötigen eine bewusste Typentscheidung. Beobachtete Werte begründen weder geschlossene Codelisten noch Schlüssel oder Fachbereiche. Zusätzliche Domains, Einheiten und Constraints nur mit `identity.semantics_confirmed: true` und fachlicher Grundlage beauftragen. Bei TEXT die maximale Länge bestätigen, bei INTEGER/DECIMAL/NUMERIC einen konkreten Wertebereich und die Genauigkeit über bestätigte Spezifikationen oder begründete Agentenvorschläge vorlegen. Der bestehende Adapter akzeptiert DATETIME mit +01:00 nicht als INTERLIS.XMLDateTime; diese Grenze wird erklärt und blockiert eine ungeprüfte Übernahme. Spaltenbezogene bestätigte Typen können unter `confirmations.<spalte>.type_spec` angegeben werden; `confirmed: true` hält die Entscheidung fest.
 
 Vorhandene Modelle werden mit einem typisierten `changes`-Batch über `applyIliModelChanges` bearbeitet. `allow_breaking` ist eine ausdrückliche Entscheidung über potenziell brechende Änderungen. Der Integrator übernimmt Compiler-, Review- und Constraint-Nachweise des Fach-MCP. Unvollständige Nachweise bleiben Kandidaten. Manuelle Reviewpunkte erscheinen im HTML.
 
 Nach erfolgreicher Ableitung werden `.ili`, `dataset.gradle` und die Datenblatt-Modellreferenz zusammen vorbereitet. Die Referenz wird über den Datenblatt-MCP vor dem abschliessenden Export gesetzt. `validate_model` führt GRETL `CsvValidator` in einer isolierten Repository-Kopie aus. Derselbe Themen-Task läuft später vor `preparePublicationWorkspace`; Metadatenlieferungen überspringen ihn ausdrücklich. Es gibt dafür keine eigene CSV-zu-XTF-Konvertierung.
 
 Beim eigenständigen Modellvorgang: Modellvorschau prüfen, `gate: model` bestätigen und lokal übernehmen oder über einen freigegebenen Zielplan als PR vorbereiten. Kein automatischer Datenupload. Beim Themenvorgang werden `model` und `metadata` für die gemeinsam gezeigten Prüfstände bestätigt.
+
+### Wertebereiche, Reparaturen und Loglinks
+
+Für `SO-DATA` müssen Modellname, Datum und Themen-Dateiname zusammenpassen:
+`SO_Messwerte_20261010`, `VERSION "2026-10-10"` und `SO_Messwerte_20261010.ili`.
+Die AT-URI ist absolut. Datenblattbeschreibungen und Einheiten bleiben erhalten.
+Bestehende Vorgänge behalten ihr Profil; eine ausdrücklich beauftragte Umstellung
+mit `identity.rule_profile: "SO-DATA"` und gegebenenfalls `REMOVE_COMMENTS`
+erzeugt einen neu zu prüfenden Kandidaten.
+
+Der Agent schlägt numerische Grenzen anhand der vollständigen CSV-Statistik und
+der fachlichen Beschreibung vor. Beispiel für eine moderne Jahresmessreihe:
+
+```json
+{
+  "range_proposals": {
+    "Jahr": {
+      "type_spec": {"baseType": {"kind": "NUM_RANGE", "min": 1900, "max": 2100}},
+      "reason": "Beobachtungsjahr der modernen Messreihe; Reserve für künftige Lieferungen bis 2100.",
+      "negative_values_possible": false
+    }
+  }
+}
+```
+
+Dieses Beispiel ist keine allgemeine Jahresregel. Positive Messwerte allein
+belegen etwa bei Temperaturen keine Nichtnegativität. Ohne fachliche Grundlage
+fragt der Agent nach. Im Modellreview stehen beobachtete Grenzen, Vorschlag,
+Genauigkeit und Begründung. Vorschläge sind als Agentenschätzung gekennzeichnet;
+die übliche Modellfreigabe bestätigt den gesamten Kandidaten.
+
+Bei Fehlern erhältst du die Diagnose **im Chat und im HTML** mit anklickbarem
+Logpfad. Beispiel mit fiktivem Pfad: „CSV-Wert liegt ausserhalb des Bereichs.
+[Validator-Log][fiktiver-validator-log].
+Korrekturversuch 1 von 3: Bereich anhand der Beschreibung erweitern.“ Vor jeder
+Korrektur erklärt der Agent die Änderung. Nach der ersten Fehlprüfung sind
+höchstens drei Reparaturversuche erlaubt, gemeinsam für Compiler und CSV-Prüfung.
+Frühere Logs bleiben auch nach Erfolg und Wiederaufnahme erreichbar. Bei
+`repair_limit_reached` braucht es einen ausdrücklichen menschlichen Neuauftrag;
+`reset_model_repair` speichert dessen tatsächliche Aussage. Infrastrukturfehler
+und ungeklärte Fachfragen verlangen Klärung. Die Originaldaten bleiben unverändert.
+
+### Verfügbarkeit des neuen Profils
+
+Lokale Entwicklungsabnahme und veröffentlichter Image-Betrieb sind getrennt.
+Der Integrator benötigt einen INTERLIS-MCP-Build mit `SO-DATA`. Zuerst wird der
+geprüfte MCP veröffentlicht; erst mit dessen tatsächlichem Registry-Digest werden
+die Integrator-Pins aktualisiert. Bestehende Installationen wechseln ausschliesslich
+mit dem ausdrücklichen Update. Der konkrete Auslieferungsstand steht in der
+[Abnahme](abnahme.md); alte gepinnte MCP-Images unterstützen das Profil nicht.
 
 ## Neue Organisation und Dienststelle
 
@@ -1188,3 +1237,5 @@ wird. Anschliessend `setup-mcps`, `setup-gretl` und `doctor` ausführen. Die
 Setup-Befehle wechseln ohne `--update` keine bestehende Image-Auswahl.
 Geänderte Konfiguration und Integrator-JAR verlangen erneut die betroffenen
 Prüfungen und Freigaben.
+
+[fiktiver-validator-log]: /absoluter/vorgang/diagnostics/pruefkennung/artifact-csv.log

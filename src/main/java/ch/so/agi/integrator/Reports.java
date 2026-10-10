@@ -39,13 +39,20 @@ public final class Reports {
   public static String render(Path root, Path output, Kind kind, String identifier, Object data) {
     String template = Json.contents(AgentResources.resolve(root, "templates/review-java.html"));
     String body = ReviewHtml.render(kind, identifier, data);
+    if (data instanceof Map<?, ?> report && report.get("diagnostic_history") instanceof List<?>) {
+      String links =
+          Diagnostics.html(output.toAbsolutePath().getParent(), report.get("diagnostic_history"));
+      int end = body.indexOf("</section>");
+      body = body.substring(0, end + 10) + links + body.substring(end + 10);
+    }
+    final String renderedBody = body;
     // Substitute only template tokens, never text introduced by a previous replacement.
     var matcher = java.util.regex.Pattern.compile("\\{\\{(TITLE|CONTENT)\\}\\}").matcher(template);
     String result =
         matcher.replaceAll(
             m ->
                 java.util.regex.Matcher.quoteReplacement(
-                    m.group(1).equals("TITLE") ? escape(kind.title) : body));
+                    m.group(1).equals("TITLE") ? escape(kind.title) : renderedBody));
     Json.write(output, result);
     return output.toString();
   }

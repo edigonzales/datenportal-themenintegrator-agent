@@ -48,8 +48,9 @@ public final class Workflow implements AutoCloseable {
     if (operation.equals("organization_schema")) return new Organizations(this).schema(args);
     return store.edit(
         Json.required(args, "run_id"),
-        r ->
-            switch (operation) {
+        r -> {
+          try {
+            return switch (operation) {
               case "status" -> status(r);
               case "attach" -> attach(r, args);
               case "provenance" -> provenance(r, args);
@@ -74,6 +75,7 @@ public final class Workflow implements AutoCloseable {
               case "prepare_organization" ->
                   new Organizations(this).prepare(r, Json.obj(args.get("values")));
               case "validate_organization" -> new Organizations(this).validate(r);
+              case "reset_model_repair" -> ModelRepairs.reset(r, args);
               case "derive_model" -> new Models(this).derive(r, args);
               case "validate_model" -> new Models(this).validate(r);
               case "transform" -> new Converters(this).transform(r, args);
@@ -92,7 +94,14 @@ public final class Workflow implements AutoCloseable {
               case "retry_delivery" ->
                   new Deliveries(this).retry(r, Json.required(args, "environment"));
               default -> throw new Problem("unknown_operation", "Operation ist nicht bekannt.");
-            });
+            };
+          } catch (Problem error) {
+            if (r.containsKey("diagnostic_history"))
+              error.details.put("diagnostic_history", r.get("diagnostic_history"));
+            if (r.containsKey("model_repair")) error.details.put("repair", r.get("model_repair"));
+            throw error;
+          }
+        });
   }
 
   private Object start(Map<String, Object> a) {
@@ -390,7 +399,29 @@ public final class Workflow implements AutoCloseable {
           gate);
   }
 
+  Map<String, Object> validateXtf(Map<String, Object> r, Path xtf, String name) {
+    try {
+      var result = validator.validate(xtf, offices(r), directory(r).resolve(name));
+      var check =
+          Diagnostics.record(
+              this,
+              r,
+              "ilivalidator",
+              Json.bool(result, "valid", false) ? "PASSED" : "FAILED",
+              result,
+              false);
+      result.put("diagnostics", check);
+      return result;
+    } catch (Problem error) {
+      error.details.put(
+          "diagnostics",
+          Diagnostics.record(this, r, "ilivalidator", "ERROR", error.result(), false));
+      throw error;
+    }
+  }
+
   private Object status(Map<String, Object> r) {
+
     var result = new LinkedHashMap<>(r);
     var valid = Json.map();
     for (String gate : Json.obj(r.get("approvals")).keySet()) {
@@ -601,7 +632,7 @@ public final class Workflow implements AutoCloseable {
                 "message",
                 "Attributbeschreibung fehlt."));
     errors.addAll(Xml.checkOffices(offices(r), Json.str(sheet, "creator_ref", null)));
-    var ili = validator.validate(sheet(r), offices(r), directory(r).resolve("validation"));
+    var ili = validateXtf(r, sheet(r), "validation");
     for (Object o : Json.list(ili.get("checks")))
       for (Object msg : Json.list(Json.obj(o).get("messages")))
         (msg.toString().startsWith("Error:") ? errors : warnings)
@@ -660,6 +691,7 @@ public final class Workflow implements AutoCloseable {
             r.get("changes"),
             "provenance",
             r.get("provenance"));
+    report.put("diagnostic_history", r.get("diagnostic_history"));
     report.put("fingerprint", fingerprint(r, "metadata"));
     Json.obj(r.get("checks")).put("metadata", report);
     var result = new LinkedHashMap<>(report);

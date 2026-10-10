@@ -238,7 +238,7 @@ Das verbindliche Schema wird in `Operations.ALL` definiert; unbekannte Felder un
 | `organization_schema` | `organization`, `values={}` | Office-Regeln aus Compiler, vorhandene Teams/Offices, fehlende Angaben |
 | `prepare_organization` | `values*` | Kandidaten; `organization_exists`, `unknown_team`, `empty_team`, `users_unconfirmed`, `team_conflict`, Office-Fehler |
 | `validate_organization` | – | Office-/YAML-/Gradle-Bericht + HTML; `organization_missing` |
-| `derive_model` | `identity*`, `confirmations={}`, `changes`, `allow_breaking=false` | Ableitungsnachweise oder `NEEDS_INPUT`, Kandidat, Vorschau |
+| `derive_model` | `identity*`, `confirmations={}`, `range_proposals={}`, `changes`, `allow_breaking=false`, `repair_of`, `repair_reason` | Ableitungsnachweise oder `NEEDS_INPUT`, Kandidat, Vorschau |
 | `validate_model` | – | Compiler-/Reviewnachweise + echte GRETL-/XTF-Prüfung; `model_missing`, Kandidaten-/Vertragsfehler |
 | `publication_plan` | `environment*` | Konkretes Ziel mit Fingerprint; `environment_disabled`, `runtime_incompatible` |
 | `prepare_pr` | `environment*` | URL, Head, Branch, Checkout; `pr_base_conflict`, `pr_checkout_exists` |
@@ -272,7 +272,7 @@ Image stehen im [Anwenderhandbuch](anwenderhandbuch.md#codex-desktop-codex-cli-u
 
 ## Modellierung und GRETL-Hook
 
-Die erste Umsetzung erzeugt eine Topic mit einer flachen Klasse. Keine aus Beispielen erfundenen Schlüssel, Fachwertebereiche, geschlossenen Codelisten oder Geometrien. INTEGER hat den technischen CSV-Vertrag mit 64-Bit-Grenzen. Für konkrete DECIMAL-/NUMERIC-Domains werden Wertebereich und Genauigkeit erfragt; beobachtete Grenzen werden nicht automatisch übernommen. DATE verwendet INTERLIS.XMLDate. Die Standarddomain INTERLIS.XMLDateTime unterstützt im bestehenden Adapter den CSV-Offset +01:00 nicht; der Integrator meldet diese Grenze ohne Formatänderung. Fachliche Beschreibungen und belegte Einheiten werden übernommen. Zusätzliche Domains/Constraints brauchen eine bestätigte Spezifikation.
+Die erste Umsetzung erzeugt eine Topic mit einer flachen Klasse. Keine aus Beispielen erfundenen Schlüssel, Fachwertebereiche, geschlossenen Codelisten oder Geometrien. Neue INTEGER-/DECIMAL-/NUMERIC-Ableitungen benötigen bestätigte Spezifikationen oder `range_proposals`; es gibt keinen pauschalen Modellbereich. Der technische CSV-INTEGER-Vertrag bleibt unverändert. Der Kern prüft Grenzen und Genauigkeit gegen die vollständige Statistik und speichert Begründung, Vorzeichenentscheidung und Herkunft `agent_estimate` ohne fingierte Bestätigung. DATE verwendet INTERLIS.XMLDate. Die Standarddomain INTERLIS.XMLDateTime unterstützt im bestehenden Adapter den CSV-Offset +01:00 nicht; der Integrator meldet diese Grenze ohne Formatänderung. Fachliche Beschreibungen und belegte Einheiten werden übernommen. Zusätzliche Domains/Constraints brauchen eine bestätigte Spezifikation.
 
 Die High-Level-Antwort wird vollständig gesichert. Compiler-Evidenz und automatisches SO-Review müssen erfolgreich sein; unvollständige Proofs bleiben Kandidaten. Manuelle Reviewpunkte bleiben für den Menschen sichtbar. Der Adapter berücksichtigt Compiler-Evidenz auch dann, wenn der Fach-MCP keinen separaten `compilerValid`-Boolean im Review liefert.
 
@@ -457,3 +457,45 @@ Publikationen werden erzeugt.
 Die vollständigen Fachintegrationstests bleiben eine eigene lokale Prüfung mit
 `config/local.toml` und den tatsächlich konfigurierten MCP-/GRETL-Diensten.
 Die isolierten CI-Smokes ersetzen diese Abnahme nicht.
+
+## SO-DATA und dauerhafte Diagnosen
+
+Neue CSV-Modelle verwenden `SO-DATA`; gespeicherte Vorgänge behalten ihr Profil.
+Der Integrator entfernt beschreibende Spezifikationsfelder vor dem Authoring und
+prüft die beauftragte Identität auch am zurückgegebenen Modellkopf. Der geplante
+Themen-Dateiname ist `<Modellname>.ili`; interne Prüfsummen-Dateinamen sind keine
+Modellnamen. `range_proposals.<spalte>` enthält `type_spec`, `reason` und
+`negative_values_possible`. Grenzen müssen alle beobachteten Werte einschliessen;
+die dezimale Genauigkeit ergibt sich aus den gleich skalierten Grenzen.
+Bestätigte Spezifikationen gehen vor, widersprüchliche Eingaben sind Fehler.
+Vorschläge und Begründungen gehören zu `model.mapping` und damit zum Fingerprint.
+
+`diagnostic_history`, `model_repair` und `model_repair_history` liegen dagegen auf
+Vorgangsebene ausserhalb dieses Fingerprints. Jeder Nachweis besitzt eine UUID,
+Prüftyp, Ergebnis, Versuchszahl und Artefakte mit absoluten Pfaden/SHA-256.
+`diagnostics/<UUID>/evidence.json` enthält die unveränderte Werkzeugantwort;
+das lesbare MCP-Protokoll ist ausdrücklich als aus Diagnosen erzeugt bezeichnet.
+Originale Werkzeuglogs und vorhandene GRETL-Berichte werden separat gesichert.
+HTML-Links werden nur für vorhandene, prüfsummengültige Artefakte unter dem realen
+Diagnoseverzeichnis desselben Vorgangs erzeugt. `status` und Fehlerantworten
+liefern die Historie für Chatlinks und Wiederaufnahme.
+
+Die erste fehlgeschlagene Compiler-/CSV-Prüfung öffnet die Reparaturserie.
+`derive_model(repair_of, repair_reason)` referenziert die letzte Fehlprüfung und
+persistiert den Versuch vor dem externen Aufruf. Weitere Prüfungen zählen nicht
+als zusätzliche Korrekturen. Nach drei Versuchen folgt `repair_limit_reached`.
+`reset_model_repair(run_id, human_statement)` setzt einen tatsächlichen neuen
+menschlichen Auftrag voraus und archiviert den alten Stand. Testfreigaben und
+Reset-Aussagen sind ausschliesslich in isolierten Fixtures synthetisch.
+
+Für die gemeinsame Entwicklungsabnahme können `IntegrationTest` und
+`ModelRepairIntegrationTest` mit `-PintegrationConfig=/absoluter/pfad/test.toml`
+eine eigene Konfiguration auswählen, beispielsweise:
+
+```sh
+./bin/datenportal-agent gradle integrationTest -PintegrationConfig=/absoluter/pfad/test.toml --tests ch.so.agi.integrator.ModelRepairIntegrationTest
+```
+
+Andere Integrationstestklassen verwenden weiterhin `config/local.toml`.
+Dies ändert weder diese Datei noch veröffentlichte Image-Pins. Erst nach
+MCP-Veröffentlichung wird dessen Registry-Digest in allen Integrator-Pins ersetzt.

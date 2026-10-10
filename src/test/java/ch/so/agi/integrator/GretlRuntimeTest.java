@@ -208,6 +208,8 @@ class GretlRuntimeTest {
     assertTrue(
         p.calls.stream().anyMatch(c -> c.get(1).equals("cp") && c.get(2).contains("/build/.")),
         "Capture reports even after timeout");
-    assertTrue(Files.isRegularFile(f.workflow.directory(run).resolve("validation/timeout.log")));
+    try (var logs = Files.walk(f.workflow.directory(run).resolve("validation"))) {
+      assertTrue(logs.anyMatch(path -> path.getFileName().toString().equals("timeout.log")));
+    }
   }
 }

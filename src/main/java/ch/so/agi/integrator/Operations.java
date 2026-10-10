@@ -137,8 +137,16 @@ public final class Operations {
         "run_id!",
         "identity:object!",
         "confirmations:object",
+        "range_proposals:object",
+        "repair_of",
+        "repair_reason",
         "changes:array",
         "allow_breaking:boolean");
+    add(
+        "reset_model_repair",
+        "Neue Reparaturserie nach ausdrücklichem menschlichem Neuauftrag.",
+        "run_id!",
+        "human_statement!");
     add(
         "validate_model",
         "Modellstand und GRETL-CSV-Prüfung in isolierter Arbeitskopie prüfen.",

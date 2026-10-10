@@ -27,15 +27,26 @@ public final class Models {
   public Object derive(Map<String, Object> r, Map<String, Object> args) {
     if (Json.str(r, "workflow", "topic").equals("organization"))
       throw new Problem("wrong_workflow", "Organisationsvorgang modelliert keine CSV.");
+    ModelRepairs.requireReference(r, args);
     Path csv = w.requiredFile(r, "data");
     w.require(r, "data");
     w.exportRequired(r);
     var sheet = w.describe(r);
-    var identity = Json.obj(args.get("identity"));
+    var identity = new LinkedHashMap<>(Json.obj(args.get("identity")));
     var confirmations = Json.obj(args.get("confirmations"));
+    var proposals = Json.obj(args.get("range_proposals"));
+    String profile =
+        Json.str(
+            identity, "rule_profile", Json.str(Json.obj(r.get("model")), "profile", "SO-DATA"));
+    if (!Set.of("CORE", "SO", "SO-DATA").contains(profile))
+      throw new Problem("model_profile", "Unbekanntes Regelprofil.");
+    identity.put("rule_profile", profile);
+
     var missing = new ArrayList<>();
     for (String field :
-        List.of("name", "uri", "version", "technical_contact", "title", "short_description"))
+        (profile.equals("SO-DATA")
+            ? List.of("name", "uri", "version")
+            : List.of("name", "uri", "version", "technical_contact", "title", "short_description")))
       if (Json.str(identity, field, "").isBlank()) missing.add(field);
     if (!missing.isEmpty())
       return Json.map(
@@ -44,22 +55,27 @@ public final class Models {
           "missing",
           missing,
           "defaults",
-          Json.map("ili_version", "2.4", "rule_profile", "SO", "model_purpose", "VALIDATION"));
+          Json.map("ili_version", "2.4", "rule_profile", profile, "model_purpose", "VALIDATION"));
     String modelName = name(identity, "name", null),
         topic = name(identity, "topic", "Data"),
         clazz = name(identity, "class", "Observation");
     try {
       if (!URI.create(Json.required(identity, "uri")).isAbsolute())
         throw new IllegalArgumentException();
-      java.time.LocalDate.parse(Json.required(identity, "version"));
+      var date = java.time.LocalDate.parse(Json.required(identity, "version"));
+      if (profile.equals("SO-DATA")
+          && (!Json.required(identity, "version").matches("[0-9]{4}-[0-9]{2}-[0-9]{2}")
+              || !modelName.endsWith(
+                  "_" + date.format(java.time.format.DateTimeFormatter.BASIC_ISO_DATE))))
+        throw new IllegalArgumentException();
+
     } catch (Exception e) {
       throw new Problem(
           "model_identity", "Absolute Modell-URI und ISO-Versionsdatum erforderlich.");
     }
     if (!Json.str(identity, "ili_version", "2.4").equals("2.4"))
       throw new Problem("unsupported_model_version", "Erste Umsetzung unterstützt INTERLIS 2.4.");
-    String purpose = Json.str(identity, "model_purpose", "VALIDATION"),
-        profile = Json.str(identity, "rule_profile", "SO");
+    String purpose = Json.str(identity, "model_purpose", "VALIDATION");
     var attrs = Json.list(sheet.get("attributes"));
     var inspection =
         Csv.inspect(
@@ -87,13 +103,32 @@ public final class Models {
                     "Serienausgaben haben unterschiedliche Datenverträge; gemeinsame Struktur klären."));
         }
     }
+    var columnNames = attrs.stream().map(Json::obj).map(a -> Json.required(a, "name")).toList();
+    for (String column : proposals.keySet())
+      if (!columnNames.contains(column))
+        throw new Problem("range_proposal_invalid", "Unbekannte CSV-Spalte.", "column", column);
     var typed = new ArrayList<Object>();
+
     var mappings = new ArrayList<Object>();
     var questions = new ArrayList<>();
     for (Object o : attrs) {
       var a = Json.obj(o);
       String column = Json.required(a, "name");
       var confirmation = Json.obj(confirmations.get(column));
+      for (Object prior : Json.list(Json.obj(r.get("model")).get("mapping"))) {
+        var previous = Json.obj(prior);
+        var saved = Json.obj(previous.get("confirmed"));
+        if (column.equals(previous.get("column")) && Json.bool(saved, "confirmed", false)) {
+          if (!confirmation.isEmpty() && !Json.digest(saved).equals(Json.digest(confirmation)))
+            throw new Problem(
+                "confirmed_semantics_conflict",
+                "Bestätigte Typsemantik darf nicht still ersetzt werden.",
+                "column",
+                column);
+          confirmation = saved;
+        }
+      }
+
       String type = Json.str(a, "data_type", "").toUpperCase(Locale.ROOT);
       var observed =
           Json.list(inspection.get("columns")).stream()
@@ -107,16 +142,28 @@ public final class Models {
         questions.add(
             column
                 + ": führende Nullen; numerische Interpretation bestätigen oder TEXT verwenden.");
-      if (Json.str(a, "description", "").isBlank())
+      if (!profile.equals("SO-DATA") && Json.str(a, "description", "").isBlank())
         questions.add(column + ": fachliche Beschreibung fehlt.");
       if (!Json.str(a, "code_list", "").isBlank() && !confirmation.containsKey("type_spec"))
         questions.add(column + ": Codeliste ist belegt, aber Werte/Domain noch nicht bestätigt.");
       var typeSpec = Json.obj(confirmation.get("type_spec"));
-      if (Set.of("DECIMAL", "NUMERIC").contains(type) && typeSpec.isEmpty())
+      Map<String, Object> proposal = Json.map();
+      if (proposals.containsKey(column)) {
+        proposal = ModelRanges.proposal(column, Json.obj(proposals.get(column)), observed, type);
+        if (!typeSpec.isEmpty()
+            && !Json.digest(typeSpec).equals(Json.digest(proposal.get("type_spec"))))
+          throw new Problem(
+              "range_proposal_conflict",
+              "Vorschlag widerspricht vorhandener Spezifikation.",
+              "column",
+              column);
+        if (typeSpec.isEmpty()) typeSpec = Json.obj(proposal.get("type_spec"));
+      }
+      if (Set.of("INTEGER", "DECIMAL", "NUMERIC").contains(type) && typeSpec.isEmpty())
         questions.add(
             column
                 + ": konkreten numerischen Wertebereich und Genauigkeit bestätigen. INTERLIS verlangt min/max für einen instanziierbaren Zahlentyp; beobachtete Grenzen werden nicht automatisch übernommen.");
-      if (type.equals("TEXT") && typeSpec.isEmpty() && profile.equals("SO"))
+      if (type.equals("TEXT") && typeSpec.isEmpty() && Set.of("SO", "SO-DATA").contains(profile))
         questions.add(
             column
                 + ": maximale Textlänge für das SO-Regelprofil bestätigen; beobachtete Längen sind keine fachliche Grenze.");
@@ -124,23 +171,14 @@ public final class Models {
         questions.add(
             column
                 + ": Der bestehende GRETL-/INTERLIS-XMLDateTime-Adapter akzeptiert den vorgeschriebenen CSV-Offset +01:00 nicht. Passende belegte Modelldomain klären; keine stille Umdeutung zu TEXT und keine Formatänderung.");
-      if (!typeSpec.isEmpty() && !Json.bool(confirmation, "confirmed", false))
+      if (!typeSpec.isEmpty() && proposal.isEmpty() && !Json.bool(confirmation, "confirmed", false))
         questions.add(column + ": zusätzliche Typsemantik bestätigen.");
       if (typeSpec.isEmpty())
         typeSpec =
             switch (type) {
               case "TEXT" -> Json.map("baseType", Json.map("kind", "TEXT"));
-              case "INTEGER" ->
-                  Json.map(
-                      "baseType",
-                      Json.map(
-                          "kind",
-                          "NUM_RANGE",
-                          "min",
-                          new java.math.BigDecimal("-9223372036854775808"),
-                          "max",
-                          new java.math.BigDecimal("9223372036854775807")));
-              case "DECIMAL", "NUMERIC" -> Json.map("baseType", Json.map("kind", "NUMERIC"));
+              case "INTEGER", "DECIMAL", "NUMERIC" ->
+                  Json.map("baseType", Json.map("kind", "NUMERIC"));
               case "BOOLEAN" -> Json.map("baseType", Json.map("kind", "BOOLEAN"));
               case "DATE" -> Json.map("domainFqn", "INTERLIS.XMLDate");
               case "DATETIME" -> Json.map("domainFqn", "INTERLIS.XMLDateTime");
@@ -174,6 +212,8 @@ public final class Models {
               typeSpec,
               "observed",
               observed,
+              "range_proposal",
+              proposal,
               "confirmed",
               confirmation,
               "origin",
@@ -227,13 +267,14 @@ public final class Models {
                                 Json.str(
                                     Json.obj(sheet.get("fields")),
                                     "description",
-                                    Json.required(identity, "short_description"))),
+                                    Json.str(identity, "short_description", ""))),
                             "attributes",
                             typed,
                             "constraints",
                             Json.list(identity.get("constraints")))))));
     for (String field : List.of("domains", "units", "imports"))
       if (identity.containsKey(field)) spec.put(field, identity.get(field));
+    if (profile.equals("SO-DATA")) spec = new LinkedHashMap<>(Json.obj(withoutDescriptions(spec)));
     Map<String, Object> result;
     String operation;
     Path existing = w.store.file(r, "model");
@@ -267,13 +308,24 @@ public final class Models {
       operation = "authorIliModel";
       callArgs.put("spec", spec);
     }
+    ModelRepairs.reserve(w, r, args);
     r.put(
         "pending_model", Json.map("operation", operation, "arguments", callArgs, "at", Json.now()));
     w.persist(r);
-    result = w.interlis.call(operation, callArgs);
+    try {
+      result = w.interlis.call(operation, callArgs);
+    } catch (Problem error) {
+      var check = Diagnostics.record(w, r, "ili2c", "ERROR", error.result(), false);
+      error.details.put("diagnostics", check);
+      throw error;
+    }
+    Diagnostics.record(
+        w, r, "ili2c", compilerStatus(Json.obj(result.get("afterReview")), result), result, true);
+
     r.remove("pending_model");
     String text =
         Json.str(result, "updatedModelText", Json.str(result, "candidateModelText", null));
+    if (text != null && authoringValid(result)) ModelIdentity.verify(text, identity);
     var model =
         Json.map(
             "identity",
@@ -332,6 +384,10 @@ public final class Models {
         result.get("status"),
         "candidate",
         !authoringValid(result),
+        "diagnostic_history",
+        r.get("diagnostic_history"),
+        "repair",
+        r.get("model_repair"),
         "model",
         model,
         "next",
@@ -344,10 +400,36 @@ public final class Models {
             w.directory(r).resolve("model-candidate.html"),
             Reports.Kind.MODEL_CANDIDATE,
             Json.str(r, "identifier", null),
-            Json.map("model_text", text, "model", model, "changes", r.get("changes"))));
+            Json.map(
+                "model_text",
+                text,
+                "model",
+                model,
+                "changes",
+                r.get("changes"),
+                "diagnostic_history",
+                r.get("diagnostic_history"),
+                "repair",
+                r.get("model_repair"))));
+  }
+
+  static Object withoutDescriptions(Object value) {
+    if (value instanceof Map<?, ?> map) {
+      var copy = new LinkedHashMap<String, Object>();
+      map.forEach(
+          (key, child) -> {
+            if (!Set.of("iliDoc", "metaAttributes").contains(key))
+              copy.put(key.toString(), withoutDescriptions(child));
+          });
+      return copy;
+    }
+    if (value instanceof List<?> list)
+      return list.stream().map(Models::withoutDescriptions).toList();
+    return value;
   }
 
   String metadataRelative(Map<String, Object> r) {
+
     Path dir = w.settings.topics.resolve(w.topic(r));
     if (Files.isDirectory(dir))
       try (var paths = Files.list(dir)) {
@@ -379,6 +461,15 @@ public final class Models {
     if (review.containsKey("compilerValid")) return Json.bool(review, "compilerValid", false);
     return Objects.equals(
         Json.obj(Json.obj(result.get("evidence")).get("compiler")).get("status"), "PASSED");
+  }
+
+  static String compilerStatus(Map<String, Object> review, Map<String, Object> result) {
+    if (compilerPassed(review, result)) return "PASSED";
+    if (Boolean.FALSE.equals(review.get("compilerValid"))
+        || "FAILED"
+            .equals(Json.obj(Json.obj(result.get("evidence")).get("compiler")).get("status")))
+      return "FAILED";
+    return "NOT_CHECKED";
   }
 
   public static String task(String original, String identifier, String model) {
@@ -467,6 +558,7 @@ public final class Models {
     w.exportRequired(r);
     Path ili = w.requiredFile(r, "model");
     var sheet = w.describe(r);
+    ModelIdentity.verify(Json.contents(ili), Json.obj(model.get("identity")));
     var errors = new ArrayList<Object>();
     if (!Objects.equals(model.get("contract_sha256"), contract(sheet)))
       errors.add(
@@ -484,16 +576,24 @@ public final class Models {
               "message",
               "CSV seit Ableitung verändert; erneut ableiten."));
     if (!Objects.equals(Json.sha(ili), model.get("evidence_model_sha256"))) {
-      var result =
-          w.interlis.call(
-              "reviewIliModel",
-              Json.map(
-                  "modelText",
-                  Json.contents(ili),
-                  "modelPurpose",
-                  model.get("purpose"),
-                  "ruleProfile",
-                  model.get("profile")));
+      Map<String, Object> result;
+      try {
+        result =
+            w.interlis.call(
+                "reviewIliModel",
+                Json.map(
+                    "modelText",
+                    Json.contents(ili),
+                    "modelPurpose",
+                    model.get("purpose"),
+                    "ruleProfile",
+                    model.get("profile")));
+      } catch (Problem error) {
+        error.details.put(
+            "diagnostics", Diagnostics.record(w, r, "ili2c", "ERROR", error.result(), false));
+        throw error;
+      }
+      Diagnostics.record(w, r, "ili2c", compilerStatus(result, result), result, true);
       model.put("external_review", result);
       model.put("evidence_model_sha256", Json.sha(ili));
       model.put(
@@ -584,6 +684,9 @@ public final class Models {
                 "GRETL hat keine ausgeführte erfolgreiche CSV-Validierung bestätigt."));
       }
     }
+    if (!Json.bool(gretl, "skipped", false))
+      Diagnostics.record(
+          w, r, "gretl-csv", Json.bool(gretl, "valid", false) ? "PASSED" : "FAILED", gretl, true);
     if (gretl.containsKey("log")
         && !Json.bool(gretl, "valid", false)
         && Json.contents(Path.of(Json.required(gretl, "log")))
@@ -594,9 +697,7 @@ public final class Models {
               "datetime_validator_limit",
               "message",
               "Die bestehende GRETL-/ilivalidator-Prüfung für INTERLIS.XMLDateTime akzeptiert den gültigen CSV-Zeitzonenoffset +01:00 nicht. Eine passende Modelldomain oder separat beauftragte Komponentenänderung ist erforderlich; Daten werden nicht still verändert."));
-    var xtf =
-        w.validator.validate(
-            w.sheet(r), w.offices(r), w.directory(r).resolve("model-xtf-validation"));
+    var xtf = w.validateXtf(r, w.sheet(r), "model-xtf-validation");
     var report =
         Json.map(
             "valid",
@@ -621,7 +722,11 @@ public final class Models {
             Json.sha(w.sheet(r)),
             "changes",
             r.get("changes"));
+    if (Json.bool(report, "valid", false)) ModelRepairs.passed(r);
+    report.put("diagnostic_history", r.get("diagnostic_history"));
+    report.put("repair", r.get("model_repair"));
     report.put("fingerprint", w.fingerprint(r, "model"));
+
     Json.obj(r.get("checks")).put("model", report);
     var result = new LinkedHashMap<>(report);
     result.put(

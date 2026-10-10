@@ -33,6 +33,9 @@ test {
 }
 // Only real integration tests need host-visible paths for sibling Docker bind mounts.
 tasks.named('integrationTest', Test) {
+    if (providers.gradleProperty('integrationConfig').isPresent()) {
+        systemProperty 'integrator.test.config', providers.gradleProperty('integrationConfig').get()
+    }
     if (System.getenv('DATENPORTAL_TEST_TMP')) {
         systemProperty 'java.io.tmpdir', System.getenv('DATENPORTAL_TEST_TMP')
     }

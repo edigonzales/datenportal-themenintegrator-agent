@@ -378,8 +378,7 @@ public final class Organizations {
       }
     }
     errors.addAll(Xml.checkOffices(w.offices(r), Json.required(spec, "office_identifier")));
-    var ili =
-        w.validator.validate(null, w.offices(r), w.directory(r).resolve("organization-validation"));
+    var ili = w.validateXtf(r, null, "organization-validation");
     Path snapshot = new Workspace(w).snapshot(r, "organization");
     Path assertions = w.directory(r).resolve("organization-validation/check-organization.gradle");
     Json.write(
@@ -417,6 +416,7 @@ public final class Organizations {
             false,
             "message",
             "Der Seed erzeugt für eine Organisation ohne Datenthema noch keinen Jenkins-Job.");
+    report.put("diagnostic_history", r.get("diagnostic_history"));
     report.put("fingerprint", w.fingerprint(r, "organization"));
     Json.obj(r.get("checks")).put("organization", report);
     var result = new LinkedHashMap<>(report);
