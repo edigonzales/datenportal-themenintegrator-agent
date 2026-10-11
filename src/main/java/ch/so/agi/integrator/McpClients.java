@@ -62,33 +62,12 @@ public final class McpClients {
         if (Json.str(config, "transport", "stdio").equals("http")) {
           transport = http(Json.required(config, "url"));
         } else {
-          List<String> command;
-          if (config.containsKey("image")) {
-            selected = docker.selected(service, true);
-            docker.reap();
-            container = docker.name(service);
-            docker.register(container);
-            command = docker.launch(container, Json.required(selected, "image_id"));
-          } else {
-            var jar = settings.path(Json.required(config, "jar"));
-            if (!java.nio.file.Files.isRegularFile(jar))
-              throw new Problem(
-                  "interlis_unavailable",
-                  "Konfiguriertes INTERLIS-MCP-JAR fehlt.",
-                  "path",
-                  jar.toString());
-            command =
-                List.of(
-                    Json.str(
-                        config,
-                        "java_command",
-                        java.nio.file.Path.of(System.getProperty("java.home"), "bin/java")
-                            .toString()),
-                    "-jar",
-                    jar.toString(),
-                    "--spring.profiles.active=stdio");
-          }
-          String logName = container == null ? service : container;
+          selected = docker.selected(service, true);
+          docker.reap();
+          container = docker.name(service);
+          docker.register(container);
+          var command = docker.launch(container, Json.required(selected, "image_id"));
+          String logName = container;
           var stdio =
               new EofStdioTransport(
                   command,

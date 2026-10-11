@@ -1,5 +1,37 @@
 # Entwicklerhandbuch
 
+## Vollständige synthetische Docker-Abnahme
+
+```sh
+./bin/datenportal-agent acceptance delivery
+```
+
+Die explizite Abnahme erzeugt private Themen-/Stack-Kopien und eigene Ports,
+startet die Infrastruktur mit der Host-Docker-CLI und führt Modellierung und
+Anlieferung über die erzeugten Codex-/OpenCode-MCP-Konfigurationen im
+Agent-Container aus. Sie verwendet nur ausdrücklich markierte synthetische
+Freigaben und die Testzugänge des eigenen JCasC-Stacks. `init` führt diese
+Publikationsabnahme nicht automatisch aus.
+
+Der Positivfall muss GRETL-Validierung, Publikation, Manifest, Portal und Download
+bestätigen. Der Negativfall wird gezielt an die echte Jenkins-Schnittstelle der
+Testinstanz geliefert: ein CSV-Validierungsfehler muss vor
+`preparePublicationWorkspace` stoppen, ohne den Release zu ändern. Infrastruktur-
+und Anmeldungsfehler sind keine bestandenen Negativtests.
+
+Die erzeugte CSV-Task verwendet einen abhängigen Gradle-`Copy`-Task mit `from`,
+`into` und `rename`: Jenkins-Uploads ohne Endung werden bytegleich als
+`build/integrator-validation/input.csv` geprüft. Der Upload bleibt unverändert.
+Bereits zuvor erzeugte Taskdefinitionen benötigen eine erneute Modellableitung
+mit der bestehenden Identität, Prüfung und Freigabe der geänderten Task. Alte
+fachliche Kandidaten werden bei einem Softwareupdate nicht automatisch geändert.
+
+Berichte liegen unter `.datenportal-integrator/delivery-acceptance/<UUID>/`.
+Die Abnahme entfernt ausschliesslich ihre eigenen Container, Volumes und Secrets.
+Die vorhandenen Fach-MCPs, der normale Dev-Stack und fachliche Vorgänge bleiben
+ausserhalb dieser Abnahme.
+
+
 ## Docker-Anlieferung und lokale Zugangsdaten
 
 `bin/datenportal-agent acceptance delivery` verwendet `DeliveryAcceptance` für
@@ -120,9 +152,50 @@ docker run --rm --network host --user "$(id -u):$(id -g)" --group-add "$socket_g
   '
 ```
 
-Die zweite Prüfung erzeugt ein eigenes Compose-Projekt, prüft Ersteinrichtung,
-Wiederholung und `--skip-smoke` und entfernt nur ihre eigenen Dienste/Volumes.
-Ihre Berichte bleiben unter `.datenportal-integrator/init-acceptance/` erhalten.
+Die zweite Prüfung kopiert einen privaten Entwicklungs-Checkout und verwendet den echten Docker-Launcher mit eigenen Ports und Compose-Projekt. Sie prüft Ersteinrichtung, Wiederholung, `doctor`, beide erzeugten MCP-Verbindungen und `--skip-smoke` und entfernt nur ihre eigenen Dienste/Volumes.
+Ihre Berichte bleiben unter `.datenportal-integrator/init-acceptance/` erhalten. Als zweites Argument akzeptiert `InitAcceptance` einen absoluten Pfad zu einer abweichenden Quellkonfiguration; die erzeugte Testkonfiguration hat keine aktiven Publikationsprofile.
+
+### Erweiterte Laufzeitkonfiguration
+
+Der [Docker-Einstieg](anwenderhandbuch.md#installation-und-konfiguration) ist
+der Anwenderweg. Die folgenden Modi sind für Entwicklung und isolierte Tests:
+
+```sh
+./bin/datenportal-agent --runtime docker-build init
+./bin/datenportal-agent --runtime docker-build doctor
+./bin/datenportal-agent --runtime local doctor
+./bin/datenportal-agent harness-config
+```
+
+`docker-build` baut die Checkout-Quellen im Container; `local` verwendet ein
+vorhandenes JDK 25 über `JAVA_HOME` oder `DATENPORTAL_JAVA_COMMAND`.
+`serve` startet den stdio-MCP und wartet auf einen Client; es ist kein
+zusätzlicher interaktiver Einrichtungsschritt. Direkte Java-Aufrufe bleiben
+für die Agent-Entwicklung verfügbar. Ein direkter Fach-MCP-JAR-Start wird
+hingegen nicht unterstützt.
+
+Die aktuelle Konfiguration verlangt `[datasheet]`; `[interlis]` ist optional,
+wenn kein Modellierungsablauf verwendet wird. Beide Abschnitte unterstützen
+`transport="http"` mit `url` oder `transport="stdio"` mit einem Docker-`image`.
+Bei verwaltetem HTTP sind `managed=true`, Image und eine lokale Adresse mit
+explizitem Port und `/mcp` nötig. Unverwaltete HTTP-Dienste startet der Integrator
+nicht. Das Datenblatt-Image liefert zusätzlich die Originalmodelle; ohne Image
+müssen diese über `model_dirs` erreichbar sein. `setup-mcps` kopiert sie aus
+einem gestoppten Image-Container. Im stdio-Modus werden `url` und `managed`
+entfernt; jede Verbindung startet einen eigenen Docker-Container.
+
+`[gretl].mode="compose"` hält den Prüfcontainer verfügbar; `"ephemeral"`
+startet pro Prüfung einen eigenen Container. Ohne `mode` gilt `ephemeral`,
+die vollständige Standardvorlage wählt ausdrücklich `compose`.
+GRETL verwendet immer Java 17 und das Bundle im festgelegten Jenkins-Image.
+`setup-gretl` inventarisiert das Image ohne laufenden Jenkins-Server.
+
+`timeout_seconds` gilt standardmässig 300 Sekunden; `stack_timeout_seconds`
+1800 Sekunden für Stack-/Dienststart und Bootstrap. Beide sind auf 1–7200
+begrenzt. Schema und Java-Prüfung verwenden dieselben aktuellen Felder und
+Typen; `SettingsTest` prüft die Vorlage sowie ungültige Werte. Die Betriebs-
+und Update-Rezepte stehen im Anwenderhandbuch; Setup-Helfer sind kein zweiter
+Standardinstallationsweg.
 
 ## Architektur und Verantwortlichkeiten
 
@@ -334,7 +407,7 @@ Organisationsvorgänge sind im [Anwenderhandbuch](anwenderhandbuch.md) beschrieb
 | Komponente | Verantwortung |
 |---|---|
 | `Settings`, `Json`, `Problem`, `ProcessRunner` | TOML, Pfadgrenzen, Prüfsummen, atomare Speicherung, strukturierte Fehler und externe Prozesse |
-| `Store` | Vorgänge, Dateiartefakte, Sperren, Ereignisse und explizite Migration |
+| `Store` | Vorgänge, Dateiartefakte, Sperren, Ereignisse und Prüfung des aktuellen Schemas |
 | `Workflow` | Operationen, Prüfstände, Freigabeabhängigkeiten, Kandidaten und lokale Übernahme |
 | `Csv`, `Xml`, `Validator`, `Reports` | Vollständige technische CSV-Prüfung, sicherer XML-Leser, externe ilivalidator-Aufrufe, XLSX/HTML |
 | `McpClients` | Verzögert initialisierte, wiederverwendete SDK-Clients für beide Fach-MCPs über Docker-stdio oder HTTP |
@@ -387,7 +460,7 @@ Der [GRETL-`CsvValidator`](https://github.com/edigonzales/gretl-next/blob/main/g
 | `model`, `organization_spec`, `transform` | Ableitungsstand, bestätigte Organisationsdaten oder Konverternachweis |
 | `deliveries`, `seeds` | Externe Queue-/Build-Kennungen und fortsetzbare Phasen |
 | `publication_plans`, `pull_request` | Freigegebenes Ziel und PR-Stand |
-| `events`, `delivery_history`, `historical_approvals` | Chronik, frühere Versuche und Migrationshistorie |
+| `events`, `delivery_history` | Chronik und frühere Lieferungsversuche |
 
 Dateiartefakte sind unveränderlich: beim Zugriff erneut SHA-256 prüfen. State wird mit exklusiver Dateisperre und atomarem Rename geschrieben; die temporäre Datei wird vor dem Rename synchronisiert. Auch ein fachlicher Fehler nach externem Start muss den Journalstand speichern. Unter demselben Vorgang keine konkurrierenden Änderungen ausführen.
 
@@ -401,11 +474,19 @@ Gates: `data`, `metadata`, `model`, `organization`, `publish:<profil>`. Eine Fre
 
 Beim Upload werden Datenblattinhalt und Datenartefakt für die spätere Prüfung eingefroren. Neu angehängte Dateien verändern den Prüfkontext eines bereits gestarteten Laufs nicht. `publication=accepted` und ein fehlgeschlagener Reload sind getrennte Zustände. `verify_delivery` prüft eine bestätigte Publikation erneut ohne Upload. Ein fehlender Publikationsbericht erlaubt keine sichere neue Lieferung. `retry_delivery` verlangt einen eindeutig fehlgeschlagenen, nicht publizierten Versuch und aktuelle Freigaben.
 
-### Explizite Migration
+### Nicht unterstützte Altstände
 
-`migrate_run(run_id, apply=false)` liefert Vorschau; `apply=true` schreibt zuerst eine Schema-1-Sicherung. Artefakte, Entwürfe, pending-Aufträge und externe Laufkennungen bleiben erhalten. Alte Freigaben werden historisch übernommen und neue Checks/Freigaben verlangt. Bereits laufende/abgeschlossene Lieferungen bleiben unter derselben Kennung. Python-Konverter werden markiert und nicht ausgeführt. Eine Migration ist kein Upload und keine automatische fachliche Freigabe.
+`Store` unterstützt Schema 2. Fehlende oder andere Schemaversionen sowie
+Vorgänge mit ausstehender Konverterumstellung werden vor der Bearbeitung mit
+`unsupported_state_version` zurückgewiesen. Die Datei bleibt bytegleich;
+es gibt keinen Migrationsbefehl oder automatischen Umbau historischer Freigaben.
+Aktuelle Lieferungen speichern ihren Prüfsnapshot vor dem HTTP-Upload.
+Fehlt er, stoppt `verification_snapshot_missing`; aus alten Berichten wird
+kein Ersatzkontext konstruiert. Externe Kennungen bleiben erhalten und erlauben
+keinen erneuten Upload ohne geklärten Ausgang.
 
 ## CLI und MCP
+
 
 CLI-Grammatik:
 
@@ -425,7 +506,7 @@ Das verbindliche Schema wird in `Operations.ALL` definiert; unbekannte Felder un
 | Operation | Argumente neben `run_id` | Ergebnis / wichtige Fehler |
 |---|---|---|
 | `start` | `organization*`, `workflow=topic`, `identifier` (topic/model nötig), `issue`, `source_environment=local`, `data_path`, `metadata_path` | Vorgang mit `id`; `invalid_identifier`, `invalid_workflow` |
-| `status` | – | State + `current_approvals`; `migration_required`, `artifact_changed` |
+| `status` | – | State + `current_approvals`; `unsupported_state_version`, `artifact_changed` |
 | `attach` | `path*`, `role*` | Artefakt; `invalid_role`, `file_missing` |
 | `baseline` | – | Baseline und Verfügbarkeit; `manifest_invalid`, `ambiguous_repository_metadata` |
 | `analyze` | – | Vollständiger CSV-Bericht, Fingerprint, HTML-Pfad; oder `skipped: metadata_only` |
@@ -436,7 +517,7 @@ Das verbindliche Schema wird in `Operations.ALL` definiert; unbekannte Felder un
 | `approve` | `gate*`, `fingerprint*`, `human_statement*` | Freigabe; `stale_review`, `validation_required`, `approval_required`, `local_test_required` |
 | `stage_change` | `relative_path*`, `source_path*` | Kandidat + Ausgangs-/Zielhash; `change_not_allowed`, `unsafe_path` |
 | `apply_local_changes` | – | Übernommene Dateien, ggf. `repository_created`; `repository_conflict`, `approval_required` |
-| `transform` | `converter*`, `tests*`, `policy*`, `instructions*` | Nachweise, Lieferantenvorgabe, Vorher/Nachher; `converter_tests_failed`, `converter_output_invalid`, `converter_migration_required` |
+| `transform` | `converter*`, `tests*`, `policy*`, `instructions*` | Nachweise, Lieferantenvorgabe, Vorher/Nachher; `converter_tests_failed`, `converter_output_invalid`, `converter_invalid` |
 | `organization_schema` | `organization`, `values={}` | Office-Regeln aus Compiler, vorhandene Teams/Offices, fehlende Angaben |
 | `prepare_organization` | `values*` | Kandidaten; `organization_exists`, `unknown_team`, `empty_team`, `users_unconfirmed`, `team_conflict`, Office-Fehler |
 | `validate_organization` | – | Office-/YAML-/Gradle-Bericht + HTML; `organization_missing` |
@@ -451,19 +532,18 @@ Das verbindliche Schema wird in `Operations.ALL` definiert; unbekannte Felder un
 | `reconcile_seed` | `environment*`, `queue*` | Zugeordneter Seed; `wrong_seed`, `invalid_queue` |
 | `verify_delivery` | `environment*` | Erneute Sichtbarkeitsprüfung; `publication_unconfirmed` |
 | `retry_delivery` | `environment*` | `ready_for_new_attempt`; `retry_unsafe` |
-| `migrate_run` | `apply=false` | Vorschau/Sicherung, Historie; `unsupported_state_version` |
 
 Werkzeughelfer: `setup-java`, `setup-tools`, `setup-mcps [--update]`, `setup-gretl [--update]`, `harness-config`, `codex [harness-argumente]`. Diese sind CLI-Helfer, keine zusätzlichen MCP-Fachoperationen.
 
 `Harness` erzeugt OpenCode-2.x-Konfiguration unter
 `mcp.servers.datenportal_integrator`. `harness-config` liefert absolute
 Launcherpfade, `init` schreibt projektbezogene Pfade mit der aktuellen
-Runtime-/Mount-Auswahl und Konfiguration. Bekannte ältere Integrator-Einträge
-werden migriert; deaktivierte Server, eigene Timeouts, Umgebungszuordnungen
-und fremde V2-Server bleiben erhalten. Numerische Alt-Timeouts werden zu
-`catalog` und `execution`, fehlende Werte zu `startup=180000`,
-`catalog=1800000`, `execution=1800000` Millisekunden. Doppeleinträge werden vor
-dem Ergänzen von Standardwerten normalisiert und zusammengeführt.
+Runtime-/Mount-Auswahl und Konfiguration. Aktuelle Launcher-Einträge erhalten
+Deaktivierung, eigene Timeouts, Umgebungszuordnungen und fremde V2-Server.
+Fehlende Timeout-Felder werden zu `startup=180000`, `catalog=1800000` und
+`execution=1800000` Millisekunden ergänzt. Alte Java-Startbefehle, direkte
+OpenCode-MCP-Einträge, `enabled` und numerische Timeouts werden zurückgewiesen.
+Es gibt weder eine Konvertierung noch eine Zusammenführung von Alt-/Neueinträgen.
 Widersprüche, unbekannte Startbefehle und fremde alte MCP-Einträge führen vor
 Dateiänderungen zu `harness_conflict`. Sicherungen bleiben unter
 `.datenportal-integrator/harness-backups/`; wiederholte Installation ist
@@ -590,13 +670,13 @@ JUnit simuliert Pull-/Cache-/Konfigurationsfehler und fremde Container. Die echt
 
 ## GRETL-Containeradapter
 
-`[gretl].image` legt das Prüfimage fest; `mode = "compose"` aktiviert die dauerhafte Laufzeit, ohne `mode` gilt `ephemeral`. Ohne Abschnitt gilt `sogis/datenportal-jenkins:0.1.0-3`. `GretlRuntime` ersetzt den Host-Aufruf in `Workspace.gradle`. Image-Pinning und Besitzerkennungen verwenden die bestehende Docker-Mechanik. Die lokale Runtime-Datei hat Schema-Version 2: Referenz, Digest, Image-ID, Plattform, Java-17-/Bundle-/Cachepfade im Container und Bundle-SHA-256. Die Inventarliste wird wie im Themen-Task aus sortierten `Dateiname=SHA256`-Zeilen mit abschliessendem LF gebildet. Alte Runtime-Dateien werden gesichert; aktive lokale JDK-/JAR-Pfade werden nicht mehr ausgewertet oder an Container weitergereicht.
+`[gretl].image` legt das Prüfimage fest; `mode = "compose"` aktiviert die dauerhafte Laufzeit, ohne `mode` gilt `ephemeral`. Ohne Abschnitt gilt `sogis/datenportal-jenkins:0.1.0-3`. `GretlRuntime` ersetzt den Host-Aufruf in `Workspace.gradle`. Image-Pinning und Besitzerkennungen verwenden die bestehende Docker-Mechanik. Die lokale Runtime-Datei hat Schema-Version 2: Referenz, Digest, Image-ID, Plattform, Java-17-/Bundle-/Cachepfade im Container und Bundle-SHA-256. Die Inventarliste wird wie im Themen-Task aus sortierten `Dateiname=SHA256`-Zeilen mit abschliessendem LF gebildet. Nicht unterstützte Runtime-Dateien bleiben unverändert und sperren die Einrichtung; die Fehlermeldung nennt den Nachweis. Lokale GRETL-JDK-/JAR-Pfade sind keine gültigen Konfigurationsfelder.
 
 Der ephemeral-Prüfcontainer überschreibt den Image-Einstiegspunkt mit einem Warteprozess. Es gibt keinen Jenkins-Controller, keine Hostmounts und keine übernommenen Jenkins-Zugangsdaten. Arbeitskopie und Zusatzdateien werden nach `/tmp` kopiert und für `jenkins` vorbereitet. Der vorhandene Wrapper und das Init-Script laufen als dieser Benutzer. `-PdataFile` und zusätzliche `-I`/`--init-script`-Argumente werden ausdrücklich übersetzt; andere Argumente werden nicht pauschal ersetzt. Die Host-Arbeitskopie bleibt im Bericht erhalten.
 
 Prüfergebnisse behalten `valid`, `returncode`, `diagnostics`, `log`, `log_sha256`, `workspace` und `messages`; Runtime-Identität, Prüfartefaktpfad und `reports_copied` kommen hinzu. Fehlende Gradle-Artefakte werden ausgewiesen; nach Fehler/Timeout wird vorhandenes Material eingesammelt; nur ephemeral-Container werden danach entfernt. Timeout-Protokolle bleiben lokal. Die Aufräumlogik entfernt nur eigene Container. Der lokale Lieferablauf vergleicht vor Bootstrap/Seed Image-ID und Bundle mit Jenkins; abweichende Stände ergeben `gretl_runtime_mismatch`. INT/PROD behalten ihre bestehenden Schnittstellen und die Bundle-Prüfung im Themen-Task.
 
-Konfigurationsfingerprints binden den vorbereiteten GRETL-Stand. Die veralteten Felder `gretl_java_home` und `gretl_offline_jars` werden lediglich kompatibel gelesen und als Hinweise angezeigt; Änderungen an diesen unbenutzten Pfaden ändern den effektiven Prüfstand nicht. Schema-2-Vorgänge, externe Lieferkennungen und unbestätigte Operationen bleiben erhalten. Runtime-Wechsel verlangen neue Prüfungen/Freigaben und starten keine Lieferung.
+Konfigurationsfingerprints binden den vorbereiteten GRETL-Stand und die aktuelle Konfiguration. Entfernte Host-GRETL-Felder werden als ungültige Konfiguration zurückgewiesen. Alte Runtime-Nachweise werden weder migriert noch überschrieben. Sie müssen bewusst ausserhalb des Runtime-Verzeichnisses archiviert werden, bevor eine Neueinrichtung möglich ist. Runtime-Wechsel verlangen neue Prüfungen/Freigaben und starten keine Lieferung.
 
 ## Dauerhafte Compose-Laufzeit
 
@@ -664,10 +744,7 @@ Die isolierten CI-Smokes ersetzen diese Abnahme nicht.
 ## SO-DATA und dauerhafte Diagnosen
 
 Neue CSV-Modelle verwenden `SO-DATA`; gespeicherte Vorgänge behalten ihr Profil.
-Das bisherige Profil `SO` heisst jetzt `SO-GIS`. Explizite neue Eingaben mit
-`SO` werden auf `SO-GIS` normalisiert. Ein bereits gespeichertes `SO` bleibt im
-Vorgang unverändert und wird nur beim MCP-Aufruf als `SO-GIS` übergeben;
-blosses Lesen oder Prüfen schreibt keine Modellidentität oder Freigabe um.
+Zulässig sind ausschliesslich `CORE`, `SO-GIS` und `SO-DATA`. Der alte Wert `SO` wird bei Modelloperationen mit `model_profile` abgewiesen; der gespeicherte Kandidat bleibt unverändert. Es gibt keinen Alias und keine automatische Profilumstellung.
 Der Integrator entfernt beschreibende Spezifikationsfelder vor dem Authoring und
 prüft die beauftragte Identität auch am zurückgegebenen Modellkopf. Der geplante
 Themen-Dateiname ist `<Modellname>.ili`; interne Prüfsummen-Dateinamen sind keine

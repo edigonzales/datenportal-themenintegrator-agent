@@ -8,11 +8,16 @@ import java.util.*;
 public class InitAcceptance {
   public static void main(String[] args) throws Exception {
     Path root = Path.of(args[0]).toAbsolutePath();
-    Settings source = Settings.load(root.resolve("config/local.toml").toString());
+    Settings source =
+        Settings.load(args.length > 1 ? args[1] : root.resolve("config/local.toml").toString());
     Path fixture = root.resolve(".datenportal-integrator/init-acceptance/" + UUID.randomUUID());
     Files.createDirectories(fixture);
-    for (String directory : List.of("validation", "templates", "runtime", "tests/fixtures", "bin"))
+    for (String directory :
+        List.of("validation", "templates", "runtime", "tests/fixtures", "bin", "src", "gradle"))
       Workspace.copy(root.resolve(directory), fixture.resolve(directory));
+    for (String file :
+        List.of("build.gradle", "settings.gradle", "gradle.lockfile", "gradlew", ".dockerignore"))
+      Files.copy(root.resolve(file), fixture.resolve(file), StandardCopyOption.COPY_ATTRIBUTES);
     Files.createDirectories(fixture.resolve("config"));
     try (var files = Files.list(root.resolve("config"))) {
       for (Path file : files.filter(Files::isRegularFile).toList())
@@ -43,14 +48,16 @@ public class InitAcceptance {
     ProcessRunner runner = new ProcessRunner();
     var command =
         List.of(
-            System.getProperty("java.home") + "/bin/java",
-            "-jar",
-            fixture.resolve("build/libs/datenportal-integrator.jar").toString());
+            fixture.resolve("bin/datenportal-agent").toString(),
+            "--runtime",
+            "docker-build",
+            "--mount-rw",
+            root.getParent().toString());
     Settings settings = null;
     try {
       var explicit = new ArrayList<>(command);
       explicit.addAll(List.of("--config", "config/missing.toml", "init"));
-      var missing = runner.run(explicit, fixture, 30, null);
+      var missing = runner.run(explicit, fixture, 300, null);
       if (missing.exitCode() == 0 || Files.exists(fixture.resolve("config/local.toml")))
         throw new AssertionError("Explicit missing configuration must not create defaults");
       var init = new ArrayList<>(command);
@@ -68,6 +75,32 @@ public class InitAcceptance {
         throw new AssertionError("Unchanged init did not reuse smoke");
       if (!configHash.equals(Json.sha(settings.file)))
         throw new AssertionError("Configuration changed");
+      var doctorCommand = new ArrayList<>(command);
+      doctorCommand.add("doctor");
+      Path doctorOutput = fixture.resolve("doctor.json");
+      var doctorProcess =
+          new ProcessBuilder(doctorCommand)
+              .directory(fixture.toFile())
+              .redirectError(fixture.resolve("doctor.log").toFile())
+              .redirectOutput(doctorOutput.toFile())
+              .start();
+      if (!doctorProcess.waitFor(300, java.util.concurrent.TimeUnit.SECONDS)) {
+        doctorProcess.destroyForcibly();
+        throw new AssertionError("Doctor timed out");
+      }
+      if (doctorProcess.exitValue() != 0) throw new AssertionError("Doctor failed");
+      var doctor = Json.read(doctorOutput);
+      Json.atomic(fixture.resolve("doctor.json"), doctor);
+      if (!Json.bool(Json.obj(doctor.get("initialization")), "ready", false)
+          || !Json.bool(Json.obj(doctor.get("datasheet_mcp")), "valid", false)
+          || !Json.bool(Json.obj(doctor.get("interlis_mcp")), "valid", false))
+        throw new AssertionError("Doctor did not confirm current readiness");
+      for (boolean codex : List.of(true, false)) {
+        try (var client = new DeliveryAcceptance(settings).client(settings, codex)) {
+          if (client.listTools().tools().size() != Operations.ALL.size())
+            throw new AssertionError("Generated MCP configuration did not expose current tools");
+        }
+      }
       init.add("--skip-smoke");
       Json.write(fixture.resolve("skip.log"), runner.checked(init, fixture, 300));
       if (Json.bool(Json.read(report), "ready", true))
@@ -86,6 +119,12 @@ public class InitAcceptance {
               "repeat_reused",
               true,
               "configuration_unchanged",
+              true,
+              "docker_launcher",
+              true,
+              "doctor_ready",
+              true,
+              "generated_clients_connected",
               true,
               "skip_not_ready",
               true));

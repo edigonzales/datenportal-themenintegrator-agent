@@ -9,7 +9,7 @@ docker run --rm --platform "$platform" --network none "$image" --help >/dev/null
 # Synthetic configuration exercises the real stdio MCP initialization and resource paths.
 docker run --rm --platform "$platform" --network none -e "EXPECTED_AGENT_VERSION=$version" --entrypoint bash "$image" -euc '
     mkdir -p /tmp/agent/config
-    printf "root = \"..\"\ntopics_repo = \"/tmp/topics\"\nstack_repo = \"/tmp/stack\"\n" > /tmp/agent/config/local.toml
+    printf "root = \"..\"\ntopics_repo = \"/tmp/topics\"\nstack_repo = \"/tmp/stack\"\n[datasheet]\ntransport = \"http\"\nurl = \"http://127.0.0.1:8000/mcp\"\n" > /tmp/agent/config/local.toml
     test -r "$DATENPORTAL_AGENT_HOME/templates/review-java.html"
     test -r "$DATENPORTAL_AGENT_HOME/validation/office-check.ini"
     test -r "$DATENPORTAL_AGENT_HOME/tests/fixtures/dataset.xtf"

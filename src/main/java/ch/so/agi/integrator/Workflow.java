@@ -41,8 +41,6 @@ public final class Workflow implements AutoCloseable {
   public Object call(String operation, Map<String, Object> args) {
     Operations.validate(operation, args);
     if (operation.equals("start")) return start(args);
-    if (operation.equals("migrate_run"))
-      return store.migrate(Json.required(args, "run_id"), Json.bool(args, "apply", false));
     if (operation.equals("metadata") && Json.str(args, "operation", "").equals("describe_schema"))
       return datasheets.call("describe_schema", Json.obj(args.get("arguments")));
     if (operation.equals("organization_schema")) return new Organizations(this).schema(args);

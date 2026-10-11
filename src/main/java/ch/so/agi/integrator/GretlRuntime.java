@@ -35,8 +35,8 @@ public class GretlRuntime {
     if (!Files.isRegularFile(file))
       throw new Problem("gretl_setup_required", "GRETL-Image mit setup-gretl vorbereiten.");
     var record = Json.read(file);
-    if (Json.number(record, "schema_version", 0) != 2
-        || !reference(s).equals(record.get("reference")))
+    requireCurrentRecord(s, record);
+    if (!reference(s).equals(record.get("reference")))
       throw new Problem(
           "gretl_setup_required",
           "GRETL-Runtime hat einen alten oder abweichenden Stand; setup-gretl ausführen.");
@@ -45,6 +45,15 @@ public class GretlRuntime {
           .matches(field.equals("image_id") ? "sha256:[a-f0-9]{64}" : "[a-f0-9]{64}"))
         throw new Problem("gretl_setup_required", "GRETL-Runtime-Nachweis ist ungültig.");
     return record;
+  }
+
+  static void requireCurrentRecord(Settings s, Map<String, Object> record) {
+    if (!Objects.equals(record.get("schema_version"), 2))
+      throw new Problem(
+          "gretl_setup_required",
+          "Nicht unterstützter GRETL-Nachweis. Datei bewusst ausserhalb des Runtime-Verzeichnisses archivieren und setup-gretl erneut ausführen.",
+          "path",
+          file(s).toString());
   }
 
   public Map<String, Object> selected(boolean inspect) {
@@ -75,8 +84,8 @@ public class GretlRuntime {
                   StandardOpenOption.WRITE);
           var guard = channel.lock()) {
         var previous = Files.isRegularFile(file(settings)) ? Json.read(file(settings)) : Json.map();
-        var old = Json.number(previous, "schema_version", 0) == 2 ? previous : Json.map();
-        var pin = docker.pin(reference(settings), old, update);
+        if (Files.isRegularFile(file(settings))) requireCurrentRecord(settings, previous);
+        var pin = docker.pin(reference(settings), previous, update);
         String name = start(Json.required(pin, "image_id"));
         try {
           pin.putAll(describe(name));
@@ -84,18 +93,9 @@ public class GretlRuntime {
           docker.remove(name);
         }
         pin.put("schema_version", 2);
-        if (!previous.isEmpty() && Json.number(previous, "schema_version", 0) != 2)
-          Json.atomic(file(settings).resolveSibling("legacy-runtime.json"), previous);
         Json.atomic(file(settings), pin);
         return Json.map(
-            "runtime_file",
-            file(settings).toString(),
-            "sha256",
-            pin.get("sha256"),
-            "runtime",
-            pin,
-            "deprecated_settings",
-            deprecated(settings));
+            "runtime_file", file(settings).toString(), "sha256", pin.get("sha256"), "runtime", pin);
       }
     } catch (Problem p) {
       throw translate(p);
@@ -106,12 +106,6 @@ public class GretlRuntime {
           "exception",
           e.getClass().getSimpleName());
     }
-  }
-
-  static List<String> deprecated(Settings s) {
-    return List.of("gretl_java_home", "gretl_offline_jars").stream()
-        .filter(s.values::containsKey)
-        .toList();
   }
 
   String start(String image) {

@@ -11,10 +11,6 @@ public final class Deliveries {
   }
 
   void approved(Map<String, Object> r) {
-    if (Json.bool(r, "converter_migration_required", false))
-      throw new Problem(
-          "converter_migration_required",
-          "Python-Konverter zuerst nach Java portieren und erneut prüfen.");
     w.require(r, w.primaryGate(r));
     if (w.store.file(r, "data") != null) w.require(r, "data");
     if (r.containsKey("model") && w.primaryGate(r).equals("metadata")) w.require(r, "model");
@@ -248,12 +244,11 @@ public final class Deliveries {
   void outcome(
       Map<String, Object> r, String name, Map<String, Object> env, Map<String, Object> item) {
     var context = Json.obj(item.get("verification"));
-    if (context.isEmpty()) context = recoverVerification(r, item);
     var sheet = Json.obj(context.get("sheet"));
     if (sheet.isEmpty())
       throw new Problem(
           "verification_snapshot_missing",
-          "Prüfkontext des laufenden Vorgangs fehlt. Migration erfordert manuelle Aufklärung.");
+          "Prüfsnapshot der Lieferung fehlt. Bestehenden Lauf manuell klären; keinen neuen Upload starten.");
     Path data = null;
     if (context.get("data") != null) {
       var frozen = Json.map("id", r.get("id"), "files", Json.map("data", context.get("data")));
@@ -261,47 +256,6 @@ public final class Deliveries {
     }
     item.putAll(w.jenkins.apply(name, env).verify(Json.obj(item.get("report")), sheet, data));
     item.put("phase", Json.bool(item, "verified", false) ? "complete" : "failed");
-  }
-
-  Map<String, Object> recoverVerification(Map<String, Object> run, Map<String, Object> item) {
-    var report = Json.obj(item.get("report"));
-    if (!Objects.equals(report.get("dataset"), run.get("identifier"))
-        || !Objects.equals(report.get("comment"), "Themenintegrator " + run.get("id")))
-      return Json.map();
-    Map<String, Object> meta = deliveryArtifact(run, Json.str(report, "metadataFileName", null));
-    if (meta.isEmpty()) return Json.map();
-    Map<String, Object> data = deliveryArtifact(run, Json.str(report, "dataFileName", null));
-    if (!Json.str(report, "dataFileName", "").isEmpty() && data.isEmpty()) return Json.map();
-    Path sheetPath = Path.of(Json.required(meta, "path"));
-    var sheet =
-        Xml.describe(
-            sheetPath,
-            Json.required(run, "identifier"),
-            data.isEmpty() ? null : Json.str(report, "issue", Json.str(run, "issue", null)));
-    var context =
-        Json.map(
-            "sheet",
-            sheet,
-            "data",
-            data.isEmpty() ? null : data,
-            "metadata_sha256",
-            meta.get("sha256"),
-            "recovered_from",
-            "content-addressed filenames in confirmed Jenkins report");
-    item.put("verification", context);
-    Store.event(
-        run,
-        "recover_verification",
-        Json.map("metadata_sha256", meta.get("sha256"), "data_sha256", data.get("sha256")));
-    return context;
-  }
-
-  Map<String, Object> deliveryArtifact(Map<String, Object> run, String name) {
-    if (name == null || !name.matches("[a-f0-9]{64}\\.(csv|xtf|xml)")) return Json.map();
-    Path path = w.directory(run).resolve("files").resolve(name);
-    String hash = name.substring(0, 64);
-    if (!Files.isRegularFile(path) || !Json.sha(path).equals(hash)) return Json.map();
-    return Json.map("path", path.toString(), "sha256", hash, "original_name", name);
   }
 
   public Object verify(Map<String, Object> r, String name) {

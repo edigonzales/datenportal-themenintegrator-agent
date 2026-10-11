@@ -116,11 +116,6 @@ public final class Operations {
         "run_id!",
         "environment!");
     add(
-        "migrate_run",
-        "Alten Vorgang mit Vorschau und Sicherung übernehmen; Freigaben historisch halten.",
-        "run_id!",
-        "apply:boolean");
-    add(
         "organization_schema",
         "Office-Regeln aus dem konfigurierten Modell und bestehende Teams liefern.",
         "organization",

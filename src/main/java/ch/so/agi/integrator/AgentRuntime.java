@@ -48,6 +48,12 @@ final class AgentRuntime {
     String token = UUID.randomUUID().toString();
     Path jar = AgentResources.resolve(s.root, "build/libs/datenportal-integrator.jar");
     try {
+      int port;
+      try (var socket = new ServerSocket(0)) {
+        port = socket.getLocalPort();
+      } catch (java.io.IOException e) {
+        throw new Problem("network_probe_unavailable", "Kein freier Port für die Netzwerkprüfung.");
+      }
       var command =
           new ArrayList<>(
               List.of(
@@ -60,7 +66,7 @@ final class AgentRuntime {
                   "--label",
                   "datenportal.integrator.probe=true",
                   "-p",
-                  "127.0.0.1::18764",
+                  "127.0.0.1:" + port + ":18764",
                   "--entrypoint",
                   "java"));
       if (!AgentResources.installed()) {
@@ -75,16 +81,6 @@ final class AgentRuntime {
               AgentRuntime.class.getName(),
               token));
       p.checked(command, s.root, 60);
-      String port =
-          p.checked(
-              List.of(
-                  "docker",
-                  "inspect",
-                  "--format",
-                  "{{(index (index .NetworkSettings.Ports \"18764/tcp\") 0).HostPort}}",
-                  name),
-              s.root,
-              20);
       var client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(1)).build();
       for (int attempt = 0; attempt < 20; attempt++) {
         try {

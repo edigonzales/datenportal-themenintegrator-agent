@@ -36,7 +36,6 @@ public final class Settings {
             "topics_repo",
             "stack_repo",
             "state_dir",
-            "datasheet_mcp_url",
             "datasheet",
             "validator_command",
             "model_dirs",
@@ -47,29 +46,37 @@ public final class Settings {
             "stack_timeout_seconds",
             "interlis",
             "gretl",
-            "runtime",
-            "gretl_java_home",
-            "gretl_offline_jars");
+            "runtime");
     for (String key : values.keySet())
       if (!allowed.contains(key))
         throw new Problem("invalid_configuration", "Unbekannte Konfiguration.", "field", key);
+    for (String key : allowed) {
+      Class<?> type =
+          switch (key) {
+            case "datasheet", "interlis", "gretl", "runtime", "environments" -> Map.class;
+            case "validator_command", "model_dirs", "compose_files", "stack_start_args" ->
+                List.class;
+            case "timeout_seconds", "stack_timeout_seconds" -> Long.class;
+            default -> String.class;
+          };
+      type(values, key, type, key);
+      if (values.get(key) instanceof List<?> list
+          && (list.stream().anyMatch(v -> !(v instanceof String))
+              || (key.equals("validator_command") && list.isEmpty()))) throw invalid(key);
+    }
+    if (!values.containsKey("datasheet")) throw invalid("datasheet");
+    for (String key : List.of("timeout_seconds", "stack_timeout_seconds"))
+      if (values.get(key) instanceof Long number && (number < 1 || number > 7200))
+        throw invalid(key);
     root = config.toAbsolutePath().getParent().resolve(Json.str(values, "root", "..")).normalize();
     topics = path(Json.required(values, "topics_repo"));
     stack = path(Json.required(values, "stack_repo"));
     runs = path(Json.str(values, "state_dir", ".datenportal-integrator/runs"));
     timeout = Json.number(values, "timeout_seconds", 300);
     stackTimeout = Json.number(values, "stack_timeout_seconds", 1800);
-    if (timeout < 1 || timeout > 7200)
-      throw new Problem(
-          "invalid_configuration", "timeout_seconds muss zwischen 1 und 7200 liegen.");
-    if (stackTimeout < 1 || stackTimeout > 7200)
-      throw new Problem(
-          "invalid_configuration", "stack_timeout_seconds muss zwischen 1 und 7200 liegen.");
-    if (values.containsKey("datasheet") && values.containsKey("datasheet_mcp_url"))
-      throw new Problem(
-          "invalid_configuration", "datasheet_mcp_url entfernen, wenn [datasheet] verwendet wird.");
     for (String service : List.of("datasheet", "interlis")) validateMcp(service);
     var gretl = Json.obj(values.get("gretl"));
+    for (String key : List.of("image", "mode")) type(gretl, key, String.class, "gretl." + key);
     if (gretl.keySet().stream().anyMatch(k -> !Set.of("image", "mode").contains(k))
         || !Set.of("compose", "ephemeral").contains(GretlRuntime.mode(this))
         || !GretlRuntime.reference(this).matches("[A-Za-z0-9][A-Za-z0-9._/:@-]*"))
@@ -77,13 +84,23 @@ public final class Settings {
           "invalid_configuration",
           "[gretl] benötigt eine gültige Image-Referenz und mode=compose|ephemeral.");
     var runtime = Json.obj(values.get("runtime"));
+    type(runtime, "project", String.class, "runtime.project");
     if (runtime.keySet().stream().anyMatch(k -> !k.equals("project"))
         || !Json.str(runtime, "project", "datenportal-integrator")
             .matches("[a-z0-9][a-z0-9_-]{0,63}"))
       throw new Problem(
           "invalid_configuration", "[runtime].project muss ein gültiger Compose-Projektname sein.");
     for (Object profile : Json.obj(values.get("environments")).values()) {
+      if (!(profile instanceof Map)) throw invalid("environments");
       var environment = Json.obj(profile);
+      for (String field : environment.keySet())
+        type(
+            environment,
+            field,
+            Set.of("enabled", "git_write_back", "reload_portal").contains(field)
+                ? Boolean.class
+                : String.class,
+            "environments." + field);
       for (String field : environment.keySet())
         if (!Set.of(
                 "kind",
@@ -106,6 +123,10 @@ public final class Settings {
         Json.required(environment, field);
       for (String field : List.of("jenkins_url", "portal_url", "manifest_url"))
         url(Json.required(environment, field));
+      if (!Set.of("local", "int", "prod").contains(Json.required(environment, "kind"))
+          || !Set.of("working-tree", "managed-git")
+              .contains(Json.str(environment, "repository_mode", "managed-git")))
+        throw invalid("environments");
     }
   }
 
@@ -125,20 +146,16 @@ public final class Settings {
   }
 
   public Map<String, Object> mcp(String service) {
-    if (service.equals("datasheet") && !values.containsKey("datasheet"))
-      return Json.map(
-          "transport",
-          "http",
-          "url",
-          Json.str(values, "datasheet_mcp_url", "http://127.0.0.1:8000/mcp"));
     return Json.obj(values.get(service));
   }
 
   private void validateMcp(String service) {
     var c = mcp(service);
-    if (c.isEmpty() && service.equals("interlis")) return;
+    if (!values.containsKey(service) && service.equals("interlis")) return;
     for (String field : c.keySet())
-      if (!Set.of("transport", "image", "jar", "java_command", "url", "managed").contains(field))
+      type(c, field, field.equals("managed") ? Boolean.class : String.class, service + "." + field);
+    for (String field : c.keySet())
+      if (!Set.of("transport", "image", "url", "managed").contains(field))
         throw new Problem(
             "invalid_configuration", "Unbekannte MCP-Einstellung.", "field", service + "." + field);
     String transport = Json.str(c, "transport", "stdio");
@@ -146,18 +163,12 @@ public final class Settings {
       throw new Problem("invalid_configuration", "MCP-Transport muss stdio oder http sein.");
     if (transport.equals("http")) {
       url(Json.required(c, "url"));
-      if (c.containsKey("jar") || c.containsKey("java_command"))
-        throw new Problem(
-            "invalid_configuration", "HTTP und JAR-Konfiguration dürfen nicht gemischt werden.");
-    } else {
-      boolean image = c.containsKey("image"), jar = c.containsKey("jar");
-      if (image == jar
-          || (jar && service.equals("datasheet"))
-          || c.containsKey("url")
-          || (image && c.containsKey("java_command")))
-        throw new Problem(
-            "invalid_configuration",
-            "stdio benötigt genau ein Image oder das bestehende INTERLIS-JAR, ohne HTTP-Adresse.");
+    } else if (!c.containsKey("image") || c.containsKey("url")) {
+      throw new Problem(
+          "invalid_configuration",
+          "stdio benötigt ein Docker-Image ohne HTTP-Adresse.",
+          "field",
+          service);
     }
     if (c.containsKey("image")
         && !Json.required(c, "image").matches("[A-Za-z0-9][A-Za-z0-9._/:@-]*"))
@@ -176,6 +187,18 @@ public final class Settings {
             "invalid_configuration",
             "managed=true benötigt ein Image und lokales HTTP /mcp mit explizitem Port.");
     }
+  }
+
+  private static Problem invalid(String field) {
+    return new Problem(
+        "invalid_configuration",
+        "Konfigurationsfeld fehlt oder hat einen ungültigen Wert; aktuelle Vorlage verwenden.",
+        "field",
+        field);
+  }
+
+  private static void type(Map<String, Object> values, String key, Class<?> type, String field) {
+    if (values.containsKey(key) && !type.isInstance(values.get(key))) throw invalid(field);
   }
 
   public List<String> modelDirectories() {
@@ -313,15 +336,8 @@ public final class Settings {
     for (String part : strings("validator_command", List.of()))
       if (part.endsWith(".jar") && Files.isRegularFile(path(part)))
         files.put(part, Json.sha(path(part)));
-    var interlis = Json.obj(values.get("interlis"));
-    String jar = Json.str(interlis, "jar", "");
-    if (!jar.isEmpty() && Files.isRegularFile(path(jar)))
-      files.put("interlis_jar", Json.sha(path(jar)));
     Path own = AgentResources.jar(root);
     if (Files.isRegularFile(own)) files.put("integrator_jar", Json.sha(own));
-    var effective = new LinkedHashMap<>(values);
-    effective.remove("gretl_java_home");
-    effective.remove("gretl_offline_jars");
-    return Json.digest(Json.map("settings", effective, "dependencies", files));
+    return Json.digest(Json.map("settings", values, "dependencies", files));
   }
 }

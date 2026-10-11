@@ -314,21 +314,36 @@ class ModelsTest {
   }
 
   @Test
-  void soGisIsCanonicalWhileSavedSoProfileIsNotSilentlyRewritten() {
+  void rejectsSoAliasForNewAndStoredModelsWithoutChangingCandidate() {
     var identity = identity();
     identity.put("rule_profile", "SO");
+    f.error(
+        "model_profile",
+        () ->
+            f.call(
+                "derive_model",
+                "run_id",
+                id,
+                "identity",
+                identity,
+                "range_proposals",
+                proposals()));
+    assertTrue(requests.isEmpty());
+    identity.put("rule_profile", "SO-GIS");
     var result =
         f.call("derive_model", "run_id", id, "identity", identity, "range_proposals", proposals());
     assertEquals("SO-GIS", Json.obj(result.get("model")).get("profile"));
-    assertEquals("SO-GIS", Json.obj(requests.getFirst().get("arguments")).get("ruleProfile"));
     f.workflow.store.edit(
         id,
         run -> {
           Json.obj(run.get("model")).put("profile", "SO");
           return null;
         });
-    assertEquals("SO", Json.obj(f.call("status", "run_id", id).get("model")).get("profile"));
-    assertEquals("SO-GIS", Models.wireProfile("SO"));
+    var before = f.call("status", "run_id", id);
+    f.error("model_profile", () -> f.call("validate_model", "run_id", id));
+    var after = f.call("status", "run_id", id);
+    for (String field : List.of("model", "files", "approvals"))
+      assertEquals(before.get(field), after.get(field));
   }
 
   @Test

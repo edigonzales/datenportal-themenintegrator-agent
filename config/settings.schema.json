@@ -5,7 +5,8 @@
   "additionalProperties": false,
   "required": [
     "topics_repo",
-    "stack_repo"
+    "stack_repo",
+    "datasheet"
   ],
   "properties": {
     "root": {
@@ -21,11 +22,6 @@
     "state_dir": {
       "type": "string",
       "default": ".datenportal-integrator/runs"
-    },
-    "datasheet_mcp_url": {
-      "type": "string",
-      "format": "uri",
-      "default": "http://127.0.0.1:8000/mcp"
     },
     "validator_command": {
       "type": "array",
@@ -58,123 +54,8 @@
       "maximum": 7200,
       "default": 300
     },
-    "gretl_java_home": {
-      "type": "string",
-      "description": "Veraltet; wird im Dockerbetrieb ignoriert. [gretl].image verwenden.",
-      "deprecated": true
-    },
-    "gretl_offline_jars": {
-      "type": "string",
-      "default": ".datenportal-integrator/tools/gretl-runtime/jars",
-      "deprecated": true,
-      "description": "Veraltet; wird im Dockerbetrieb ignoriert. [gretl].image verwenden."
-    },
     "interlis": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "transport": {
-          "enum": [
-            "stdio",
-            "http"
-          ],
-          "default": "stdio"
-        },
-        "jar": {
-          "type": "string"
-        },
-        "java_command": {
-          "type": "string"
-        },
-        "url": {
-          "type": "string",
-          "format": "uri"
-        },
-        "image": {
-          "type": "string",
-          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/:@-]*$"
-        }
-      },
-      "allOf": [
-        {
-          "if": {
-            "properties": {
-              "transport": {
-                "const": "http"
-              }
-            },
-            "required": [
-              "transport"
-            ]
-          },
-          "then": {
-            "required": [
-              "url"
-            ],
-            "not": {
-              "anyOf": [
-                {
-                  "required": [
-                    "jar"
-                  ]
-                },
-                {
-                  "required": [
-                    "java_command"
-                  ]
-                }
-              ]
-            }
-          },
-          "else": {
-            "oneOf": [
-              {
-                "required": [
-                  "image"
-                ],
-                "not": {
-                  "anyOf": [
-                    {
-                      "required": [
-                        "jar"
-                      ]
-                    },
-                    {
-                      "required": [
-                        "java_command"
-                      ]
-                    },
-                    {
-                      "required": [
-                        "url"
-                      ]
-                    }
-                  ]
-                }
-              },
-              {
-                "required": [
-                  "jar"
-                ],
-                "not": {
-                  "anyOf": [
-                    {
-                      "required": [
-                        "image"
-                      ]
-                    },
-                    {
-                      "required": [
-                        "url"
-                      ]
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        }
-      ]
+      "$ref": "#/$defs/mcp"
     },
     "environments": {
       "type": "object",
@@ -183,54 +64,7 @@
       }
     },
     "datasheet": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "transport": {
-          "enum": [
-            "stdio",
-            "http"
-          ],
-          "default": "stdio"
-        },
-        "image": {
-          "type": "string",
-          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/:@-]*$"
-        },
-        "url": {
-          "type": "string",
-          "format": "uri"
-        }
-      },
-      "allOf": [
-        {
-          "if": {
-            "properties": {
-              "transport": {
-                "const": "http"
-              }
-            },
-            "required": [
-              "transport"
-            ]
-          },
-          "then": {
-            "required": [
-              "url"
-            ]
-          },
-          "else": {
-            "required": [
-              "image"
-            ],
-            "not": {
-              "required": [
-                "url"
-              ]
-            }
-          }
-        }
-      ]
+      "$ref": "#/$defs/mcp"
     },
     "gretl": {
       "type": "object",
@@ -240,6 +74,30 @@
           "type": "string",
           "default": "sogis/datenportal-jenkins:0.1.0-3",
           "pattern": "^[A-Za-z0-9][A-Za-z0-9._/:@-]*$"
+        },
+        "mode": {
+          "enum": [
+            "compose",
+            "ephemeral"
+          ],
+          "default": "ephemeral"
+        }
+      }
+    },
+    "stack_timeout_seconds": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 7200,
+      "default": 1800
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "project": {
+          "type": "string",
+          "default": "datenportal-integrator",
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
         }
       }
     }
@@ -314,16 +172,87 @@
           "default": true
         }
       }
+    },
+    "mcp": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "transport": {
+          "enum": [
+            "stdio",
+            "http"
+          ],
+          "default": "stdio"
+        },
+        "image": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/:@-]*$"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "managed": {
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "transport": {
+                "const": "http"
+              }
+            },
+            "required": [
+              "transport"
+            ]
+          },
+          "then": {
+            "required": [
+              "url"
+            ]
+          },
+          "else": {
+            "required": [
+              "image"
+            ],
+            "not": {
+              "required": [
+                "url"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "managed": {
+                "const": true
+              }
+            },
+            "required": [
+              "managed"
+            ]
+          },
+          "then": {
+            "required": [
+              "image",
+              "url",
+              "transport"
+            ],
+            "properties": {
+              "transport": {
+                "const": "http"
+              },
+              "url": {
+                "pattern": "^http://(127\\.0\\.0\\.1|localhost):[0-9]+/mcp$"
+              }
+            }
+          }
+        }
+      ]
     }
-  },
-  "allOf": [
-    {
-      "not": {
-        "required": [
-          "datasheet",
-          "datasheet_mcp_url"
-        ]
-      }
-    }
-  ]
+  }
 }

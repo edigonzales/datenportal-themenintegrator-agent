@@ -68,25 +68,17 @@ class DockerMcpsTest {
   }
 
   @Test
-  void retainsLegacyAndRejectsConflictingConfiguration() throws Exception {
-    var legacy =
-        config("datasheet_mcp_url=\"http://localhost:8000/mcp\"\n[interlis]\njar=\"old.jar\"\n");
-    assertEquals("http", legacy.mcp("datasheet").get("transport"));
-    assertEquals("old.jar", legacy.mcp("interlis").get("jar"));
-    assertEquals(
-        "invalid_configuration",
-        assertThrows(
-                Problem.class,
-                () -> config("datasheet_mcp_url=\"http://localhost/mcp\"\n" + dockerConfig()))
-            .code);
-    assertEquals(
-        "invalid_configuration",
-        assertThrows(
-                Problem.class,
-                () -> config("[interlis]\nimage=\"sogis/mcp:v1\"\njar=\"old.jar\"\n"))
-            .code);
-    assertThrows(
-        Problem.class, () -> config("[datasheet]\ntransport=\"stdio\"\nimage=\"--privileged\"\n"));
+  void rejectsRemovedConfigurationWithoutRewritingIt() throws Exception {
+    for (String extra :
+        List.of(
+            "datasheet_mcp_url=\"http://localhost:8000/mcp\"\n" + dockerConfig(),
+            "gretl_java_home=\"/missing\"\n" + dockerConfig(),
+            "gretl_offline_jars=\"/missing\"\n" + dockerConfig(),
+            "[datasheet]\ntransport=\"http\"\nurl=\"http://localhost:8000/mcp\"\n[interlis]\njar=\"old.jar\"\n")) {
+      assertEquals("invalid_configuration", assertThrows(Problem.class, () -> config(extra)).code);
+      assertTrue(Json.contents(temp.resolve("local.toml")).endsWith(extra));
+    }
+    assertThrows(Problem.class, () -> config(""));
   }
 
   @Test

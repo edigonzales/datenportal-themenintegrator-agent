@@ -39,8 +39,13 @@ final class DeliveryAcceptance {
     Files.copy(
         AgentResources.resolve(source.root, "config/rules.json"),
         root.resolve("config/rules.json"));
-    for (String part : List.of("validation", "templates"))
+    for (String part : List.of("validation", "templates", "tests/fixtures"))
       Workspace.copy(AgentResources.resolve(source.root, part), root.resolve(part));
+    for (String part :
+        List.of("runtime/Dockerfile", "config/settings.schema.json", "config/local.example.toml")) {
+      Files.createDirectories(root.resolve(part).getParent());
+      Files.copy(AgentResources.resolve(source.root, part), root.resolve(part));
+    }
     Files.createDirectories(root.resolve("build/libs"));
     Files.copy(
         AgentResources.resolve(source.root, "build/libs/datenportal-integrator.jar"),

@@ -19,7 +19,12 @@ class DatasheetRestartIntegrationTest {
   @TempDir Path temp;
 
   Settings source() {
-    return Fixtures.integrationSettings();
+    var settings = Fixtures.integrationSettings();
+    // Each connection must own a fresh process for these restart assertions.
+    settings.values.put(
+        "datasheet",
+        Json.map("transport", "stdio", "image", Json.required(settings.mcp("datasheet"), "image")));
+    return settings;
   }
 
   Fixtures fixture(Settings s, McpClients.ToolClient client) throws Exception {
@@ -180,7 +185,8 @@ class DatasheetRestartIntegrationTest {
     String id = f.metadataOnly();
     String config =
         Json.contents(temp.resolve("local.toml"))
-            .replaceAll("(?m)^model_dirs = .*", "model_dirs = []");
+            .replaceAll("(?m)^model_dirs = .*", "model_dirs = []")
+            .replaceAll("(?ms)^\\[datasheet\\]\\n.*?(?=^\\[|\\z)", "");
     Json.write(
         temp.resolve("local.toml"),
         config

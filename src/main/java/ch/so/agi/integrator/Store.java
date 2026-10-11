@@ -78,10 +78,6 @@ public final class Store {
   }
 
   public <T> T edit(String id, Function<Map<String, Object>, T> fn) {
-    return edit(id, false, fn);
-  }
-
-  public <T> T edit(String id, boolean legacy, Function<Map<String, Object>, T> fn) {
     Path p = directory(id);
     try (var ch =
         FileChannel.open(p.resolve(".lock"), StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
@@ -94,9 +90,13 @@ public final class Store {
       if (lock == null) throw new Problem("run_locked", "Vorgang wird bereits bearbeitet.");
       try (lock) {
         var data = Json.read(p.resolve("state.json"));
-        if (!legacy && Json.number(data, "schema_version", 1) != VERSION)
+        if (!Objects.equals(data.get("schema_version"), VERSION)
+            || data.containsKey("converter_migration_required"))
           throw new Problem(
-              "migration_required", "Vorgang muss mit migrate_run explizit übernommen werden.");
+              "unsupported_state_version",
+              "Nur aktuelle Schema-2-Vorgänge ohne ausstehende Konverterumstellung werden unterstützt. Der gespeicherte Stand bleibt unverändert.",
+              "path",
+              p.resolve("state.json").toString());
         try {
           return fn.apply(data);
         } finally {
@@ -151,50 +151,5 @@ public final class Store {
     var event = Json.map("at", Json.now(), "action", action);
     event.putAll(details);
     Json.list(data.get("events")).add(event);
-  }
-
-  public Map<String, Object> migrate(String id, boolean apply) {
-    return edit(
-        id,
-        true,
-        data -> {
-          int version = Json.number(data, "schema_version", 1);
-          if (version == VERSION) return Json.map("required", false, "id", id);
-          if (version != 1)
-            throw new Problem("unsupported_state_version", "Unbekannte Vorgangsversion.");
-          var migration =
-              Json.map(
-                  "id",
-                  id,
-                  "from",
-                  1,
-                  "to",
-                  VERSION,
-                  "historical_approvals",
-                  data.get("approvals"),
-                  "deliveries",
-                  data.get("deliveries"),
-                  "pending_metadata",
-                  data.get("pending_metadata"),
-                  "python_converter_requires_migration",
-                  data.containsKey("transform"),
-                  "applied",
-                  apply);
-          if (apply) {
-            Path backup =
-                directory(id).resolve("state-v1-backup-" + System.currentTimeMillis() + ".json");
-            Json.atomic(backup, data);
-            data.put("schema_version", VERSION);
-            data.put("workflow", "topic");
-            data.put("historical_approvals", data.get("approvals"));
-            data.put("historical_checks", data.get("checks"));
-            data.put("approvals", Json.map());
-            data.put("checks", Json.map());
-            if (data.containsKey("transform")) data.put("converter_migration_required", true);
-            Store.event(data, "migrate_run", Json.map("backup", backup.toString()));
-            migration.put("backup", backup.toString());
-          }
-          return migration;
-        });
   }
 }

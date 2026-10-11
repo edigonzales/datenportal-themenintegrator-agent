@@ -59,7 +59,9 @@ class IntegrationTest {
     transport.setStdErrorHandler(line -> {});
     try (var client = McpClient.sync(transport).requestTimeout(Duration.ofSeconds(30)).build()) {
       client.initialize();
-      assertEquals(29, client.listTools().tools().size());
+      assertEquals(Operations.ALL.size(), client.listTools().tools().size());
+      assertTrue(
+          client.listTools().tools().stream().noneMatch(tool -> tool.name().equals("migrate_run")));
       var result =
           client.callTool(
               new McpSchema.CallToolRequest(

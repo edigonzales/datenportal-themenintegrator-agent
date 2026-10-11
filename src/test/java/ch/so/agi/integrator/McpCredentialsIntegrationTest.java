@@ -58,7 +58,7 @@ class McpCredentialsIntegrationTest {
     try {
       Json.write(
           temp.resolve("config/local.toml"),
-          "root=\"..\"\ntopics_repo=\"topics\"\nstack_repo=\"stack\"\n[environments.local]\nkind=\"local\"\nenabled=true\nusername_env=\"SYNTHETIC_MCP_USER\"\ntoken_env=\"SYNTHETIC_MCP_TOKEN\"\njenkins_url="
+          "root=\"..\"\ntopics_repo=\"topics\"\nstack_repo=\"stack\"\n[datasheet]\ntransport=\"http\"\nurl=\"http://127.0.0.1:8000/mcp\"\n[environments.local]\nkind=\"local\"\nenabled=true\nusername_env=\"SYNTHETIC_MCP_USER\"\ntoken_env=\"SYNTHETIC_MCP_TOKEN\"\njenkins_url="
               + Json.text(base + "/jenkins")
               + "\nportal_url="
               + Json.text(base)

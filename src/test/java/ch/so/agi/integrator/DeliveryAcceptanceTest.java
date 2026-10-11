@@ -12,7 +12,8 @@ class DeliveryAcceptanceTest {
   @Test
   void CleanupCannotSelectAnotherRootOrComposeProject() throws Exception {
     Json.write(
-        temp.resolve("config.toml"), "root=\".\"\ntopics_repo=\"topics\"\nstack_repo=\"stack\"\n");
+        temp.resolve("config.toml"),
+        "root=\".\"\ntopics_repo=\"topics\"\nstack_repo=\"stack\"\n[datasheet]\ntransport=\"http\"\nurl=\"http://127.0.0.1:8000/mcp\"\n");
     var acceptance = new DeliveryAcceptance(new Settings(temp.resolve("config.toml")));
     Path fixture = temp.resolve(".datenportal-integrator/delivery-acceptance/fixture");
     Files.createDirectories(fixture);
@@ -42,7 +43,9 @@ class DeliveryAcceptanceTest {
     Json.atomic(fixture.resolve("fixture.json"), record);
     Json.write(
         fixture.resolve("agent/config/local.toml"),
-        "root=" + Json.text(temp.toString()) + "\ntopics_repo=\"topics\"\nstack_repo=\"stack\"\n");
+        "root="
+            + Json.text(temp.toString())
+            + "\ntopics_repo=\"topics\"\nstack_repo=\"stack\"\n[datasheet]\ntransport=\"http\"\nurl=\"http://127.0.0.1:8000/mcp\"\n");
     assertEquals(
         "unsafe_path", assertThrows(Problem.class, () -> acceptance.cleanup(fixture)).code);
     Files.createSymbolicLink(fixture.resolve("datenportal-themenrepo"), temp);

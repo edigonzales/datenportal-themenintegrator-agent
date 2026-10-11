@@ -37,12 +37,6 @@ public final class Setup {
           throw new Problem("invalid_arguments", "runtime-up akzeptiert keine Argumente.");
         yield new ComposeRuntime(s, new ProcessRunner()).up();
       }
-      case "start-datasheet" ->
-          Json.map(
-              "deprecated",
-              true,
-              "hint",
-              "setup-mcps ausführen. stdio-MCPs werden vom Integrator bei Bedarf gestartet; kein Quellbuild.");
       case "harness-config" -> harness();
       case "codex" -> codex(args);
       default -> throw new Problem("unknown_operation", "Unbekannter Helfer.");
@@ -119,12 +113,8 @@ public final class Setup {
     } catch (Exception e) {
       throw new Problem(
           "launcher_unavailable",
-          "Java-Launcher konnte nicht angelegt werden; absoluten JDK-Pfad aus harness-config verwenden.");
+          "Java-Launcher konnte nicht angelegt werden; für den lokalen Betrieb JAVA_HOME auf JDK 25 setzen.");
     }
-  }
-
-  List<String> serverArgs() {
-    return new Harness(s).arguments();
   }
 
   Object harness() {

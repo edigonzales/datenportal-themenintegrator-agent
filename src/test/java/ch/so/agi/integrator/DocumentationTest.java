@@ -21,11 +21,16 @@ class DocumentationTest {
     files.add(Fixtures.ROOT.resolve("skills/datenportal-themenintegrator/SKILL.md"));
     Pattern links = Pattern.compile("\\[[^\\]]*\\]\\(([^)]+)\\)");
     for (Path file : files) {
+      anchors(file);
       var match = links.matcher(Json.contents(file));
       while (match.find()) {
-        String target = match.group(1).split("#", 2)[0];
-        if (target.isEmpty() || target.contains("://") || target.startsWith("mailto:")) continue;
-        assertTrue(Files.exists(file.getParent().resolve(target)), file + " -> " + target);
+        String[] parts = match.group(1).split("#", 2);
+        String target = parts[0];
+        if (target.contains("://") || target.startsWith("mailto:")) continue;
+        Path linked = target.isEmpty() ? file : file.getParent().resolve(target);
+        assertTrue(Files.exists(linked), file + " -> " + target);
+        if (parts.length == 2 && linked.toString().endsWith(".md"))
+          assertTrue(anchors(linked).contains(parts[1]), file + " -> " + match.group(1));
       }
     }
     String skill = Json.contents(files.getLast());
@@ -36,6 +41,25 @@ class DocumentationTest {
                 .load(skill.substring(4, skill.indexOf("\n---", 4))));
     assertEquals("datenportal-themenintegrator", meta.get("name"));
     assertFalse(Json.required(meta, "description").isBlank());
+  }
+
+  Set<String> anchors(Path file) {
+    var result = new HashSet<String>();
+    var counts = new HashMap<String, Integer>();
+    boolean fenced = false;
+    for (String line : Json.contents(file).lines().toList()) {
+      if (line.startsWith("```")) fenced = !fenced;
+      if (fenced || !line.matches("^#{1,6} .*")) continue;
+      String base =
+          line.replaceFirst("^#+ +", "")
+              .toLowerCase(Locale.ROOT)
+              .replaceAll("[^\\p{L}\\p{N}_ -]", "")
+              .replace(' ', '-');
+      int count = counts.merge(base, 1, Integer::sum) - 1;
+      result.add(base + (count == 0 ? "" : "-" + count));
+    }
+    assertFalse(fenced, "Unclosed code fence: " + file);
+    return result;
   }
 
   @Test

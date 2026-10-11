@@ -14,7 +14,7 @@ public final class ImageRuntimeAcceptance {
     Files.writeString(root.resolve("SYNTHETIC_TEST_FIXTURE"), "Image network probe only\n");
     Files.writeString(
         root.resolve("config/local.toml"),
-        "root=\"..\"\ntopics_repo=\"topics\"\nstack_repo=\"stack\"\n");
+        "root=\"..\"\ntopics_repo=\"topics\"\nstack_repo=\"stack\"\n[datasheet]\ntransport=\"http\"\nurl=\"http://127.0.0.1:8000/mcp\"\n");
     if (!AgentResources.installed()
         || Files.exists(root.resolve("build/libs/datenportal-integrator.jar")))
       throw new AssertionError("Must use installed image without workspace JAR");

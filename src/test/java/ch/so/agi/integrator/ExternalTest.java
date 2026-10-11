@@ -211,26 +211,20 @@ class ExternalTest {
   }
 
   @Test
-  void migrationDoesNotUploadExistingRun() throws Exception {
+  void missingVerificationSnapshotCannotBeReconstructed() throws Exception {
     var f = new Fixtures(temp);
     String id = f.metadataOnly();
     f.workflow.store.edit(
         id,
-        r -> {
-          r.put("schema_version", 1);
-          Json.obj(r.get("deliveries"))
+        run -> {
+          Json.obj(run.get("deliveries"))
               .put(
                   "local",
-                  Json.map(
-                      "phase",
-                      "complete",
-                      "job",
-                      Json.map("queue", "old", "build", "23"),
-                      "report",
-                      Json.map("publication", "accepted")));
+                  Json.map("phase", "complete", "report", Json.map("publication", "accepted")));
           return null;
         });
-    f.call("migrate_run", "run_id", id, "apply", true);
-    assertEquals("complete", f.call("deliver", "run_id", id).get("phase"));
+    f.error(
+        "verification_snapshot_missing",
+        () -> f.call("verify_delivery", "run_id", id, "environment", "local"));
   }
 }

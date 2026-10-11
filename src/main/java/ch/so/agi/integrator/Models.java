@@ -13,8 +13,11 @@ public final class Models {
     this.w = w;
   }
 
-  static String wireProfile(String storedProfile) {
-    return storedProfile.equals("SO") ? "SO-GIS" : storedProfile;
+  static String profile(String value) {
+    if (!Set.of("CORE", "SO-GIS", "SO-DATA").contains(value))
+      throw new Problem(
+          "model_profile", "Zulässige Regelprofile: CORE, SO-GIS, SO-DATA.", "profile", value);
+    return value;
   }
 
   static String name(Map<String, Object> m, String key, String fallback) {
@@ -42,9 +45,7 @@ public final class Models {
     String profile =
         Json.str(
             identity, "rule_profile", Json.str(Json.obj(r.get("model")), "profile", "SO-DATA"));
-    if (identity.containsKey("rule_profile") && profile.equals("SO")) profile = "SO-GIS";
-    if (!Set.of("CORE", "SO", "SO-GIS", "SO-DATA").contains(profile))
-      throw new Problem("model_profile", "Unbekanntes Regelprofil.");
+    profile(profile);
     identity.put("rule_profile", profile);
 
     var missing = new ArrayList<>();
@@ -170,7 +171,7 @@ public final class Models {
                 + ": konkreten numerischen Wertebereich und Genauigkeit bestätigen. INTERLIS verlangt min/max für einen instanziierbaren Zahlentyp; beobachtete Grenzen werden nicht automatisch übernommen.");
       if (type.equals("TEXT")
           && typeSpec.isEmpty()
-          && Set.of("SO", "SO-GIS", "SO-DATA").contains(profile))
+          && Set.of("SO-GIS", "SO-DATA").contains(profile))
         questions.add(
             column
                 + ": maximale Textlänge für das gewählte Regelprofil bestätigen; beobachtete Längen sind keine fachliche Grenze.");
@@ -291,8 +292,7 @@ public final class Models {
       Path candidate = w.repoFile(r, w.topic(r) + "/" + modelName + ".ili");
       if (Files.isRegularFile(candidate)) existing = candidate;
     }
-    Map<String, Object> callArgs =
-        Json.map("modelPurpose", purpose, "ruleProfile", wireProfile(profile));
+    Map<String, Object> callArgs = Json.map("modelPurpose", purpose, "ruleProfile", profile);
     if (existing != null) {
       if (Json.list(args.get("changes")).isEmpty())
         return Json.map(
@@ -563,6 +563,7 @@ public final class Models {
   public Map<String, Object> validate(Map<String, Object> r) {
     var model = Json.obj(r.get("model"));
     if (model.isEmpty()) throw new Problem("model_missing", "Modell zuerst ableiten.");
+    String profile = profile(Json.str(model, "profile", ""));
     w.exportRequired(r);
     Path ili = w.requiredFile(r, "model");
     var sheet = w.describe(r);
@@ -595,7 +596,7 @@ public final class Models {
                     "modelPurpose",
                     model.get("purpose"),
                     "ruleProfile",
-                    wireProfile(Json.str(model, "profile", "SO-GIS"))));
+                    profile));
       } catch (Problem error) {
         error.details.put(
             "diagnostics", Diagnostics.record(w, r, "ili2c", "ERROR", error.result(), false));

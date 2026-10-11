@@ -19,7 +19,7 @@ class GretlContainerIntegrationTest {
         config,
         "root=\".\"\ntopics_repo="
             + Json.text(source.topics.toString())
-            + "\nstack_repo=\"missing-stack\"\ngretl_java_home=\"/unavailable-java17\"\ngretl_offline_jars=\"/unavailable-jars\"\n[gretl]\nimage="
+            + "\nstack_repo=\"missing-stack\"\n[datasheet]\ntransport=\"http\"\nurl=\"http://127.0.0.1:8000/mcp\"\n[gretl]\nimage="
             + Json.text(GretlRuntime.reference(source))
             + "\n");
     var s = new Settings(config);

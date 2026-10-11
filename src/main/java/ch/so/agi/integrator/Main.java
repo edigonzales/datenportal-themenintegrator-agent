@@ -92,7 +92,6 @@ public final class Main {
               "setup-gretl",
               "setup-mcps",
               "runtime-up",
-              "start-datasheet",
               "harness-config",
               "codex")
           .contains(command)) {
@@ -211,7 +210,6 @@ public final class Main {
     } catch (Problem p) {
       checks.put("gretl_runtime", p.result());
     }
-    checks.put("deprecated_settings", GretlRuntime.deprecated(s));
     checks.put("initialization", new Initializer(s).status());
     var publication = Json.map();
     Json.obj(s.values.get("environments"))

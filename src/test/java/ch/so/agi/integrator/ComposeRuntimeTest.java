@@ -14,6 +14,11 @@ class ComposeRuntimeTest {
   Settings settings(String extra) {
     Path config = temp.resolve("local.toml");
     Json.write(config, "root=\".\"\ntopics_repo=\"topics\"\nstack_repo=\"stack\"\n" + extra);
+    if (!extra.contains("[datasheet]"))
+      Json.write(
+          config,
+          Json.contents(config)
+              + "\n[datasheet]\ntransport=\"http\"\nurl=\"http://127.0.0.1:8000/mcp\"\n");
     return new Settings(config);
   }
 

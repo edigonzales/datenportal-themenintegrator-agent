@@ -25,10 +25,8 @@ public final class Converters {
     if (!recipe.startsWith(topic) || !tests.startsWith(topic))
       throw new Problem(
           "converter_scope", "Konverter und Tests müssen zum aktuellen Thema gehören.");
-    if (recipe.toString().endsWith(".py"))
-      throw new Problem(
-          "converter_migration_required",
-          "Python-Rezept zuerst nach Java portieren; keine automatische Ausführung.");
+    if (!recipe.toString().endsWith(".json"))
+      throw new Problem("converter_invalid", "Ein JSON-Rezept mit Java-Quellen ist erforderlich.");
     var spec = Json.read(recipe);
     String className = Json.required(spec, "class_name");
     if (!className.matches("[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)*"))
@@ -171,7 +169,6 @@ public final class Converters {
             "tests_log",
             log.toString());
     r.put("transform", transform);
-    r.remove("converter_migration_required");
     w.store.attach(r, converted, "data");
     Json.atomic(
         topic.resolve("integration.json"),

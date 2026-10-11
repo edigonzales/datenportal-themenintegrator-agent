@@ -1,8 +1,93 @@
 # Abnahmestand
 
+## Bereinigung und Docker-Einstieg vom 11. Oktober 2026
+
+Dieser Abschnitt beschreibt den aktuellen Stand. Alle darunter datierten
+Abschnitte sind historische Nachweise; ihre damaligen Kompatibilitäts- und
+Versionsangaben gelten nicht für diesen Stand.
+
+Zulässig sind nur `CORE`, `SO-GIS` und `SO-DATA`. Der Alias `SO`, alte
+Konfigurationsfelder, direkte INTERLIS-JAR-Starts, Vorgangsmigrationen,
+Python-Konverterübernahmen und alte Client-Konfigurationsmigrationen sind entfernt.
+Nicht unterstützte Dateien bleiben erhalten. Fehlende Liefer-Prüfsnapshots
+sperren die Verifikation; alte Berichte lösen keine Rekonstruktion und keinen
+neuen Upload aus. Aktuelle Client-Einstellungen, Freigaben, Reparaturgrenzen und
+Diagnosehistorien bleiben unterstützt.
+
+README und Anwenderhandbuch führen durch den veröffentlichten Docker-Betrieb:
+drei vorhandene Checkouts, nur bei Abweichungen eigene Einstellungen, `init`,
+`doctor`, Projektvertrauen und Skill-Auswahl. Einrichtung und Publikation sowie
+Agent- und Werkzeugupdates sind getrennt erklärt. Neun Anwendungsszenarien,
+Beispielprompts, HTML-Berichte und die vorhandenen Diagramme bleiben enthalten.
+Schema, Vorlage und Java-Prüfung sind abgeglichen. Der echte Erststart deckte
+einen Docker-Desktop-Fehler bei automatisch zugewiesenen Probeports auf;
+`AgentRuntime` veröffentlicht dafür nun einen vorher ausgewählten freien Port.
+
+### Veröffentlichter INTERLIS-MCP
+
+- **0.0.574-1**, Quellrevision `2f202dd9926f9a0eb0b73a7a50bb73179d2cba3a`:
+  [erfolgreiche Pipeline](https://github.com/edigonzales/interlis-mcp/actions/runs/38114821829).
+  Anwendung, ARM64-/AMD64-Images und Veröffentlichung einschliesslich
+  Image-Smokes bestanden. Registry-Digest
+  `sha256:e9824d526528127705d800b798e8e6173dc2adb812451bf9096b349d7174b233`
+  enthält beide Architekturen. Das lokal geladene ARM64-Image bestätigt Version
+  und Quellrevision. Beispielkonfiguration und Compose verwenden diesen Digest.
+- JDK 21: `check e2eTest bootJar` und
+  `:interlis-mcp-module:publishMavenJavaPublicationToVerificationRepository`
+  erfolgreich; **595 Unit-Tests und 24 MCP-End-to-End-Tests**, keine Auslassungen.
+  Parser und tatsächliche Werkzeugschemas akzeptieren die drei aktuellen Profile
+  und weisen `SO` zurück. Benchmark-, Workflow- und Maven-Verbraucherprüfungen
+  sind eingeschlossen. Nachweis: `/tmp/interlis-cleanup-checks.log` und
+  [MCP-Abnahmedokument](https://github.com/edigonzales/interlis-mcp/blob/main/docs/SO_DATA_ACCEPTANCE.md).
+
+### Tatsächliche Integrator-Prüfungen
+
+Die Prüfung verwendet den veröffentlichten MCP-Digest oben, den gepinnten
+Datenblatt-MCP, GRETL und einen privaten Jenkins-/Garage-Stack. Die lokalen
+Nachweise liegen unter `.datenportal-integrator/cleanup-acceptance/`.
+
+- `test jar spotlessCheck`: **190 Unit-Tests bestanden**, keine Auslassungen.
+  Geprüft sind aktuelle/abgewiesene Konfigurationen, unveränderte Dateien bei
+  Konflikten, erhaltene Client-Einstellungen, Sicherungen, Profile, gesperrte
+  Altvorgänge, fehlende Liefer-Prüfsnapshots und Dokumentationsstruktur.
+  `DocumentationTest` prüft lokale Links, Abschnittsanker, Codeblöcke,
+  Skill-Metadaten und CLI-Argumente; keine Formulierungstests.
+- Der erste Integrationslauf bestand 23 von 26 Fällen. Drei Testannahmen wurden
+  korrigiert: alte Werkzeuganzahl, doppelter Datenblatt-Abschnitt und ein
+  Neustarttest, der statt eines neuen STDIO-Prozesses dieselbe HTTP-Instanz nutzte.
+  Nachweis: `integration-first.log` und `integration-first-results/`.
+- Der anschliessende vollständige Lauf `integrationTest` mit eigener
+  `-PintegrationConfig` besteht **alle 26 Tests ohne Auslassungen**. Darin sind
+  echte MCP-/Validator-/GRETL-Prüfungen, Wiederaufnahme, Dienstneustarts,
+  Credential-Rotation und die drei Reparaturszenarien enthalten. Nachweise:
+  `integration.log` und `integration-results/`.
+- Vollständige Docker-Ersteinrichtung mit dem aktuellen Entwicklungs-JAR und
+  dem veröffentlichten MCP `0.0.574-1` bestanden: fehlende Standarddatei wird
+  erstellt, abweichende Repository-Pfade/Ports/Mounts funktionieren, wiederholtes
+  `init` erhält die Konfiguration und verwendet den aktuellen Smoke-Nachweis,
+  `doctor` bestätigt Bereitschaft. Beide erzeugten Client-Konfigurationen
+  verbinden sich tatsächlich und liefern 28 Werkzeuge. `--skip-smoke` meldet
+  anschliessend ausdrücklich keine Bereitschaft. Nachweise: `cold-init-final.log`
+  und `.datenportal-integrator/init-acceptance/6f2c3825-2e42-463b-ba19-791dc75e3fd8/acceptance.json`.
+  Eigene Init-Testdienste und Volumes sind entfernt. Dieser Nachweis verwendet
+  `docker-build`; die Veröffentlichung wird getrennt geprüft.
+
+### Simulierte Entscheidungen und Grenzen
+
+Alle automatischen Freigaben und Testlieferungen gehören ausschliesslich zu
+isolierten, als synthetisch gekennzeichneten Fixtures. Unit-Tests simulieren
+externe Fehler und Konflikte; sie ersetzen keine tatsächliche Werkzeugprüfung.
+Es wurden keine Geschäftsdaten verändert oder publiziert.
+
+Ein vollständiger fachlicher GUI-Dialog mit tatsächlichen menschlichen
+Freigaben bleibt eine gesonderte Abnahme. Die technische OpenCode-2.0.26-Prüfung
+vom 10. Oktober bleibt gültiger damaliger Nachweis und wurde hier nicht als
+neuer GUI-Test ausgegeben. Die im MCP-Abnahmedokument genannte wiederholte
+Compilerprüfung von `INTERLIS.MissingSyntheticType` bleibt ebenfalls offen.
+
 ## SO-GIS, vervollständigte Dokumentation und veröffentlichte MCP-Pins vom 10. Oktober 2026
 
-Dieser Abschnitt beschreibt den aktuellen Stand. Die nachfolgenden Abschnitte
+Dieser Abschnitt beschreibt den damaligen Stand vom 10. Oktober 2026. Die nachfolgenden Abschnitte
 bleiben historische Nachweise ihrer jeweiligen Quellstände; damalige offene
 Punkte sind nur dann weiterhin offen, wenn sie hier ausdrücklich genannt werden.
 

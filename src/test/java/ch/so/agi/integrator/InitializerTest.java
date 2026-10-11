@@ -36,7 +36,7 @@ class InitializerTest {
     var harness = new Harness(f.settings);
     String original =
         "model=\"example\"\n[mcp_servers.other]\ncommand=\"other\"\n"
-            + "[mcp_servers.datenportal_integrator]\ncommand=\"java\"\nargs=[\"-jar\",\"build/libs/datenportal-integrator.jar\",\"serve\"]\nenv_vars=[\"EXTRA_TOKEN\"]\n"
+            + "[mcp_servers.datenportal_integrator]\ncommand=\"bin/datenportal-agent\"\nargs=[\"serve\"]\nenv_vars=[\"EXTRA_TOKEN\"]\n"
             + "[mcp_servers.datenportal_integrator.env]\nSECRET_MAPPING=\"preserved\"\nDATENPORTAL_FORWARD_ENV=\"EXTRA_TOKEN\"\n";
     String updated = harness.updateToml(original);
     var parsed = org.tomlj.Toml.parse(updated);

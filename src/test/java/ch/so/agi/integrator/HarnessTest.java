@@ -15,7 +15,9 @@ class HarnessTest {
   @BeforeEach
   void isolatedRoot() {
     Path config = temp.resolve("config/selected.toml");
-    Json.write(config, "root=\"..\"\ntopics_repo=\"topics\"\nstack_repo=\"stack\"\n");
+    Json.write(
+        config,
+        "root=\"..\"\ntopics_repo=\"topics\"\nstack_repo=\"stack\"\n[datasheet]\ntransport=\"http\"\nurl=\"http://127.0.0.1:8000/mcp\"\n");
     harness = new Harness(new Settings(config));
     assertEquals(temp, harness.s.root);
     harness.s.values.put(
@@ -70,38 +72,6 @@ class HarnessTest {
   }
 
   @Test
-  void migratesKnownJavaAndLauncherWithDisabledStateAndTimeout() {
-    for (var command :
-        List.of(
-            List.of("java", "-jar", "build/libs/datenportal-integrator.jar", "serve"),
-            List.of(
-                "/opt/java/bin/java",
-                "-jar",
-                "/old/build/libs/datenportal-integrator.jar",
-                "serve"),
-            List.of("bin/datenportal-agent", "--runtime", "docker-build", "serve"),
-            List.of(harness.launcher(), "serve"))) {
-      var previous = server();
-      previous.put("command", command);
-      previous.put("enabled", false);
-      previous.put("timeout", 42000);
-      previous.put(
-          "environment",
-          Json.map("FIXTURE_MAPPING", "synthetic-value", "DATENPORTAL_FORWARD_ENV", "EXTRA_TOKEN"));
-      var updated = entry(harness.updateOpenCode(legacy(previous)));
-      assertEquals(true, updated.get("disabled"));
-      assertFalse(updated.containsKey("enabled"));
-      assertEquals(
-          Json.map("startup", 180000, "catalog", 42000, "execution", 42000),
-          updated.get("timeout"));
-      var env = Json.obj(updated.get("environment"));
-      assertEquals("synthetic-value", env.get("FIXTURE_MAPPING"));
-      var names = Set.of(env.get("DATENPORTAL_FORWARD_ENV").toString().split("\\s+"));
-      assertTrue(names.containsAll(Set.of("EXTRA_TOKEN", "FIXTURE_MAPPING", "FIXTURE_TOKEN")));
-    }
-  }
-
-  @Test
   void preservesV2CustomSettingsOtherServersAndGlobals() {
     var original = server();
     original.putAll(
@@ -138,52 +108,12 @@ class HarnessTest {
   @Test
   void externalSelectedConfigRemainsAbsolute() {
     Path config = temp.resolve("external.toml");
-    Json.write(config, "root=\"project\"\ntopics_repo=\"topics\"\nstack_repo=\"stack\"\n");
+    Json.write(
+        config,
+        "root=\"project\"\ntopics_repo=\"topics\"\nstack_repo=\"stack\"\n[datasheet]\ntransport=\"http\"\nurl=\"http://127.0.0.1:8000/mcp\"\n");
     var other = new Harness(new Settings(config));
     var command = Json.strings(entry(other.updateOpenCode(Json.map())).get("command"));
     assertEquals(config.toString(), command.get(command.indexOf("--config") + 1));
-  }
-
-  @Test
-  void mergesCompatibleDuplicatesBeforeFillingDefaults() {
-    var old = server();
-    old.put("enabled", false);
-    old.put("timeout", 42000);
-    old.put(
-        "environment",
-        Json.map("Z_MAPPING", "z", "A_MAPPING", "a", "DATENPORTAL_FORWARD_ENV", "OLD_TOKEN"));
-    var modern = server();
-    modern.put("command", List.of(harness.launcher(), "serve"));
-    modern.put("disabled", true);
-    modern.put("timeout", Json.map("startup", 75000));
-    modern.put(
-        "environment",
-        Json.map("B_MAPPING", "b", "A_MAPPING", "a", "DATENPORTAL_FORWARD_ENV", "NEW_TOKEN"));
-    var config = legacy(old);
-    Json.obj(config.get("mcp")).put("servers", Json.map("datenportal_integrator", modern));
-    var updated = harness.updateOpenCode(config);
-    var result = entry(updated);
-    assertEquals(true, result.get("disabled"));
-    assertEquals(
-        Json.map("startup", 75000, "catalog", 42000, "execution", 42000), result.get("timeout"));
-    var env = Json.obj(result.get("environment"));
-    assertEquals("a", env.get("A_MAPPING"));
-    assertEquals("b", env.get("B_MAPPING"));
-    assertEquals("z", env.get("Z_MAPPING"));
-    assertTrue(
-        Set.of(env.get("DATENPORTAL_FORWARD_ENV").toString().split("\\s+"))
-            .containsAll(Set.of("OLD_TOKEN", "NEW_TOKEN")));
-    assertEquals(updated, harness.updateOpenCode(updated));
-    assertTrue(Json.obj(config.get("mcp")).containsKey("datenportal_integrator"));
-  }
-
-  @Test
-  void omittedLegacyValuesDoNotOverrideExplicitV2Values() {
-    var config = legacy(server());
-    var modern = server();
-    modern.put("disabled", true);
-    Json.obj(config.get("mcp")).put("servers", Json.map("datenportal_integrator", modern));
-    assertEquals(true, entry(harness.updateOpenCode(config)).get("disabled"));
   }
 
   void unchangedOnConflict(Map<String, Object> config) throws Exception {
@@ -199,7 +129,7 @@ class HarnessTest {
   }
 
   @Test
-  void conflictingDuplicatesDoNotWriteEitherFile() throws Exception {
+  void oldEntriesAndDuplicatesDoNotWriteEitherFile() throws Exception {
     for (String field : List.of("disabled", "timeout", "environment", "cwd")) {
       var old = server();
       var modern = server();
@@ -232,6 +162,12 @@ class HarnessTest {
     var unknown = Json.map("command", List.of("custom-wrapper", "serve"));
     unchangedOnConflict(legacy(unknown));
     unchangedOnConflict(v2(unknown));
+    unchangedOnConflict(legacy(server()));
+    unchangedOnConflict(
+        v2(
+            Json.map(
+                "command",
+                List.of("java", "-jar", "build/libs/datenportal-integrator.jar", "serve"))));
     unchangedOnConflict(Json.map("mcp", Json.map("other", server())));
   }
 
@@ -251,6 +187,7 @@ class HarnessTest {
             Json.map("protocol", null),
             Json.map("environment", null),
             Json.map("environment", Json.map("TOKEN", 1)),
+            Json.map("timeout", 1000),
             Json.map("timeout", 0),
             Json.map("timeout", -1),
             Json.map("timeout", 1.5),
@@ -261,7 +198,7 @@ class HarnessTest {
             Json.map("timeout", Json.map("other", 1)))) {
       var previous = server();
       previous.putAll(bad);
-      unchangedOnConflict(legacy(previous));
+      unchangedOnConflict(v2(previous));
     }
     unchangedOnConflict(Json.map("mcp", null));
     unchangedOnConflict(Json.map("mcp", Json.map("servers", List.of())));
@@ -279,7 +216,7 @@ class HarnessTest {
       assertEquals(invalid, Json.contents(open));
       assertEquals("model=\"fixture\"\n", Json.contents(codex));
     }
-    Json.atomic(open, legacy(server()));
+    Json.atomic(open, v2(server()));
     String before = Json.contents(open);
     Json.write(codex, "[mcp_servers.datenportal_integrator]\ncommand=\"custom-wrapper\"\n");
     assertEquals("harness_conflict", assertThrows(Problem.class, harness::install).code);
@@ -288,9 +225,31 @@ class HarnessTest {
   }
 
   @Test
+  void preservesCodexTimeoutsAndDeactivationAndRejectsInvalidTimeoutWithoutWrites() {
+    Path codex = temp.resolve(".codex/config.toml"), open = temp.resolve("opencode.json");
+    Json.write(
+        codex,
+        "[mcp_servers.datenportal_integrator]\ncommand=\"bin/datenportal-agent\"\nenabled=false\nstartup_timeout_sec=75.5\ntool_timeout_sec=2400\n");
+    harness.install();
+    var settings = org.tomlj.Toml.parse(Json.contents(codex));
+    assertEquals(
+        75.5, settings.getDouble("mcp_servers.datenportal_integrator.startup_timeout_sec"));
+    assertEquals(2400L, settings.getLong("mcp_servers.datenportal_integrator.tool_timeout_sec"));
+    assertEquals(false, settings.getBoolean("mcp_servers.datenportal_integrator.enabled"));
+    Json.write(
+        codex,
+        Json.contents(codex)
+            .replace("startup_timeout_sec=75.5", "startup_timeout_sec=\"invalid\""));
+    String beforeCodex = Json.contents(codex), beforeOpen = Json.contents(open);
+    assertEquals("harness_conflict", assertThrows(Problem.class, harness::install).code);
+    assertEquals(beforeCodex, Json.contents(codex));
+    assertEquals(beforeOpen, Json.contents(open));
+  }
+
+  @Test
   void backupsKeepOriginalBytesAndRepeatedInstallIsStable() throws Exception {
     Path open = temp.resolve("opencode.json"), codex = temp.resolve(".codex/config.toml");
-    Json.atomic(open, legacy(server()));
+    Json.atomic(open, v2(server()));
     Json.write(codex, "model=\"fixture\"\n");
     String beforeOpen = Json.contents(open), beforeCodex = Json.contents(codex);
     harness.install();

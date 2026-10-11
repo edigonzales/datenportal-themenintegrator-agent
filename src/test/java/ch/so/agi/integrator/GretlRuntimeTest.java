@@ -21,7 +21,7 @@ class GretlRuntimeTest {
     Path config = temp.resolve("local.toml");
     Json.write(
         config,
-        "root=\".\"\ntopics_repo=\"topics\"\nstack_repo=\"missing-stack\"\n[gretl]\nimage=\"sogis/jenkins:v1\"\n");
+        "root=\".\"\ntopics_repo=\"topics\"\nstack_repo=\"missing-stack\"\n[datasheet]\ntransport=\"http\"\nurl=\"http://127.0.0.1:8000/mcp\"\n[gretl]\nimage=\"sogis/jenkins:v1\"\n");
     try {
       Files.createDirectories(temp.resolve("config"));
       Files.createDirectories(temp.resolve("validation"));
@@ -78,10 +78,27 @@ class GretlRuntimeTest {
   }
 
   @Test
-  void setupPinsImageWithoutStartingStackAndIgnoresLegacyHostPaths() {
+  void oldRuntimeRecordIsNotOverwrittenOrStarted() {
     var s = settings();
-    s.values.put("gretl_java_home", "/missing-java17");
-    s.values.put("gretl_offline_jars", "/missing-jars");
+    Path record = GretlRuntime.file(s);
+    var process = new Docker();
+    for (var old : List.of(Json.map("schema_version", 1, "fixture", true), Json.map())) {
+      Json.atomic(record, old);
+      String before = Json.contents(record);
+      var error = assertThrows(Problem.class, () -> new GretlRuntime(s, process).setup(true));
+      assertEquals("gretl_setup_required", error.code);
+      assertEquals(record.toString(), error.details.get("path"));
+      assertEquals(
+          "gretl_setup_required", assertThrows(Problem.class, () -> GretlRuntime.recorded(s)).code);
+      assertEquals(before, Json.contents(record));
+    }
+    assertTrue(process.calls.isEmpty());
+    assertFalse(Files.exists(record.resolveSibling("legacy-runtime.json")));
+  }
+
+  @Test
+  void setupPinsImageWithoutStartingStack() {
+    var s = settings();
     var p = new Docker();
     var runtime = new GretlRuntime(s, p);
     runtime.setup(false);
@@ -95,10 +112,6 @@ class GretlRuntimeTest {
     runtime.setup(true);
     assertNotEquals(before, s.fingerprint());
     assertEquals(B, runtime.selected(false).get("image_id"));
-    String activeFingerprint = s.fingerprint();
-    s.values.put("gretl_java_home", "/different-missing-java17");
-    assertEquals(activeFingerprint, s.fingerprint());
-    assertEquals(List.of("gretl_java_home", "gretl_offline_jars"), GretlRuntime.deprecated(s));
   }
 
   @Test

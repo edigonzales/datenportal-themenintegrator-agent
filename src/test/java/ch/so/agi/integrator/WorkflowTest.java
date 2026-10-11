@@ -370,32 +370,28 @@ class WorkflowTest {
   }
 
   @Test
-  void migratedApprovalsHistoricalPendingAndJobsPreserved() {
-    String id = f.metadataOnly();
-    f.approveAll(id);
-    f.workflow.store.edit(
-        id,
-        r -> {
-          r.put("schema_version", 1);
-          r.remove("workflow");
-          r.put("pending_metadata", Json.map("operation", "update_metadata"));
-          Json.obj(r.get("deliveries"))
-              .put(
-                  "local",
-                  Json.map("phase", "delivery_submitting", "job", Json.map("queue", "123")));
-          return null;
-        });
-    f.error("migration_required", () -> f.call("status", "run_id", id));
-    assertFalse(Json.bool(f.call("migrate_run", "run_id", id), "applied", true));
-    var result = f.call("migrate_run", "run_id", id, "apply", true);
-    assertTrue(Files.isRegularFile(Path.of(Json.required(result, "backup"))));
-    var r = f.call("status", "run_id", id);
-    assertTrue(Json.obj(r.get("approvals")).isEmpty());
-    assertFalse(Json.obj(r.get("historical_approvals")).isEmpty());
-    assertEquals(
-        "123",
-        Json.obj(Json.obj(Json.obj(r.get("deliveries")).get("local")).get("job")).get("queue"));
-    assertNotNull(r.get("pending_metadata"));
-    f.error("submission_unknown", () -> f.call("deliver", "run_id", id));
+  void unsupportedRunsRemainUnchangedAndCannotDeliver() {
+    for (boolean converter : List.of(false, true)) {
+      String id = f.metadataOnly();
+      f.approveAll(id);
+      f.workflow.store.edit(
+          id,
+          r -> {
+            if (converter) r.put("converter_migration_required", true);
+            else r.put("schema_version", 1);
+            Json.obj(r.get("deliveries"))
+                .put(
+                    "local",
+                    Json.map("phase", "delivery_submitting", "job", Json.map("queue", "123")));
+            return null;
+          });
+      Path state = f.workflow.store.directory(id).resolve("state.json");
+      String before = Json.contents(state);
+      f.error("unsupported_state_version", () -> f.call("status", "run_id", id));
+      f.error("unsupported_state_version", () -> f.call("deliver", "run_id", id));
+      assertEquals(before, Json.contents(state));
+    }
+    assertThrows(
+        Problem.class, () -> Operations.validate("migrate_run", Json.map("run_id", "old")));
   }
 }

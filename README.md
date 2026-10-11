@@ -1,151 +1,97 @@
 # Datenportal-Themenintegrator
 
-Java-25-Workflow für Themenanlieferung, INTERLIS-Modellierung und die Anlage neuer Organisationen. CLI und stdio-MCP verwenden denselben ausführbaren JAR und speichern Prüfstände, menschliche Freigaben und externe Laufkennungen lokal.
+Der Agent unterstützt die Integration von CSV-, XTF- und XLSX-Lieferungen,
+INTERLIS-Validierungsmodelle und neue Organisationen. Er erstellt prüfbare
+Kandidaten und HTML-Berichte; fachliche Änderungen und Publikationen benötigen
+deine Freigabe.
 
-Neue CSV-Validierungsmodelle verwenden das kommentarfreie Profil `SO-DATA`.
-Das bisherige GIS-Profil `SO` heisst `SO-GIS`; `SO` bleibt Eingabealias.
-[Wertebereiche, Reparaturen und Loglinks](docs/anwenderhandbuch.md#wertebereiche-reparaturen-und-loglinks)
-erklärt die Anwendung. Der [Abnahmestand](docs/abnahme.md) trennt geprüfte
-Quellstände, veröffentlichte Images und noch offene Nachweise.
-Für bestehende Installationen beschreibt [Fachwerkzeuge aktualisieren](docs/anwenderhandbuch.md#fachwerkzeuge-aktualisieren)
-das ausdrückliche Agent- und MCP-Update; eine vorhandene lokale Image-Auswahl
-wird nicht automatisch durch die neuen Beispiel-Pins ersetzt.
+## Mit Docker starten
 
-Für den lokalen Gesamtstack reichen Integrator, Themenrepo und Dev-Stack als
-Checkouts. `../datenportal-dev-stack/scripts/up.sh` ist der gemeinsame
-vollständige Start: Secrets, Garage, erfolgreicher Seed, Erstpublikation und
-Portal. Der Jenkins-Quellcheckout ist nur für lokale Image-Builds erforderlich.
-Passende laufende Instanzen werden weiterverwendet.
+Du brauchst lokales Docker mit Compose, Git, Bash und einen eingerichteten
+Client: Codex oder OpenCode 2.x stable. Auf macOS in Docker Desktop ab 4.34
+**Settings → Resources → Network → Enable host networking** aktivieren und
+**Apply and restart** wählen. Unter Linux einen lokalen Docker Engine verwenden.
 
-Das lokale Konfigurationsbeispiel verwendet drei dauerhafte Compose-Dienste: Datenblatt-MCP und `interlis-mcp` über HTTP sowie einen eigenen GRETL-Prüfcontainer aus dem Jenkins-Image. Fehlende Dienste starten automatisch; passende laufende Instanzen und der Gradle-Daemon werden wiederverwendet. Fach-MCP-Checkouts und lokale Fach-MCP-Builds sind nicht erforderlich. Der Launcher startet standardmässig das fertig gebaute Docker-Image `sogis/datenportal-themenintegrator-agent`; beim Start ist kein Agent-Build nötig. Ein Host-JDK 25 ist optional. Bestehende stdio-/ephemeral-Konfigurationen bleiben unterstützt. Fachliche Änderungen im Themenrepo werden als Kandidaten geprüft und erst nach Freigabe übernommen.
-
-Die Setup-Befehle erzeugen eine ignorierte `compose.override.yaml` mit den ausgewählten Image-Identitäten, Ports und lokalen Mounts. Compose startet keine neueren Images. Dienste bleiben nach dem Ende des Integrators verfügbar; `docker compose down` hält sie an und erhält den Gradle-Cache. Jenkins und sein Home gehören weiterhin zum Dev-Stack.
-
-## Agent-Image und Updates
-
-Jeder erfolgreiche Push-Build auf `main` veröffentlicht auf Docker Hub
-`0.1.<GitHub Run Number>` für `linux/amd64` und `linux/arm64` sowie `latest`.
-Git-Tags und GitHub Releases werden dafür nicht erstellt.
-
-Beim ersten Start lädt der Launcher `latest` und speichert den Digest und die
-lokale Image-ID. Weitere Starts verwenden diesen Stand. Updates erfolgen explizit:
+Die drei Checkouts liegen im Standardfall nebeneinander:
 
 ```sh
-./bin/datenportal-agent --update-agent --version
-./bin/datenportal-agent init
+mkdir datenportal-arbeitsbereich
+cd datenportal-arbeitsbereich
+git clone https://github.com/edigonzales/datenportal-themenintegrator-agent.git
+git clone https://github.com/sogis/datenportal-themenrepo.git
+git clone https://codeberg.org/edigonzales/datenportal-dev-stack.git
+cd datenportal-themenintegrator-agent
 ```
 
-Ein fehlgeschlagenes Update lässt die bisherige Auswahl erhalten. Fehlt ein
-bereits gewähltes Image lokal, lädt der Launcher denselben Digest nach.
-Konfiguration und Arbeitsdaten bleiben im Workspace; Programmressourcen liegen
-im Image unter `/opt/datenportal-agent`.
+Bestehende Checkouts können weiterverwendet werden. Bei abweichenden Pfaden,
+belegten Ports 8000/8080 oder zusätzlichen Eingabeordnern zuerst
+[die betreffenden Einstellungen](docs/anwenderhandbuch.md#was-muss-ich-konfigurieren)
+anpassen. Bei Standardpfaden und freien Ports ist keine manuelle
+Konfigurationsdatei nötig.
 
-Für Änderungen am Java-Agenten vor einer Veröffentlichung:
-
-```sh
-./bin/datenportal-agent --runtime docker-build serve
-./bin/datenportal-agent gradle test jar spotlessCheck
-```
-
-`gradle` verwendet automatisch den Entwicklungscontainer. `--runtime local`
-bleibt für ein vorhandenes Host-JDK 25 verfügbar. Vor dem ersten Docker-Hub-Release
-ist `docker-build` ebenfalls der nutzbare Startmodus.
-
-Die Pipeline benötigt die GitHub-Actions-Secrets `DOCKERHUB_USERNAME` und
-`DOCKERHUB_TOKEN` mit Schreibrecht auf `sogis/datenportal-themenintegrator-agent`.
-Pull Requests prüfen beide Plattformen ohne diese Secrets und publizieren nicht.
-Details stehen im [Entwicklerhandbuch](docs/entwicklerhandbuch.md#image-veröffentlichung).
-
-Die vollständige [Erstinitialisierung mit dem Docker-Image](docs/anwenderhandbuch.md#erstinitialisierung-mit-dem-veröffentlichten-image)
-beschreibt Checkout-Struktur, Konfiguration, Voraussetzungen und den Wechsel
-vom lokalen Entwicklungsbuild zum veröffentlichten Image.
-
-## Einstieg
-
-Zum ersten Start: [Repositories bereitstellen](docs/anwenderhandbuch.md#repositories-bereitstellen)
-erklärt die drei nötigen lokalen Checkouts mit Clone-Befehlen und trennt sie von
-den automatischen Downloads durch Launcher und `init`.
-[Mit dem Agenten arbeiten](docs/anwenderhandbuch.md#mit-dem-agenten-arbeiten)
-zeigt die Skill-Auswahl, neun Anwendungsszenarien und kopierbare Beispielprompts.
-`init` erzeugt die MCP-Konfiguration für OpenCode 2.x stable und migriert bekannte
-ältere Integrator-Einträge automatisch. Danach die
-[MCP-Verbindung prüfen](docs/anwenderhandbuch.md#codex-desktop-codex-cli-und-opencode).
-Die OpenCode-Korrektur ist im geprüften Agent-Release `0.1.9` enthalten. Bei einem bereits
-eingerichteten Image-Betrieb ausdrücklich
-`./bin/datenportal-agent --update-agent --version` und danach `init` ausführen.
-
-Für den Standardbetrieb werden lokales Docker mit Compose und folgende
-Host-Werkzeuge benötigt:
-
-| Einsatz | Voraussetzungen zusätzlich zu Docker und Compose |
-|---|---|
-| Integrator über Docker | Bash und übliche Unix-Werkzeuge, etwa `sed`, `id`, `mktemp` und `cksum` |
-| Checkouts bereitstellen und aktualisieren | Git |
-| Bedienung über einen KI-Assistenten | Gewählter Client, etwa Codex oder OpenCode |
-| Dev-Stack direkt auf dem Host starten | OpenSSL; beim vollständigen Bootstrap zusätzlich Python 3 |
-| Optionaler Modus `--runtime local` | JDK 25 und die lokal benötigten Laufzeitwerkzeuge |
-
-`gh`, Java, Gradle und die Fachwerkzeuge benötigen im Docker-Betrieb keine
-Host-Installation. Das Python-Skript `scripts/bootstrap.py` gehört zum
-Dev-Stack-Repository. Der Java-Integrator ruft dessen Shell-Wrapper auf; dabei
-läuft Python im Agent-Container. Beim direkten vollständigen Start mit
-`../datenportal-dev-stack/scripts/up.sh` läuft der Bootstrap dagegen auf dem
-Host und benötigt dort Python 3. `--infrastructure-only` überspringt diesen
-Bootstrap.
-
-Die drei Checkouts, passende Zugangsrechte und erreichbare Downloadquellen
-werden unter [Repositories bereitstellen](docs/anwenderhandbuch.md#repositories-bereitstellen)
-beschrieben. GitHub-Zugangsdaten werden gemäss
-[GitHub-Anmeldung im Docker-Betrieb](docs/anwenderhandbuch.md#github-anmeldung-im-docker-betrieb)
-übergeben.
-
-macOS benötigt Docker
-Desktop ab 4.34 mit aktiviertem **Settings → Resources → Network → Enable host
-networking**; Linux verwendet den lokalen Docker Engine. Der Launcher verwendet
-Host-Networking und den lokalen Docker-Socket. Remote-Docker-Kontexte werden
-wegen der lokalen Dateien abgewiesen.
+| Du stellst bereit | Der Agent übernimmt | Erst später erforderlich |
+|---|---|---|
+| Docker, Client und die drei Checkouts | Agent-Image laden und festhalten | GitHub-Zugang und Git-Identität für Schreibzugriffe |
+| Abweichende Pfade und zusätzliche Mounts | Fehlende Standardkonfiguration anlegen | Jenkins-Zugang für lokale Lieferung |
+| Freie Ports; bei mehreren Arbeitsbereichen eigener Projektname | Fachwerkzeuge, Originalmodelle und Prüfumgebung vorbereiten | INT-/PROD-Adressen und Zugänge |
+| Gewünschte lokale Einstellungen | Eigene Dienste starten, MCP-Einträge erstellen und synthetisch prüfen | Publikationsstack und fachliche Freigaben |
 
 ```sh
 ./bin/datenportal-agent init
 ./bin/datenportal-agent doctor
-./bin/datenportal-agent serve
-./bin/datenportal-agent gradle test jar spotlessCheck
-./bin/datenportal-agent gradle integrationTest
 ```
 
-`init` erstellt nur eine fehlende Standardkonfiguration, bereitet die festgelegten
-Werkzeuge vor und prüft echte Datenblatt-/Modell-/CSV-Aufrufe mit synthetischen
-Daten in einer privaten Arbeitskopie. Der Publikationsstack wird dabei nicht
-initialisiert. Wiederholung verwendet aktuelle Prüfnachweise; `--update-tools`
-wählt Werkzeugstände bewusst neu, `--skip-smoke` lässt den Status unvollständig.
+`init` klont keine Repositories und publiziert keine Geschäftsdaten. Für den
+Erststart sind weder Host-Java/Gradle noch Fach-MCP-Quellcheckouts oder
+Jenkins-Zugangsdaten nötig. Der Dev-Stack-Checkout muss vorhanden sein; seine
+Publikationsumgebung wird erst für eine spätere Lieferung benötigt.
 
-Dateien im gemeinsamen Checkout-Elternordner sind unter ihren absoluten Pfaden
-verfügbar. Weitere Verzeichnisse vor dem Befehl mit `--mount-ro /eingang` oder
-`--mount-rw /arbeitsordner` einbinden. `DATENPORTAL_FORWARD_ENV` nennt ausdrücklich
-weitergereichte Zugangsdatenvariablen. Werte gehören weder in Argumente noch Git.
-Lokales JDK 25 für Entwicklung: `./bin/datenportal-agent --runtime local doctor`.
+Bei Erfolg meldet `init` `ready: true`. Prüfe bei `doctor`
+`initialization.ready`, die beiden MCP-Verbindungen und GRETL auf Fehler;
+der Exit-Code allein bestätigt keine Bereitschaft.
+[Die vollständige Einrichtung](docs/anwenderhandbuch.md#installation-und-konfiguration)
+erklärt die Ausgaben und trennt eigene Vorbereitung von automatischen Schritten.
 
-Lokale Jenkins-Zugangsdaten können einmalig im gemeinsamen, ignorierten
-Credential-Store hinterlegt werden: `credentials set local --username USER --token-stdin`
-liest den Token ausschliesslich von stdin; `credentials set local --from-env`
-übernimmt ausdrücklich die konfigurierten und weitergereichten Variablen.
-`credentials status local` zeigt nur Bereitschaft und Quelle. Codex und OpenCode
-lesen denselben Store auch nach Änderungen ohne MCP-Neustart. Die Datei ist
-unverschlüsselt, ihr Verzeichnis benötigt 0700 und ihre Dateien 0600.
-Vollständige Umgebungszugänge haben Vorrang; INT/PROD verwenden weiterhin die
-expliziten Umgebungsvariablen. Details stehen im Anwenderhandbuch.
+## Ersten Auftrag starten
 
-`./bin/datenportal-agent acceptance delivery` prüft separat eine vollständige
-synthetische Docker-Anlieferung mit gültiger und ungültiger CSV. Die Abnahme
-erstellt einen eigenen Stack auf dem Host, verwendet anschliessend den echten
-Agent-Container und räumt nur ihre Testcontainer, Volumes und Secrets auf.
-Sie startet weder eine MFK-Anlieferung noch eine INT-/PROD-Publikation.
+Den Integrator-Ordner als Projekt in Codex oder OpenCode öffnen und die von
+`init` eingerichtete MCP-Verbindung prüfen. In Codex muss das Projekt als
+vertrauenswürdig gelten. Für Codex CLI: `./bin/datenportal-agent codex`.
 
-- [Anwenderhandbuch](docs/anwenderhandbuch.md): Einrichtung, drei Vorgangsarten, Freigaben, Korrekturen und Wiederaufnahme.
-- [Entwicklerhandbuch](docs/entwicklerhandbuch.md): Komponenten, Schnittstellen, Migration, Erweiterungen und Tests; mit [Architekturskizze](docs/entwicklerhandbuch.md#zusammenspiel-der-komponenten) und [Sequenzdiagramm zur Themenintegration](docs/entwicklerhandbuch.md#sequenz-einer-themenintegration).
-- [Abnahmestand](docs/abnahme.md): tatsächlich durchgeführte, simulierte und offene Prüfungen.
-- [Gemeinsamer Skill](skills/datenportal-themenintegrator/SKILL.md): Agent-Regeln für Codex und OpenCode.
+Skill auswählen und einen konkreten Auftrag formulieren, beispielsweise:
 
-`java -jar build/libs/datenportal-integrator.jar schema <operation>` zeigt das verbindliche Argumentenschema. `call <operation> --args-file <datei.json>` verwendet dieselbe Operation wie MCP. `serve` startet den MCP über stdio.
+```text
+$datenportal-themenintegrator
+Prüfe die angehängte CSV für die Organisation agi. Erkläre Spalten,
+fehlende Werte und mögliche Typfehler. Zeige mir den HTML-Prüfbericht
+und warte danach auf meine fachliche Entscheidung.
+```
 
-Alte Vorgänge benötigen `migrate_run`; frühere Freigaben werden historisch übernommen. Python-Konverter werden ausdrücklich als migrationsbedürftig gemeldet.
+In OpenCode beginnt derselbe Prompt mit `@datenportal-themenintegrator`.
+[Neun Anwendungsszenarien](docs/anwenderhandbuch.md#mit-dem-agenten-arbeiten)
+zeigen erwartete Ergebnisse, menschliche Entscheidungen und kopierbare Prompts.
+Neue CSV-Validierungsmodelle verwenden das kommentarfreie Profil `SO-DATA`;
+weitere Profile sind `CORE` und `SO-GIS`.
+
+## Weiterarbeiten und aktualisieren
+
+Normale Starts verwenden das gespeicherte Agent-Image. Ein Update erfolgt
+bewusst; lokale Konfiguration und Fachwerkzeug-Pins bleiben erhalten:
+
+```sh
+./bin/datenportal-agent --update-agent --version
+./bin/datenportal-agent init
+./bin/datenportal-agent doctor
+```
+
+Danach bestehende Client-Verbindungen neu starten. Für die Bereinigung alter
+Konfigurationen und gesonderte Werkzeugupdates siehe
+[Betrieb und Updates](docs/anwenderhandbuch.md#betrieb-und-updates).
+
+- [Anwenderhandbuch](docs/anwenderhandbuch.md): Einrichtung, Anwendungsszenarien, Berichte und Publikation.
+- [Entwicklerhandbuch](docs/entwicklerhandbuch.md): Architektur, Schnittstellen, Entwicklungsmodi, Tests und Image-Veröffentlichung.
+- [Abnahmestand](docs/abnahme.md): tatsächlich geprüfte Revisionen und Images, simulierte Fälle und offene Nachweise.
+
+`--runtime docker-build`, `--runtime local`, Docker-stdio und GRETL `ephemeral`
+bleiben für Entwicklung und isolierte Tests verfügbar. Ihre Verwendung steht
+im Entwicklerhandbuch. Der Standardbetrieb benötigt keinen lokalen Agent-Build.

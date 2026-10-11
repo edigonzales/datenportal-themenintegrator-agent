@@ -29,7 +29,7 @@ image = "sogis/datenportal-datenblatt-mcp@sha256:b391421578f8c4652fb7a6446518774
 transport = "http"
 managed = true
 url = "http://127.0.0.1:8080/mcp"
-image = "sogis/interlis-mcp@sha256:eb348cd3cc6da8fedf9da2dbf564f1c8ee0d3827fb0c8e9447b3b44f013d338b"
+image = "sogis/interlis-mcp@sha256:e9824d526528127705d800b798e8e6173dc2adb812451bf9096b349d7174b233"
 # Für bestehende externe HTTP-Dienste managed=false setzen.
 # Für stdio managed/url entfernen und transport="stdio" setzen.
 

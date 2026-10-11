@@ -73,7 +73,7 @@ public final class ReportExamples {
                 "version",
                 "2026-10-09"),
             "profile",
-            "SO",
+            "SO-GIS",
             "purpose",
             "VALIDATION",
             "authoring_valid",
