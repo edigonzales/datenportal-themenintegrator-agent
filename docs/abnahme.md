@@ -40,6 +40,24 @@ einen Docker-Desktop-Fehler bei automatisch zugewiesenen Probeports auf;
   sind eingeschlossen. Nachweis: `/tmp/interlis-cleanup-checks.log` und
   [MCP-Abnahmedokument](https://github.com/edigonzales/interlis-mcp/blob/main/docs/SO_DATA_ACCEPTANCE.md).
 
+### Veröffentlichter Agent
+
+Agent **0.1.12**, Quellrevision `59c04fde46d9d442bdea80e8cdfe7545d0479f09`,
+ist veröffentlicht:
+[erfolgreiche Image-Pipeline](https://github.com/edigonzales/datenportal-themenintegrator-agent/actions/runs/38116335646).
+Unit-Tests und Formatierung, Builds und Image-Smokes für ARM64 und AMD64
+(einschliesslich eingebettetem Java-Code), Netzwerkprüfung, Veröffentlichung
+und `latest`-Promotion sind erfolgreich. Der unabhängig abgefragte Registry-Digest
+`sha256:d625254bcf34ea44e192336b53c487618f2c225ab56e5b8f403aa7d5d9cb69c6`
+enthält beide Plattformen; das heruntergeladene ARM64-Image bestätigt Version
+und Quellrevision. Nachweise: `agent-ci.json`, `agent-ci-jobs.json`,
+`agent-manifest.json`, `agent-image.txt` und `agent-pull.log` im Nachweisordner.
+
+Dieser unveränderliche Release ist der Bezugspunkt der Abnahme. Spätere reine
+Nachweiscommits ändern die geprüfte Implementierung nicht. Bestehende
+Installationen wechseln erst mit dem ausdrücklichen Agent-Update; vorhandene
+lokale Konfigurationen und Fachwerkzeug-Pins werden nicht still ersetzt.
+
 ### Tatsächliche Integrator-Prüfungen
 
 Die Prüfung verwendet den veröffentlichten MCP-Digest oben, den gepinnten
@@ -71,6 +89,25 @@ Nachweise liegen unter `.datenportal-integrator/cleanup-acceptance/`.
   und `.datenportal-integrator/init-acceptance/6f2c3825-2e42-463b-ba19-791dc75e3fd8/acceptance.json`.
   Eigene Init-Testdienste und Volumes sind entfernt. Dieser Nachweis verwendet
   `docker-build`; die Veröffentlichung wird getrennt geprüft.
+- Zusätzliche vollständige synthetische Lieferabnahme bestanden: positiver
+  Jenkins-Lauf und Downloads verifiziert; fehlerhafte CSV stoppt im
+  Validierungstask vor der Publikationsvorbereitung. Der bestehende Release
+  bleibt unverändert. Nachweise: `delivery.log` und
+  `.datenportal-integrator/delivery-acceptance/d3ce3fd7-43ac-4ce1-9dd5-cd2ab8c315e7/report.json`.
+  Eigene Testcontainer, Volumes und Secrets sind entfernt (`delivery-cleanup.json`);
+  die Berichte und Konsolen bleiben erhalten.
+
+- Praxisprüfung mit dem veröffentlichten Agent **0.1.12** bestanden: normaler
+  Docker-Launcher in einem weiteren privaten Arbeitsbereich, ohne lokale
+  Java-Quellen, Gradle-Builddateien oder Agent-JAR und mit `JAVA_HOME=/no-host-jdk`.
+  `init` startet die konfigurierten Dienste; wiederholtes `init` erhält die
+  Konfiguration und verwendet denselben Smoke-Nachweis. `doctor` bestätigt
+  `initialization.ready`, `smoke_current` und `host-loopback-verified`. Beide
+  erzeugten Client-Konfigurationen verbinden sich tatsächlich mit Version
+  `0.1.12`, liefern 28 Werkzeuge und beantworten `organization_schema`.
+  Nachweise: `.datenportal-integrator/release-acceptance/0.1.12/agent/` mit
+  `first-init.json`, `repeat-init.json`, `doctor.json`, `client-check.json` und
+  `client-check.log`. Eigene Dienste/Volumes sind anschliessend entfernt.
 
 ### Simulierte Entscheidungen und Grenzen
 
