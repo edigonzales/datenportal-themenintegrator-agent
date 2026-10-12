@@ -1,5 +1,102 @@
 # Abnahmestand
 
+## Drei fachliche Skills vom 12. Oktober 2026
+
+Dieser Nachweis betrifft die Arbeitskopie auf Basis von `f97f66b`, noch ohne
+Commit oder Veröffentlichung. Themenintegration, eigenständiges
+Validierungsmodell und Organisationsanlage haben eigene Skills; gemeinsame
+Verfahren werden bei Bedarf aus `docs/agent/` gelesen. CLI/MCP-Operationen,
+fachliche Gates und Zustandsschema bleiben unverändert.
+
+### Tatsächlich geprüft
+
+- Docker: `./bin/datenportal-agent gradle test jar spotlessCheck` bestanden,
+  **194 Unit-/Funktionstests**, keine Fehler oder Auslassungen.
+- Alle drei Skills: YAML-Frontmatter, eindeutige zum Verzeichnis passende
+  Namen, Beschreibungen, relative Skill-Verknüpfungen sowie rekursive lokale
+  Markdown-Links und Anker geprüft. Die alten Hauptskill-Anker bleiben erhalten.
+- Die kopierten Skills, Handbücher und Routing-Regeln der Abnahmeumgebung
+  bleiben innerhalb ihres privaten Roots. Referenzen werden bytegleich kopiert;
+  Änderungen an der Kopie verändern die Quellen nicht. Der Replay-Server weist
+  unmarkierte Arbeitsbereiche und unmarkierte externe Antwortordner zurück.
+- **20 ausgewählte Agentenszenarien** mit simulierten MCP-Antworten geprüft:
+  Codex CLI **0.162.0-alpha.17.2** mit CLI-Standardmodell und OpenCode CLI
+  **2.0.26** mit `deepseek/deepseek-flash`. Beide Clients entdecken und laden
+  alle drei Skills; Haupt-, Modell- und Organisationsskill wurden automatisch
+  sowie ausdrücklich ausgewählt. Vorhandene Zugangsdaten nutzt ausschliesslich
+  der jeweilige Client; sie werden nicht in die Fixtures kopiert.
+
+| Szenario | Beobachtetes Verhalten in beiden Clients |
+|---|---|
+| CSV prüfen | Bericht und CSV-Stopp; keine Freigabe, Modellierung oder Publikation |
+| Nur Beschreibung ändern | Datenblattoperationen und Metadatenreview; keine CSV-Anforderung/-Prüfung |
+| Eigenständiges Modell | Vorhandener Modellvorgang, Ableitung und Prüfung; Modellreview ohne Lieferung |
+| Thema mit Modell | Derselbe Themenvorgang, gemeinsame Prüfung und beide Gates im Review |
+| Organisation anlegen | Organisationsvorgang ohne CSV/Themenidentifier; Dateien und Berechtigungen zur Freigabe |
+| Fehlende Dienststelle | `office` im Themenvorgang; keine Organisationsanlage |
+| Unterbrochene Lieferung | `status`, fehlende Queue-Kennung erfragen und stoppen; kein Liefer-/Retry-Aufruf |
+| Ungültiger CSV-Name | Stopp vor dem Integrator; keine Umbenennung oder Änderung |
+
+Die zusätzlichen ausdrücklichen Modell- und Organisationsaufrufe ergeben
+zusammen mit den acht Szenarien zehn ausgewählte Sitzungen pro Client.
+Werkzeugaufrufe, geladene Referenzen, Schlussantworten und unveränderte
+Eingangsbytes wurden anhand der Protokolle geprüft. Keine ausgewählte Sitzung
+rief `approve`, lokale Übernahme, PR oder Publikation auf.
+
+Nachweise: `.datenportal-integrator/skill-acceptance/5af252f6-c7fa-413a-87aa-bec5ef1a8889/`
+mit `manifest.json`, `report.json`, Prompts, aufgezeichneten Antworten,
+Eingangsprüfsummen und clientbezogenen Sitzungsprotokollen. Der Java-Testserver
+`SkillReplay` läuft ohne Netzwerk; Antwortordner und Test-Classpath sind
+schreibgeschützt eingebunden. Berichts- und Kandidatenartefakte entstehen erst
+beim zugehörigen Replay-Aufruf.
+
+### Simulierte Ergebnisse und fehlgeschlagene Vorläufe
+
+Die MCP-Antworten, Prüfresultate und vorhandenen Datenfreigaben sind vorgegebene
+synthetische Testdaten. Beobachtet wurden die Entscheidungen der Clients;
+diese Sitzungen belegen keine ausgeführte ili2c-/GRETL-Prüfung und keine
+tatsächliche menschliche Fachfreigabe. Automatische Werkzeugfreigaben waren
+ausschliesslich in den isolierten Replay-Umgebungen aktiv.
+
+Frühe Codex-Aufrufe ohne Projektvertrauen beziehungsweise Werkzeugfreigabe
+erreichten den Replay-Server nicht. Die automatische Prüfung lehnte zudem
+einen Lieferaufruf bei unklarem Upload und einen Export mit vermeintlichem
+Original-Ausgabeziel ab. Die Wiederaufnahme wurde auf Status und belegte
+Zuordnung begrenzt; Exportantworten verwenden separate Kandidatenpfade.
+
+OpenCodes Standardmodell meldete `exo-free` als eingestellt. Gemma und Qwen
+zeigten in Vorläufen falsche Argumente, direkte Dateibearbeitung oder nicht
+beauftragte Operationen; diese Vorläufe sind nicht abgenommen. Kimi antwortete
+mit HTTP 400. Bei einem frühen Testlauf wählte OpenCode wegen des geerbten
+Arbeitsverzeichnisses den übergeordneten Checkout; die Tests setzen seither
+Arbeitsverzeichnis und `PWD` konsistent und verwenden eigene Git-Roots.
+Ein dabei erzeugtes Argumentartefakt wurde in den Nachweisordner verschoben.
+
+Auch ein erster DeepSeek-Wiederaufnahmetest lief nach unzulässigen weiteren
+Aufrufen in den Timeout. Die Kernregel für `submission_unknown` steht nun
+zusätzlich unmittelbar im Hauptskill. Der abschliessende Test mit einem
+konsistenten bereits freigegebenen Lieferstand stoppte nach `status` bei der
+fehlenden Queue-Kennung; gleiches Verhalten wurde mit Codex erneut geprüft.
+Die Modellanleitung nennt nach den Vorläufen das erforderliche `identity`-
+Objekt und den Vorrang vorhandener Vorgangs-IDs ausdrücklich. Der externe
+Skill-Creator-Validator konnte mangels PyYAML nicht starten; die entsprechenden
+Frontmatter- und Verknüpfungsprüfungen übernimmt der bestandene Java-Test.
+
+### Offen
+
+`./bin/datenportal-agent gradle integrationTest` wurde ausgeführt:
+**18 Tests, zwei bestanden, 16 fehlgeschlagen**. Ursache der Fehlprüfungen ist
+die fehlende `config/local.toml`, auf die beide Projekt-Clients verweisen.
+Damit bleiben die Prüfung der tatsächlich konfigurierten Fachwerkzeuge und
+die vollständige Vorbereitung der bestehenden Delivery-Abnahme offen. Es wurde
+keine historische Fixture-Konfiguration als aktuellen Betriebsstand ausgegeben
+und keine neue Betriebskonfiguration erfunden.
+
+Ein vollständiger GUI-Dialog mit tatsächlichen menschlichen Fachfreigaben
+bleibt eine separate Abnahme. Die hier geprüften CLI-Sitzungen ersetzen weder
+diesen Dialog noch eine INT-/PROD-Abnahme. Es wurden keine Geschäftsdaten
+publiziert.
+
 ## Geprüfte Image-Defaults vom 12. Oktober 2026
 
 Neue Installationen verwenden die unten nachgewiesenen Werkzeugstände:
