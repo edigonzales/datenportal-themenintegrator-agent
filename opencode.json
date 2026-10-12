@@ -1,24 +1,19 @@
 {
-  "$schema": "https://opencode.ai/config.json",
-  "mcp": {
-    "servers": {
-      "datenportal_integrator": {
-        "command": [
-          "bin/datenportal-agent",
-          "--config",
-          "config/local.toml",
-          "serve"
-        ],
-        "environment": {
-          "DATENPORTAL_FORWARD_ENV": "DATENPORTAL_LOCAL_USER DATENPORTAL_LOCAL_TOKEN"
+  "$schema" : "https://opencode.ai/config.json",
+  "mcp" : {
+    "servers" : {
+      "datenportal_integrator" : {
+        "command" : [ "bin/datenportal-agent", "--runtime", "docker", "--config", "config/local.toml", "serve" ],
+        "disabled" : false,
+        "environment" : {
+          "DATENPORTAL_FORWARD_ENV" : "DATENPORTAL_LOCAL_USER DATENPORTAL_LOCAL_TOKEN"
         },
-        "timeout": {
-          "startup": 180000,
-          "catalog": 1800000,
-          "execution": 1800000
+        "timeout" : {
+          "catalog" : 1800000,
+          "execution" : 1800000,
+          "startup" : 180000
         },
-        "type": "local",
-        "disabled": false
+        "type" : "local"
       }
     }
   }
