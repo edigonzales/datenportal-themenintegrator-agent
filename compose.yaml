@@ -15,7 +15,7 @@ services:
       datenportal.integrator.root: ${PWD}
 
   interlis:
-    image: sogis/interlis-mcp@sha256:e9824d526528127705d800b798e8e6173dc2adb812451bf9096b349d7174b233
+    image: sogis/interlis-mcp@sha256:72e834f04e74aed92658676ea3a693e0300f09ef91bb8f91c1334f8d943c94de
     pull_policy: never
     restart: unless-stopped
     environment:
@@ -26,14 +26,14 @@ services:
       datenportal.integrator.root: ${PWD}
 
   gretl:
-    image: sogis/datenportal-jenkins:0.1.0-3
+    image: sogis/datenportal-jenkins@sha256:c3eb068ed8636e546ca5b5cd2e57428ab31d1d00480446e52ad570bace46d833
     pull_policy: never
     restart: unless-stopped
     user: root
     entrypoint: ["bash", "/opt/integrator-runtime/gretl-entrypoint.sh"]
     environment:
       GRADLE_USER_HOME: /var/lib/integrator/gradle
-      INTEGRATOR_RUNTIME_KEY: jenkins-0.1.0-3
+      INTEGRATOR_RUNTIME_KEY: jenkins-0.1.0-6
     volumes:
       - gretl-data:/var/lib/integrator
       - ./runtime:/opt/integrator-runtime:ro

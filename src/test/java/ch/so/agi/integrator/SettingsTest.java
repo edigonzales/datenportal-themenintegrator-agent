@@ -6,6 +6,9 @@ import java.nio.file.*;
 import java.util.*;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.yaml.snakeyaml.LoaderOptions;
+import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.constructor.SafeConstructor;
 
 class SettingsTest {
   @TempDir Path temp;
@@ -18,6 +21,26 @@ class SettingsTest {
 
   String example() {
     return Json.contents(Fixtures.ROOT.resolve("config/local.example.toml"));
+  }
+
+  @Test
+  void shippedToolImagesMatchComposeAndGretlFallback() {
+    var settings = parse(example());
+    var compose =
+        Json.obj(
+            new Yaml(new SafeConstructor(new LoaderOptions()))
+                .load(Json.contents(Fixtures.ROOT.resolve("compose.yaml"))));
+    var services = Json.obj(compose.get("services"));
+    for (String tool : List.of("datasheet", "interlis", "gretl")) {
+      String image = Json.required(Json.obj(settings.values.get(tool)), "image");
+      assertTrue(image.matches("[^@]+@sha256:[a-f0-9]{64}"), tool);
+      assertEquals(image, Json.obj(services.get(tool)).get("image"), tool);
+    }
+    assertEquals(GretlRuntime.reference(settings), GretlRuntime.DEFAULT_IMAGE);
+    assertEquals(
+        GretlRuntime.reference(
+            parse(example().replaceAll("(?s)\\[gretl\\].*?\\[datasheet\\]", "[datasheet]"))),
+        GretlRuntime.DEFAULT_IMAGE);
   }
 
   @Test

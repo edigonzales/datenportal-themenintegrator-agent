@@ -116,6 +116,7 @@ class IntegrationTest {
     assertFalse(schema.isEmpty());
     var model = own(McpClients.interlis(s));
     var f = new Fixtures(temp, new ProcessRunner(), data, model);
+    f.workflow.gretl = new GretlRuntime(s, f.workflow.process);
     Workspace.copy(s.topics, f.repo);
     f.settings.values.put("validator_command", s.strings("validator_command", List.of()));
     // Test repository and test approvals are isolated; no upload or source-repository writes.
@@ -309,6 +310,7 @@ class IntegrationTest {
   void realEmptyOrganizationGradleAndOfficeValidation() throws Exception {
     Settings s = Fixtures.integrationSettings();
     var f = new Fixtures(temp, new ProcessRunner(), (n, a) -> Json.map(), (n, a) -> Json.map());
+    f.workflow.gretl = new GretlRuntime(s, f.workflow.process);
     Workspace.copy(s.topics, f.repo);
     f.settings.values.put("validator_command", s.strings("validator_command", List.of()));
     String id =
@@ -344,6 +346,7 @@ class IntegrationTest {
     var f =
         new Fixtures(
             temp, new ProcessRunner(), own(McpClients.datasheet(s)), own(McpClients.interlis(s)));
+    f.workflow.gretl = new GretlRuntime(s, f.workflow.process);
     Workspace.copy(s.topics, f.repo);
     f.settings.values.put("validator_command", s.strings("validator_command", List.of()));
     var doc = Xml.parse(Fixtures.FIXTURES.resolve("dataset.xtf"));

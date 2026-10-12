@@ -13,7 +13,7 @@ timeout_seconds = 300
 stack_timeout_seconds = 1800
 
 [gretl]
-image = "sogis/datenportal-jenkins:0.1.0-3"
+image = "sogis/datenportal-jenkins@sha256:c3eb068ed8636e546ca5b5cd2e57428ab31d1d00480446e52ad570bace46d833"
 mode = "compose"
 # setup-gretl sichert Digest und Bundle; Java 17 läuft ausschliesslich im Image.
 
@@ -29,7 +29,7 @@ image = "sogis/datenportal-datenblatt-mcp@sha256:b391421578f8c4652fb7a6446518774
 transport = "http"
 managed = true
 url = "http://127.0.0.1:8080/mcp"
-image = "sogis/interlis-mcp@sha256:e9824d526528127705d800b798e8e6173dc2adb812451bf9096b349d7174b233"
+image = "sogis/interlis-mcp@sha256:72e834f04e74aed92658676ea3a693e0300f09ef91bb8f91c1334f8d943c94de"
 # Für bestehende externe HTTP-Dienste managed=false setzen.
 # Für stdio managed/url entfernen und transport="stdio" setzen.
 

@@ -7,7 +7,8 @@ import java.util.*;
 
 /** Runs existing GRETL scripts in a pinned Jenkins image, without a Jenkins controller. */
 public class GretlRuntime {
-  public static final String DEFAULT_IMAGE = "sogis/datenportal-jenkins:0.1.0-3";
+  public static final String DEFAULT_IMAGE =
+      "sogis/datenportal-jenkins@sha256:c3eb068ed8636e546ca5b5cd2e57428ab31d1d00480446e52ad570bace46d833";
   final Settings settings;
   final ProcessRunner process;
   final DockerMcps docker;

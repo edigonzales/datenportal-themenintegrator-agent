@@ -42,6 +42,7 @@ class ModelRepairIntegrationTest {
             return interlis.call(operation, request);
           };
       var f = new Fixtures(temp, new ProcessRunner(), datasheet, faultyAuthor);
+      f.workflow.gretl = new GretlRuntime(source, f.workflow.process);
       Workspace.copy(source.topics, f.repo);
       f.settings.values.put("validator_command", source.strings("validator_command", List.of()));
       Path csv = temp.resolve("input.csv"), metadata = temp.resolve("metadata.xtf");

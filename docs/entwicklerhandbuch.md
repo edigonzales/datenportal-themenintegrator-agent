@@ -152,7 +152,7 @@ docker run --rm --network host --user "$(id -u):$(id -g)" --group-add "$socket_g
   '
 ```
 
-Die zweite Prüfung kopiert einen privaten Entwicklungs-Checkout und verwendet den echten Docker-Launcher mit eigenen Ports und Compose-Projekt. Sie prüft Ersteinrichtung, Wiederholung, `doctor`, beide erzeugten MCP-Verbindungen und `--skip-smoke` und entfernt nur ihre eigenen Dienste/Volumes.
+Die zweite Prüfung kopiert einen privaten Entwicklungs-Checkout und verwendet den echten Docker-Launcher mit eigenen Ports und Compose-Projekt. Sie prüft Ersteinrichtung mit bytegleicher Übernahme der Vorlage und ihren Image-Pins, Wiederholung, `doctor`, beide erzeugten MCP-Verbindungen und `--skip-smoke` und entfernt nur ihre eigenen Dienste/Volumes.
 Ihre Berichte bleiben unter `.datenportal-integrator/init-acceptance/` erhalten. Als zweites Argument akzeptiert `InitAcceptance` einen absoluten Pfad zu einer abweichenden Quellkonfiguration; die erzeugte Testkonfiguration hat keine aktiven Publikationsprofile.
 
 ### Erweiterte Laufzeitkonfiguration
@@ -670,7 +670,7 @@ JUnit simuliert Pull-/Cache-/Konfigurationsfehler und fremde Container. Die echt
 
 ## GRETL-Containeradapter
 
-`[gretl].image` legt das Prüfimage fest; `mode = "compose"` aktiviert die dauerhafte Laufzeit, ohne `mode` gilt `ephemeral`. Ohne Abschnitt gilt `sogis/datenportal-jenkins:0.1.0-3`. `GretlRuntime` ersetzt den Host-Aufruf in `Workspace.gradle`. Image-Pinning und Besitzerkennungen verwenden die bestehende Docker-Mechanik. Die lokale Runtime-Datei hat Schema-Version 2: Referenz, Digest, Image-ID, Plattform, Java-17-/Bundle-/Cachepfade im Container und Bundle-SHA-256. Die Inventarliste wird wie im Themen-Task aus sortierten `Dateiname=SHA256`-Zeilen mit abschliessendem LF gebildet. Nicht unterstützte Runtime-Dateien bleiben unverändert und sperren die Einrichtung; die Fehlermeldung nennt den Nachweis. Lokale GRETL-JDK-/JAR-Pfade sind keine gültigen Konfigurationsfelder.
+`[gretl].image` legt das Prüfimage fest; `mode = "compose"` aktiviert die dauerhafte Laufzeit, ohne `mode` gilt `ephemeral`. Ohne Abschnitt gilt ebenfalls der unveränderliche Digest von Jenkins/GRETL 0.1.0-6: `sogis/datenportal-jenkins@sha256:c3eb068ed8636e546ca5b5cd2e57428ab31d1d00480446e52ad570bace46d833`. `GretlRuntime` ersetzt den Host-Aufruf in `Workspace.gradle`. Image-Pinning und Besitzerkennungen verwenden die bestehende Docker-Mechanik. Die lokale Runtime-Datei hat Schema-Version 2: Referenz, Digest, Image-ID, Plattform, Java-17-/Bundle-/Cachepfade im Container und Bundle-SHA-256. Die Inventarliste wird wie im Themen-Task aus sortierten `Dateiname=SHA256`-Zeilen mit abschliessendem LF gebildet. Nicht unterstützte Runtime-Dateien bleiben unverändert und sperren die Einrichtung; die Fehlermeldung nennt den Nachweis. Lokale GRETL-JDK-/JAR-Pfade sind keine gültigen Konfigurationsfelder.
 
 Der ephemeral-Prüfcontainer überschreibt den Image-Einstiegspunkt mit einem Warteprozess. Es gibt keinen Jenkins-Controller, keine Hostmounts und keine übernommenen Jenkins-Zugangsdaten. Arbeitskopie und Zusatzdateien werden nach `/tmp` kopiert und für `jenkins` vorbereitet. Der vorhandene Wrapper und das Init-Script laufen als dieser Benutzer. `-PdataFile` und zusätzliche `-I`/`--init-script`-Argumente werden ausdrücklich übersetzt; andere Argumente werden nicht pauschal ersetzt. Die Host-Arbeitskopie bleibt im Bericht erhalten.
 
@@ -712,7 +712,8 @@ Es werden keine Tokens in Build-Argumente, Images oder Protokolle übernommen.
 
 Beide Architekturen werden vor der Publikation gebaut und ohne Workspace-Mount
 mit `runtime/image-smoke.sh` geprüft: Version, CLI, MCP-Initialisierung,
-Konfigurationsvorlage, HTML-Bericht und Java-Konverter.
+Erzeugung der eingebetteten Konfigurationsvorlage mit konsistenten Digest-Pins für Datenblatt-MCP 0.2.1, INTERLIS-MCP 0.0.575-1 und Jenkins/GRETL 0.1.0-6, bytegleichen Erhalt einer bestehenden Konfiguration, HTML-Bericht und Java-Konverter.
+Ein JUnit-Konsistenztest vergleicht zusätzlich die Referenzen in `config/local.example.toml`, `compose.yaml` und dem GRETL-Fallback. Die erzeugte Compose-Konfiguration verwendet weiterhin die ausgewählten lokalen Image-IDs.
 `bash runtime/image-network-smoke.sh <image>` prüft zusätzlich mit kompilierten
 Testklassen den echten Host-Loopback aus dem installierten Image. Die private
 Fixture enthält kein Workspace-JAR; CI führt diese Prüfung auf Linux aus. Das Image enthält nur

@@ -1,8 +1,99 @@
 # Abnahmestand
 
+## Geprüfte Image-Defaults vom 12. Oktober 2026
+
+Neue Installationen verwenden die unten nachgewiesenen Werkzeugstände:
+Datenblatt-MCP 0.2.1, INTERLIS-MCP 0.0.575-1 und Jenkins/GRETL 0.1.0-6.
+`config/local.example.toml`, `compose.yaml` und der GRETL-Fallback sind auf
+unveränderliche Registry-Digests abgestimmt. Der statische GRETL-Runtime-Key
+lautet `jenkins-0.1.0-6`; die erzeugte Compose-Konfiguration bindet weiterhin
+die tatsächlich ausgewählten Image-IDs. Bestehende lokale Konfigurationen und
+Schnittstellen bleiben erhalten. Die vier GRETL-Fixturekorrekturen des
+vorangehenden Aktualisierungslaufs sind Bestandteil dieser Änderung.
+
+### Tatsächlich geprüft
+
+- Docker: `gradle test jar spotlessCheck` erfolgreich; **191 Unit-Tests**,
+  keine Fehler oder Auslassungen. Der neue Konsistenztest vergleicht Vorlage,
+  Compose und GRETL-Fallback und verlangt unveränderliche Referenzen.
+- `gradle integrationTest` mit den tatsächlich konfigurierten Werkzeugen:
+  **26 Integrationstests bestanden**, keine Fehler oder Auslassungen.
+- ARM64-Kandidatenimage ohne Workspace-Mount und Netzwerk geprüft:
+  CLI/Version, MCP-Initialisierung, eingebettete Vorlage mit konsistenten Pins,
+  bytegleicher Erhalt einer bestehenden Konfiguration, HTML und Konverter.
+- Isolierte Ersteinrichtung mit eigenen Ports und Compose-Projekt bestanden:
+  bytegleiche Vorlagenübernahme mit den vorgesehenen Pins, gültiges Modell/CSV
+  und zurückgewiesene ungültige CSV, `doctor`, beide generierten
+  Codex-/OpenCode-Client-Verbindungen sowie unveränderte Wiederholung von `init`.
+  Der Nachweis liegt unter
+  `.datenportal-integrator/init-acceptance/72f7f346-0cce-443c-a3c3-9f0c701e4c59/acceptance.json`.
+
+Die lokalen Nachweise liegen unter
+`.datenportal-integrator/updates/2026-10-12T15-39-36-315Z-init-image-defaults/`.
+
+### Noch offene technische Schritte
+
+Veröffentlichung über den bestehenden AMD64-/ARM64-Workflow, Registry-Verifikation,
+Übernahme des neuen Integrators und erneute OpenCode-Verbindung stehen noch aus.
+
+### Simulierte Entscheidungen und offene Fachabnahme
+
+Testfreigaben gelten ausschliesslich in isolierten synthetischen Fixtures.
+Ein vollständiger fachlicher GUI-Dialog mit tatsächlichen menschlichen
+Freigaben bleibt offen. Dieser technische Release publiziert keine Geschäftsdaten.
+
+## Lokale Werkzeugaktualisierung vom 12. Oktober 2026
+
+Der bestehende Arbeitsbereich wurde mit dem veröffentlichten Docker-Launcher
+aktualisiert. Die ausgewählten Images sind über Registry-Digests festgehalten:
+
+| Komponente | Image-Version | Registry-Digest |
+|---|---|---|
+| Integrator | 0.1.14 | `sha256:be4e5ac7bd5789a900b8d1de866445513df15a11d6489c665fd3e85f91641195` |
+| Datenblatt-MCP | 0.2.1 | `sha256:b391421578f8c4652fb7a64465187746a3057ab4413d17cfc20a56025b470da1` |
+| INTERLIS-MCP | 0.0.575-1 | `sha256:72e834f04e74aed92658676ea3a693e0300f09ef91bb8f91c1334f8d943c94de` |
+| Jenkins/GRETL | 0.1.0-6 | `sha256:c3eb068ed8636e546ca5b5cd2e57428ab31d1d00480446e52ad570bace46d833` |
+
+Die zugehörigen Veröffentlichungsprüfungen sind erfolgreich:
+[Integrator](https://github.com/edigonzales/datenportal-themenintegrator-agent/actions/runs/38251793247),
+[Datenblatt-MCP](https://github.com/sogis/datenportal-datenblatt-editor/actions/runs/37592187589),
+[INTERLIS-MCP](https://github.com/edigonzales/interlis-mcp/actions/runs/38115566598) und
+[Jenkins/GRETL](https://github.com/edigonzales/datenportal-jenkins-dev/actions/runs/37736792631).
+
+### Tatsächlich geprüft
+
+- `--update-agent --version` und `init --update-tools` erfolgreich. `doctor`
+  bestätigt `initialization.ready=true`, `smoke_current=true`, beide Fach-MCPs,
+  GRETL und Host-Loopback. Docker-stdio und die bestehende GRETL-Betriebsart
+  wurden beibehalten.
+- `test jar spotlessCheck integrationTest`: **190 Unit-Tests und 26
+  Integrationstests bestanden**, keine Auslassungen. Der erste Integrationslauf
+  scheiterte in fünf Fällen, weil die isolierten Fixtures den GRETL-Standard
+  statt der tatsächlichen Konfiguration verwendeten. Vier Fixture-Zuordnungen
+  wurden korrigiert; die vollständige Wiederholung ist erfolgreich.
+- Modellableitung und Compilerprüfung, gültige und ungültige CSVs,
+  Compiler-/CSV-Reparaturen sowie das gemeinsame Limit von drei Korrekturen
+  geprüft. Die frühe GRETL-Prüfung und der vorhandene Jenkins verwenden
+  dasselbe Image; dessen Validierungstask wurde ebenfalls ausgeführt.
+- Vorhandene Zugangsdaten erhalten; eine lesende Jenkins-Anfrage bestätigt
+  die Anmeldung. OpenCode Desktop 2.0.26 wurde neu verbunden;
+  seine gebündelte CLI meldet `datenportal_integrator connected`.
+
+Die lokalen Logs, Registry-/CI-Nachweise und Testberichte liegen unter
+`.datenportal-integrator/updates/2026-10-12T14-54-30-658Z-e7fbdbd6/`.
+
+### Simulierte Entscheidungen und offene Fachabnahme
+
+Automatisierte Freigaben betreffen ausschliesslich isolierte synthetische
+Testfixtures. Dieser Aktualisierungslauf publiziert keine Geschäftsdaten.
+Der technische Verbindungstest ersetzt keinen vollständigen fachlichen
+GUI-Dialog mit tatsächlichen menschlichen Freigaben. Bestehende fachliche
+Vorgänge benötigen nach dem Werkzeugwechsel erneute Prüfungen und die
+betroffenen Freigaben.
+
 ## Bereinigung und Docker-Einstieg vom 11. Oktober 2026
 
-Dieser Abschnitt beschreibt den aktuellen Stand. Alle darunter datierten
+Dieser Abschnitt beschreibt den damaligen Stand. Alle darunter datierten
 Abschnitte sind historische Nachweise; ihre damaligen Kompatibilitäts- und
 Versionsangaben gelten nicht für diesen Stand.
 

@@ -19,6 +19,9 @@ docker run --rm --platform "$platform" --network none -e "EXPECTED_AGENT_VERSION
 package ch.so.agi.integrator;
 import java.nio.file.*;
 import java.util.*;
+import org.yaml.snakeyaml.LoaderOptions;
+import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.constructor.SafeConstructor;
 public class ImageSmoke implements CsvConverter {
   public void convert(Path input, Path output) throws Exception {
     Files.writeString(output, Files.readString(input).replace("2025", "2026"));
@@ -29,8 +32,27 @@ public class ImageSmoke implements CsvConverter {
     Reports.render(workspace, workspace.resolve("review.html"), Reports.Kind.CSV, "ch.so.image.smoke", Map.of("valid", true));
     String review = Files.readString(workspace.resolve("review.html"));
     if (!review.contains("CSV prüfen") || !review.contains("ch.so.image.smoke") || !review.contains("Prüfung bestanden")) throw new AssertionError("Rendered image report missing phase, identifier or result");
+    Path config = Path.of("config/local.toml");
+    if (Files.exists(config)) throw new AssertionError("Cold image unexpectedly has local configuration");
     Initializer.prepareConfig(null);
-    if (!Files.exists(Path.of("config/local.toml"))) throw new AssertionError();
+    byte[] embedded = Files.readAllBytes(AgentResources.resolve(workspace, "config/local.example.toml"));
+    if (!Arrays.equals(embedded, Files.readAllBytes(config))) throw new AssertionError("Embedded defaults differ");
+    var settings = new Settings(config);
+    Map<String, Object> compose;
+    try (var input = ImageSmoke.class.getResourceAsStream("/compose.yaml")) {
+      compose = Json.obj(new Yaml(new SafeConstructor(new LoaderOptions())).load(input));
+    }
+    var services = Json.obj(compose.get("services"));
+    for (String tool : List.of("datasheet", "interlis", "gretl")) {
+      String image = Json.required(Json.obj(settings.values.get(tool)), "image");
+      if (!image.matches("[^@]+@sha256:[a-f0-9]{64}") || !image.equals(Json.obj(services.get(tool)).get("image")))
+        throw new AssertionError("Inconsistent image pin: " + tool);
+    }
+    if (!GretlRuntime.reference(settings).equals(GretlRuntime.DEFAULT_IMAGE)) throw new AssertionError("GRETL fallback differs");
+    byte[] existing = (Files.readString(config).replace(GretlRuntime.DEFAULT_IMAGE, "sogis/fixture:existing") + "\n# Existing installation\n").getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    Files.write(config, existing);
+    Initializer.prepareConfig(null);
+    if (!Arrays.equals(existing, Files.readAllBytes(config))) throw new AssertionError("Existing configuration changed");
     Files.writeString(Path.of("/tmp/input.csv"), "Jahr\n2025\n");
     var params = io.modelcontextprotocol.client.transport.ServerParameters.builder(
         Path.of(System.getProperty("java.home"), "bin/java").toString())

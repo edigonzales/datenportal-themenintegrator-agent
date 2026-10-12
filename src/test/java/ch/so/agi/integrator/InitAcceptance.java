@@ -65,6 +65,14 @@ public class InitAcceptance {
       String first = runner.checked(init, fixture, 1200);
       Json.write(fixture.resolve("first.log"), first);
       settings = new Settings(fixture.resolve("config/local.toml"));
+      if (Files.mismatch(example, settings.file) != -1)
+        throw new AssertionError("Cold init did not copy the configured defaults byte-for-byte");
+      Settings defaults = new Settings(root.resolve("config/local.example.toml"));
+      for (String tool : List.of("datasheet", "interlis", "gretl"))
+        if (!Json.obj(defaults.values.get(tool))
+            .get("image")
+            .equals(Json.obj(settings.values.get(tool)).get("image")))
+          throw new AssertionError("Cold init selected different image: " + tool);
       Path report = fixture.resolve(".datenportal-integrator/init.json");
       var initial = Json.read(report);
       if (!Json.bool(initial, "ready", false)) throw new AssertionError("Cold init failed");
@@ -113,6 +121,8 @@ public class InitAcceptance {
               "synthetic_fixture",
               true,
               "default_created",
+              true,
+              "default_images_preserved",
               true,
               "explicit_missing_rejected",
               true,
