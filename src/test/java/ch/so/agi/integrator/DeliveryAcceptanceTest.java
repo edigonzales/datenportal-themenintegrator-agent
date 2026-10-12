@@ -10,6 +10,43 @@ class DeliveryAcceptanceTest {
   @TempDir Path temp;
 
   @Test
+  void replayRejectsAnUnmarkedWorkspace() {
+    assertThrows(
+        IllegalArgumentException.class, () -> SkillReplay.main(new String[] {temp.toString()}));
+  }
+
+  @Test
+  void replayRejectsUnmarkedExternalResponses() throws Exception {
+    Path root = temp.resolve("agent"), responses = temp.resolve("responses");
+    Files.createDirectories(root);
+    Files.createDirectories(responses);
+    Json.write(root.resolve("SYNTHETIC_TEST_FIXTURE"), DeliveryAcceptance.STATEMENT);
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> SkillReplay.main(new String[] {root.toString(), responses.toString()}));
+  }
+
+  @Test
+  void guidanceCopiesAndLinksStayInsideFixture() throws Exception {
+    Path root = temp.resolve("agent");
+    DeliveryAcceptance.copyAgentGuidance(Fixtures.ROOT, root);
+    DocumentationTest.verifyGuidance(root);
+    for (Path original : DocumentationTest.markdownFiles(Fixtures.ROOT)) {
+      Path copy = root.resolve(Fixtures.ROOT.relativize(original));
+      if (original.getFileName().toString().equals("AGENTS.md")) {
+        assertTrue(Json.contents(copy).startsWith("SYNTHETIC TEST FIXTURE."));
+        assertTrue(Json.contents(copy).endsWith(Json.contents(original)));
+      } else {
+        assertEquals(-1L, Files.mismatch(original, copy));
+      }
+      assertNotEquals(original.toRealPath(), copy.toRealPath());
+    }
+    Path skill = root.resolve("skills/datenportal-validierungsmodell/SKILL.md");
+    Json.write(skill, "Changed only inside the isolated test fixture\n");
+    assertNotEquals(Json.sha(skill), Json.sha(Fixtures.ROOT.resolve(root.relativize(skill))));
+  }
+
+  @Test
   void CleanupCannotSelectAnotherRootOrComposeProject() throws Exception {
     Json.write(
         temp.resolve("config.toml"),

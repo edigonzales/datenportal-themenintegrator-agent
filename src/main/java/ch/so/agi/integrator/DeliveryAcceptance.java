@@ -174,13 +174,7 @@ final class DeliveryAcceptance {
             + quote(root.resolve("config/local.toml").toString())
             + "\n");
     root.resolve("bin/datenportal-agent").toFile().setExecutable(true);
-    Files.createDirectories(root.resolve(".agents/skills"));
-    Files.createSymbolicLink(
-        root.resolve(".agents/skills/datenportal-themenintegrator"),
-        source.root.resolve("skills/datenportal-themenintegrator"));
-    Json.write(
-        root.resolve("AGENTS.md"),
-        "SYNTHETIC TEST FIXTURE. Only this private configuration and repository may be used. No business approvals or other environments.\n");
+    copyAgentGuidance(source.root, root);
     var privateSettings = new Settings(root.resolve("config/local.toml"));
     new Harness(privateSettings).install();
     // An independent Git root prevents GUI project discovery from selecting the business repo.
@@ -217,6 +211,25 @@ final class DeliveryAcceptance {
             "project",
             project));
     return directory;
+  }
+
+  static void copyAgentGuidance(Path sourceRoot, Path root) throws Exception {
+    for (String part : List.of("skills", "docs"))
+      Workspace.copy(sourceRoot.resolve(part), root.resolve(part));
+    Files.copy(sourceRoot.resolve("README.md"), root.resolve("README.md"));
+    Json.write(
+        root.resolve("AGENTS.md"),
+        "SYNTHETIC TEST FIXTURE. Only this private configuration and repository may be used. No business approvals or other environments.\n\n"
+            + Json.contents(sourceRoot.resolve("AGENTS.md")));
+    Path entries = root.resolve(".agents/skills");
+    Files.createDirectories(entries);
+    try (var skills = Files.list(root.resolve("skills"))) {
+      for (Path skill : skills.filter(p -> Files.isRegularFile(p.resolve("SKILL.md"))).toList()) {
+        Files.createSymbolicLink(
+            entries.resolve(skill.getFileName()),
+            Path.of("../../skills").resolve(skill.getFileName()));
+      }
+    }
   }
 
   Map<String, Object> run(Path directory) throws Exception {

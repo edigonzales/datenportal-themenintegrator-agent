@@ -1,8 +1,22 @@
 # datenportal-themenintegrator-agent
 
-For integration, read `skills/datenportal-themenintegrator/SKILL.md` and use this
-repository's Java CLI/MCP. Apply the skill's mandatory "Chat-Anhänge übernehmen"
-rule before passing chat attachments to the integrator.
+Use this repository's Java CLI/MCP and select the skill by the requested task:
+
+- Topic integration, CSV checks, data/metadata deliveries or their resumption:
+  [datenportal-themenintegrator](skills/datenportal-themenintegrator/SKILL.md).
+- Standalone validation-model work:
+  [datenportal-validierungsmodell](skills/datenportal-validierungsmodell/SKILL.md).
+- Standalone organization creation:
+  [datenportal-organisation](skills/datenportal-organisation/SKILL.md).
+
+For modeling within topic integration, also read the model skill and keep the
+existing `run_id`; do not start a second workflow. A missing office within a
+topic is an `office` addition, not a new organization.
+Before passing CSV files or chat attachments to the integrator, read and apply
+[Eingangsdateien](docs/agent/eingangsdateien.md): check original CSV names before
+handoff and automatically copy chat CSV/XTF/XLSX attachments unchanged with
+three matching SHA-256 checks. Originals and confirmed semantics remain intact.
+
 Integrator implementation, rules, tests and runtime
 files belong here. Never modify source files in the dev-stack, datasheet MCP,
 interlis-mcp, Jenkins plugin, GRETL or portal. Only staged, reviewed business

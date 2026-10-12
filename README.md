@@ -68,6 +68,18 @@ und warte danach auf meine fachliche Entscheidung.
 ```
 
 In OpenCode beginnt derselbe Prompt mit `@datenportal-themenintegrator`.
+Die drei Skills verwenden denselben Integrator-MCP und werden gemeinsam mit
+diesem Checkout unter `.agents/skills/` bereitgestellt:
+
+| Auftrag | Skill und Beispiel |
+|---|---|
+| Thema, CSV-Prüfung oder Metadatenänderung | [datenportal-themenintegrator](skills/datenportal-themenintegrator/SKILL.md): „Prüfe diese CSV und warte nach dem Bericht.“ |
+| Eigenständiges Validierungsmodell | [datenportal-validierungsmodell](skills/datenportal-validierungsmodell/SKILL.md): „Leite für diese CSV und ihr Datenblatt ein Modell ab; publiziere nichts.“ |
+| Eigenständige Organisation | [datenportal-organisation](skills/datenportal-organisation/SKILL.md): „Bereite eine Organisation mit diesen Teams und dieser Dienststelle vor; lege kein Thema an.“ |
+
+In Codex den jeweiligen Namen mit `$`, in OpenCode mit `@` auswählen.
+Bei Themenintegration mit ausdrücklich beauftragtem Modell lädt der Hauptskill
+die Modellanleitung hinzu und verwendet denselben Vorgang weiter.
 [Neun Anwendungsszenarien](docs/anwenderhandbuch.md#mit-dem-agenten-arbeiten)
 zeigen erwartete Ergebnisse, menschliche Entscheidungen und kopierbare Prompts.
 Neue CSV-Validierungsmodelle verwenden das kommentarfreie Profil `SO-DATA`;

@@ -152,8 +152,9 @@ persönliche MCP-Konfiguration ist normalerweise nicht nötig.
   seinen Status prüfen. Desktop- und Shell-Version getrennt beachten; Details
   unter [Codex Desktop, Codex CLI und OpenCode](#codex-desktop-codex-cli-und-opencode).
 
-Wähle anschliessend den Skill: in Codex `$datenportal-themenintegrator`,
-in OpenCode `@datenportal-themenintegrator`. Die folgenden Startprompts und
+Wähle anschliessend den zum Auftrag passenden Skill; für Themenintegration
+in Codex `$datenportal-themenintegrator`, in OpenCode `@datenportal-themenintegrator`.
+Die folgenden Startprompts und
 Anwendungsszenarien zeigen konkrete fachliche Aufträge.
 
 ## Mit dem Agenten arbeiten
@@ -167,9 +168,19 @@ abschliessen. Anschliessend das Repository `datenportal-themenintegrator-agent`
 als Projekt öffnen und die [MCP-Verbindung](#codex-desktop-codex-cli-und-opencode)
 prüfen; `init` erzeugt die Konfiguration für OpenCode 2.x automatisch.
 
-Wähle zu Beginn den [Skill datenportal-themenintegrator](../skills/datenportal-themenintegrator/SKILL.md)
-aus. Er beschreibt dem Agenten die fachlichen Abläufe und Freigaben; die
-MCP-Verbindung stellt die dazugehörigen Werkzeuge bereit.
+Wähle den Skill nach dem fachlichen Auftrag. Alle drei nutzen dieselbe
+MCP-Verbindung und sind gemeinsam unter `.agents/skills/` verfügbar:
+
+| Auftrag | Skill |
+|---|---|
+| Thema integrieren, CSV prüfen, Metadaten ändern oder Lieferung wiederaufnehmen | [datenportal-themenintegrator](../skills/datenportal-themenintegrator/SKILL.md) |
+| Eigenständiges INTERLIS-Validierungsmodell ableiten | [datenportal-validierungsmodell](../skills/datenportal-validierungsmodell/SKILL.md) |
+| Eigenständige Organisation mit Teams und Office anlegen | [datenportal-organisation](../skills/datenportal-organisation/SKILL.md) |
+
+Bei Themenintegration mit ausdrücklich beauftragtem Modell bleibt der Hauptskill
+verantwortlich und liest die Modellanleitung ergänzend. Derselbe `run_id` bleibt
+erhalten. Ein fehlendes Office im Themenvorgang wird dort ergänzt; es löst keine
+vollständige Organisationsanlage aus.
 
 | Oberfläche | Skill ausdrücklich auswählen |
 |---|---|
@@ -181,11 +192,13 @@ Die Aufrufweisen sind in der [OpenCode-2.x-Skill-Dokumentation](https://opencode
 und der [Codex-Skill-Dokumentation](https://learn.chatgpt.com/docs/build-skills)
 beschrieben. In Folgeantworten desselben Vorgangs musst du den Skill nicht
 erneut auswählen. Wird er nicht gefunden, prüfe den geöffneten Arbeitsbereich
-und den gemeinsamen Skill unter `.agents/skills/`.
+und die drei Skill-Verknüpfungen unter `.agents/skills/`. Für die anderen Skills
+den jeweiligen Namen mit demselben `$`- beziehungsweise `@`-Präfix verwenden.
 
 Hänge CSV-Daten und vorhandene XTF- oder XLSX-Metadaten an oder nenne zugängliche
 absolute Dateipfade. Gib Organisation, Themenidentifier und bei Serien die
-Ausgabe an. Der Agent fragt fehlende Angaben nach. Chat-Anhänge übernimmt er
+Ausgabe an; Organisationsaufträge benötigen keine Lieferdateien und keinen
+Themenidentifier. Der Agent fragt fehlende Angaben nach. Chat-Anhänge übernimmt er
 automatisch unverändert und vergleicht die Prüfsummen; du musst weder das
 Kopieren noch die Prüfung zusätzlich beauftragen. Ist der Originalpfad nicht
 zugänglich, fragt er danach. Die Übernahme ist noch keine fachliche Freigabe.
@@ -446,9 +459,18 @@ die konkreten Modell- und Metadatenstände freigeben. Die Taskdatei gehört zur
 Modellfreigabe.
 Eigenständige Modellierung ist auch ohne Datenpublikation möglich.
 
-**Beispielprompt:**
+**Beispielprompt für Modellierung im Themenvorgang:**
 
 > Verwende den Skill `datenportal-themenintegrator`. Leite im Vorgang `<Vorgangs-ID>` aus der bestätigten CSV und dem Datenblatt ein INTERLIS-Modell ab. Frage die Modellidentität und fachlich nicht belegte Regeln nach. Zeige die dabei regulär vorbereiteten Dateien `.ili` und `dataset.gradle` mit dem Copy-Task `stageThemenCsv` und dem Validierungstask `validateThemenCsv` gemeinsam mit dem aktualisierten Datenblatt und den Prüfresultaten zur Freigabe.
+
+**Beispielprompt für eigenständige Modellierung:**
+
+> Verwende den Skill `datenportal-validierungsmodell`. Leite für die Organisation `statistikdienst`, Thema `ch.so.bevoelkerung.altersstruktur`, aus der angehängten CSV und XTF ein Validierungsmodell ab. Prüfe zuerst die CSV und warte auf meine Datenfreigabe. Kläre danach Modellidentität und offene Fachregeln, zeige Modell, Task und aktualisiertes Datenblatt zur Modellfreigabe. Publiziere keine Daten.
+
+Der eigenständige Auftrag verwendet `workflow=model`; CSV, Datenfreigabe und
+konkreter exportierter Metadatenstand sind weiterhin Voraussetzungen. Der
+integrierte Auftrag bleibt dagegen bei `workflow=topic` und benötigt beide
+Gates `metadata` und `model` für den gemeinsamen Review.
 
 Technische Details: [INTERLIS-Modellierung](#interlis-modellierung).
 
@@ -469,7 +491,10 @@ mit dem ersten Thema. Es wird kein Dummy-Thema angelegt.
 
 **Beispielprompt:**
 
-> Verwende den Skill `datenportal-themenintegrator`. Bereite die Organisation `mobilitaet` mit dem Titel „Fachstelle Mobilität“ vor. Prüfe zuerst vorhandene Dienststellen und Teams. Frage fehlende Kontakte und Berechtigungszuordnungen nach und zeige alle geplanten Änderungen zur Freigabe. Lege noch kein Thema an.
+> Verwende den Skill `datenportal-organisation`. Bereite die Organisation `mobilitaet` mit dem Titel „Fachstelle Mobilität“ vor. Prüfe zuerst vorhandene Dienststellen und Teams. Frage fehlende Kontakte und Berechtigungszuordnungen nach und zeige alle geplanten Änderungen zur Freigabe. Lege noch kein Thema an.
+
+Für eine einzelne fehlende Dienststelle in einem bestehenden Themenvorgang
+bleibt `datenportal-themenintegrator` zuständig und verwendet `office`.
 
 Technische Details: [Organisation und Dienststelle](#neue-organisation-und-dienststelle).
 
@@ -866,7 +891,7 @@ Das Integrator-Repository als Projekt öffnen und den Skill in OpenCode mit
 `@datenportal-themenintegrator`, in Codex mit `$datenportal-themenintegrator`
 auswählen. Vollständige [Startprompts und Anwendungsszenarien](#mit-dem-agenten-arbeiten)
 stehen im Anwendungsteil dieses Handbuchs. Die Anhangübernahme erfolgt automatisch
-nach der Regel [Chat-Anhänge übernehmen](../skills/datenportal-themenintegrator/SKILL.md#chat-anhänge-übernehmen);
+nach der Regel [Chat-Anhänge übernehmen](agent/eingangsdateien.md#chat-anhänge-übernehmen);
 Kopieren und Prüfsummenvergleich müssen nicht im Prompt wiederholt werden.
 Wenn die GUI keinen zugänglichen Originalpfad übermittelt, fragt der Agent gezielt danach.
 

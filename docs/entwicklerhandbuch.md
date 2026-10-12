@@ -214,7 +214,7 @@ flowchart TB
     subgraph bedienung[Bedienung]
         direction TB
         mensch["Mensch"]
-        agent["Codex / OpenCode<br/>Sprachmodell und Skill"]
+        agent["Codex / OpenCode<br/>Sprachmodell und fachliche Skills"]
         mensch -->|Auftrag und Freigaben| agent
     end
 
@@ -293,7 +293,7 @@ nachfolgenden Schritten; Korrekturen erfordern neue Prüfstände und Freigaben.
 ```mermaid
 sequenceDiagram
     actor M as Mensch
-    participant A as Agent mit Skill
+    participant A as Agent mit fachlichen Skills
     participant I as Java-Integrator
     participant F as Fach-MCPs
     participant G as GRETL-Prüfcontainer
@@ -421,6 +421,39 @@ Organisationsvorgänge sind im [Anwenderhandbuch](anwenderhandbuch.md) beschrieb
 Alle Quellen liegen unter `src/main/java/ch/so/agi/integrator/`, JUnit unter `src/test/java/`. Fachliche Konverter liegen optional unter `topics/<organisation>/<identifier>/`. Regeln, Zusatzmodell und HTML-Vorlage bleiben im Integrator-Repo. Das Themenrepo ist die verbindliche Quelle für Organisationen, Dienststellen, Teams und Datenblätter; der Integrator pflegt keine zweite Kopie.
 
 ## Bestehende externe Schnittstellen
+
+Die Anweisungen sind in drei gemeinsam ausgelieferte Skills aufgeteilt:
+Themenintegration, eigenständiges Validierungsmodell und Organisationsanlage.
+Die Auswahl steht in `AGENTS.md`; `.agents/skills/` enthält relative
+Verknüpfungen nach `skills/`. Gemeinsame Verfahren liegen unter `docs/agent/`,
+Modellmethodik und Reparatur im Modellskill. Referenzen werden beim jeweiligen
+Leseanlass geladen. Die [Eingangsdateiregel](agent/eingangsdateien.md) gilt vor
+CSV-Übergabe und Anhangübernahme.
+
+Alle Skills verwenden dieselbe CLI/MCP und das bestehende Zustandsschema.
+Integrierte Modellierung bleibt im Themenvorgang mit beiden fachlichen Gates;
+eine Skillauswahl erzeugt keinen neuen Vorgang und keinen anderen MCP-Server.
+Die synthetische Abnahme kopiert Skills, Dokumentation und Routing-Regeln in
+ihren privaten Root und verknüpft dort ausschliesslich diese Kopien. Der
+Dokumentationstest prüft rekursiv Referenzen, Frontmatter und Verknüpfungen;
+Agentensitzungen prüfen separat Auswahl, Referenzzugriffe und Stopps.
+
+`SkillReplay` unter den Java-Testquellen stellt dafür ausschliesslich
+aufgezeichnete Antworten aus `<Antwortordner>/<operation>.json` einer mit
+`SYNTHETIC_TEST_FIXTURE` markierten Umgebung bereit und protokolliert Aufrufe
+in `calls.jsonl`. Argumente werden gegen die vorhandenen Operationsschemas
+geprüft. Den Antwortordner separat und schreibgeschützt in den Testcontainer
+einbinden und als zweites Java-Argument übergeben; auch er benötigt die
+Fixture-Markierung. So liegen die simulierten Ergebnisse ausserhalb des
+Agentenarbeitsbereichs. Optional mitgelieferte Dateien unter `artifacts/<operation>/`
+werden erst beim zugehörigen Aufruf in die private Umgebung kopiert, damit
+ein vorab vorhandener Bericht keine ausgeführte Prüfung vortäuscht.
+Der Testserver verwendet keine Fachclients, Zugangsdaten oder
+Publikationsschnittstellen; ein Docker-Aufruf mit `--network none`, einem
+privaten Fixture-Mount und schreibgeschütztem Test-Classpath genügt.
+Diese Replay-Prüfung belegt Agentenentscheidungen mit simulierten Ergebnissen,
+keine erfolgreiche Ausführung der Fachwerkzeuge. Client-Version, Modell,
+Prompt, Antworten und Sitzungsprotokoll gehören zum jeweiligen Nachweis.
 
 Keine Quellen von Dev-Stack, Fachdiensten, Jenkins-Plugin, GRETL oder Portal werden geändert. Änderungen an diesen Komponenten sind separate Aufträge. Relevante Grenzen werden als konkrete Fehler gemeldet.
 
