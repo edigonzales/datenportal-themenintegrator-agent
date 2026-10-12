@@ -31,10 +31,33 @@ vorangehenden Aktualisierungslaufs sind Bestandteil dieser Änderung.
 Die lokalen Nachweise liegen unter
 `.datenportal-integrator/updates/2026-10-12T15-39-36-315Z-init-image-defaults/`.
 
-### Noch offene technische Schritte
+### Veröffentlichung und lokale Übernahme
 
-Veröffentlichung über den bestehenden AMD64-/ARM64-Workflow, Registry-Verifikation,
-Übernahme des neuen Integrators und erneute OpenCode-Verbindung stehen noch aus.
+Die Änderung wurde auf `codex/init-image-defaults` vorbereitet und mit Commit
+`e27c1c1754729315897e77553673b5ac47da0111` auf `main` übernommen.
+Der unveränderte [Release-Workflow](https://github.com/edigonzales/datenportal-themenintegrator-agent/actions/runs/38273327631)
+ist vollständig erfolgreich: Unit-/Formatprüfungen, AMD64- und ARM64-Smokes,
+installierter Host-Loopback, Veröffentlichung und frische Prüfung beider
+Registry-Plattformen sowie anschliessende Digest-Promotion auf `latest`.
+
+- Integrator **0.1.15**, Registry-Digest
+  `sha256:39865821eff1f47413786ab21137988391387c68afa3a53fb74bcc91db4a178a`.
+  `latest` zeigt nachweislich auf denselben Multi-Plattform-Digest.
+- Das veröffentlichte ARM64-Image wurde zusätzlich lokal ohne Workspace-Mount
+  geprüft. OCI-Version und Quellcommit stimmen; die eingebettete Vorlage
+  enthält exakt die vorgesehenen drei Werkzeug-Digests. Der erweiterte
+  Container-Smoke einschliesslich Konfigurationserhalt ist bestanden.
+- Lokale Übernahme mit `--update-agent --version`, `init` und `doctor`
+  erfolgreich. Die aufgezeichnete Image-Auswahl entspricht dem Release-Digest;
+  `initialization.ready=true`, `smoke_current=true`, beide Fach-MCPs und
+  GRETL sind gültig.
+- `config/local.toml` und der Credential-Store sind gegenüber der Sicherung
+  bytegleich. Eine lesende Jenkins-Anfrage ist mit HTTP 200 authentifiziert.
+  OpenCode wurde aus- und wieder eingeschaltet; die gebündelte CLI bestätigt
+  `datenportal_integrator connected`. Der vorhandene Session-Entwurf blieb erhalten.
+
+Alle technischen Abschlusskriterien dieser Änderung sind erfüllt.
+Der Abschlussbericht liegt im oben genannten Nachweisverzeichnis als `report.json`.
 
 ### Simulierte Entscheidungen und offene Fachabnahme
 
