@@ -178,6 +178,7 @@ tasks.register('javaDistribution', Tar) {
     archiveExtension = 'tar.gz'
     destinationDirectory = layout.buildDirectory.dir('distributions')
     from(layout.buildDirectory.dir('java-distribution'))
+    filesMatching('bin/datenportal-agent') { permissions { unix('rwxr-xr-x') } }
     preserveFileTimestamps = false
     reproducibleFileOrder = true
 }

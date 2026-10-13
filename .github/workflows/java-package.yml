@@ -45,7 +45,10 @@ jobs:
       - name: Build complete source-free distribution
         run: ./gradlew --no-daemon javaDistribution -PagentVersion="$AGENT_VERSION" -PdatasheetVersion="$DATASHEET_VERSION" -PinterlisVersion="$INTERLIS_VERSION"
       - name: Check the installed distribution
-        run: bash bin/package-smoke build/java-distribution
+        run: |
+          mkdir build/unpacked
+          tar -xzf "build/distributions/datenportal-themenintegrator-agent-${AGENT_VERSION}-bin.tar.gz" -C build/unpacked
+          bash bin/package-smoke build/unpacked
       - name: Publish the tested package
         env:
           MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}

@@ -1331,3 +1331,20 @@ Nachweis: `.datenportal-integrator/delivery-acceptance/3ee3b60f-764f-41d9-ad14-a
 mit separat bereinigten positiven/negativen Jenkins-Konsolen und `cleanup.log`.
 Dies ist ein real ausgeführter technischer Test mit synthetischen Daten und
 markierten Testfreigaben, keine fachliche Lieferung und keine Benutzerabnahme.
+
+Nachtrag zur öffentlichen CI und Publikation vom selben Tag:
+
+- Integrator-Prüfungen auf Linux und macOS erfolgreich:
+  https://github.com/edigonzales/datenportal-themenintegrator-agent/actions/runs/38429038191
+- Datenblatt-MCP `0.2.3`: JAR-Rückdownload, Startprüfung und beide Dockerimages
+  erfolgreich: https://github.com/sogis/datenportal-datenblatt-editor/actions/runs/38430221469
+- INTERLIS-MCP `0.0.577-1`: JAR-Rückdownload, Modulprüfung und beide Dockerimages
+  erfolgreich: https://github.com/edigonzales/interlis-mcp/actions/runs/38430219784
+- Beide MCP-Pipelines prüfen nun ausdrücklich die Publikation gespeicherter
+  JAR-Dateien. Ein deaktivierter Archivtask hatte zunächst nur die POM publiziert.
+- Betriebspaket `0.2.2` nicht verwenden: Der erste Rückdownloadtest entdeckte
+  fehlende Ausführungsrechte des Launchers im TAR. Das TAR setzt diese nun
+  ausdrücklich; die CI prüft bereits vor dem Upload das entpackte Archiv.
+  Der korrigierte Archivtest mit den oben veröffentlichten MCP-Versionen bestand
+  lokal einschliesslich Installation, Validierung und Update. Die korrigierte
+  öffentliche Ausgabe wird als neue Version über dieselbe Pipeline publiziert.
