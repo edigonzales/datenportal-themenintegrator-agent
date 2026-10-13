@@ -34,35 +34,33 @@ public final class Models {
   public Object derive(Map<String, Object> r, Map<String, Object> args) {
     if (Json.str(r, "workflow", "topic").equals("organization"))
       throw new Problem("wrong_workflow", "Organisationsvorgang modelliert keine CSV.");
-    Map<String, Object> confirmations, proposals;
-    {
-      confirmations = ModelArguments.confirmations(args.get("confirmations"));
-      proposals = ModelArguments.proposals(args.get("range_proposals"));
-      ModelArguments.keys(
-          Json.obj(args.get("identity")),
-          "identity",
-          "name",
-          "uri",
-          "version",
-          "rule_profile",
-          "model_purpose",
-          "ili_version",
-          "topic",
-          "class",
-          "language",
-          "title",
-          "short_description",
-          "technical_contact",
-          "further_information",
-          "class_description",
-          "domains",
-          "units",
-          "imports",
-          "constraints",
-          "semantics_confirmed");
-      if (!Json.bool(Json.obj(r.get("model")), "authoring_valid", false))
-        ModelArguments.normalizeStored(r);
-    }
+
+    var confirmations = ModelArguments.confirmations(args.get("confirmations"));
+    var proposals = ModelArguments.proposals(args.get("range_proposals"));
+    ModelArguments.keys(
+        Json.obj(args.get("identity")),
+        "identity",
+        "name",
+        "uri",
+        "version",
+        "rule_profile",
+        "model_purpose",
+        "ili_version",
+        "topic",
+        "class",
+        "language",
+        "title",
+        "short_description",
+        "technical_contact",
+        "further_information",
+        "class_description",
+        "domains",
+        "units",
+        "imports",
+        "constraints",
+        "semantics_confirmed");
+    if (!Json.bool(Json.obj(r.get("model")), "authoring_valid", false))
+      ModelArguments.normalizeStored(r);
     ModelRepairs.requireReference(r, args);
 
     Path csv = w.requiredFile(r, "data");
@@ -381,6 +379,8 @@ public final class Models {
           "status",
           "INVALID_SPEC",
           "candidate",
+          true,
+          "candidate_created",
           false,
           "evidence",
           result,

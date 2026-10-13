@@ -593,6 +593,12 @@ class ModelsTest {
             "Invalid technical specification");
     f.call("derive_model", "run_id", id, "identity", identity(), "range_proposals", proposals());
     assertFalse(f.workflow.store.<Boolean>edit(id, r -> r.containsKey("model")));
+    var invalid =
+        f.call(
+            "derive_model", "run_id", id, "identity", identity(), "range_proposals", proposals());
+    assertTrue(
+        Json.bool(invalid, "candidate", false)); // Existing contract: not accepted/validated.
+    assertFalse(Json.bool(invalid, "candidate_created", true));
     reply = success;
     f.call("derive_model", "run_id", id, "identity", identity(), "range_proposals", proposals());
     String oldModel = f.workflow.store.edit(id, r -> Json.digest(r.get("model")));
