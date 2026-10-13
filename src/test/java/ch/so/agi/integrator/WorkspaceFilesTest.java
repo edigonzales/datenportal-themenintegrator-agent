@@ -22,6 +22,49 @@ class WorkspaceFilesTest {
   }
 
   @Test
+  void externalInputsRequireExplicitRootsAndRejectSymlinkEscapes() throws Exception {
+    Path workspace = temp.resolve("business/operator");
+    Path external = temp.resolve("external");
+    Path original = external.resolve("lieferung.csv");
+    Json.write(original, "Id;Wert\r\n0012;0\r\n");
+    Path config = workspace.resolve("config/local.toml");
+    String base = "root=\"..\"\ntopics_repo=\"../repo\"\n";
+    String services = "[datasheet]\ntransport=\"stdio\"\n";
+    Json.write(config, base + services);
+    var restricted = new WorkspaceFiles(new Settings(config));
+    var denied =
+        assertThrows(Problem.class, () -> restricted.importAttachment("agi", original.toString()));
+    assertEquals("input_path_not_allowed", denied.code);
+    assertEquals(original.toString(), denied.details.get("path"));
+    assertTrue(denied.getMessage().contains("input_roots"));
+    assertFalse(denied.getMessage().contains("mount"));
+    Path alias = workspace.resolve("alias.csv");
+    Files.createSymbolicLink(alias, original);
+    assertEquals(
+        "input_path_not_allowed",
+        assertThrows(Problem.class, () -> restricted.importAttachment("agi", alias.toString()))
+            .code);
+    for (String inputRoot : List.of(external.toString(), "../../external")) {
+      Json.write(config, base + "input_roots=[\"" + inputRoot + "\"]\n" + services);
+      var imported =
+          new WorkspaceFiles(new Settings(config)).importAttachment("agi", original.toString());
+      assertEquals(true, imported.get("verified"));
+      assertEquals(imported.get("source_sha256_before"), imported.get("source_sha256_after"));
+      assertEquals(imported.get("source_sha256_before"), imported.get("copy_sha256"));
+      assertEquals("Id;Wert\r\n0012;0\r\n", Files.readString(original));
+      assertArrayEquals(
+          Files.readAllBytes(original),
+          Files.readAllBytes(Path.of(imported.get("path").toString())));
+    }
+    var missing =
+        assertThrows(
+            Problem.class,
+            () -> restricted.importAttachment("agi", external.resolve("missing.csv").toString()));
+    assertEquals("input_path_unavailable", missing.code);
+    assertFalse(missing.getMessage().contains("mount"));
+  }
+
+  @Test
   void importsOriginalBytesIntoSeparateDirectoriesWithThreeChecksums() throws Exception {
     Path original = temp.resolve("lieferung.CSV");
     byte[] bytes = "Id;Wert\r\n0012;0\r\n".getBytes(java.nio.charset.StandardCharsets.UTF_8);

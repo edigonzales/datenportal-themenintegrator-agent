@@ -1348,3 +1348,25 @@ Nachtrag zur öffentlichen CI und Publikation vom selben Tag:
   Der korrigierte Archivtest mit den oben veröffentlichten MCP-Versionen bestand
   lokal einschliesslich Installation, Validierung und Update. Die korrigierte
   öffentliche Ausgabe wird als neue Version über dieselbe Pipeline publiziert.
+
+## 2026-10-13: Java-Eingangsverzeichnisse statt Mount-Anweisungen
+
+Die aktive Eingangsdatei-Anleitung und beide Handbuchfassungen beschreiben den
+Import durch den Java-Datei-MCP und gezielte `input_roots`. Persönliche Pfade und
+Docker-Mount-Anweisungen wurden daraus entfernt. Der öffentliche Fehlercode für
+nicht freigegebene Eingänge heisst jetzt `input_path_not_allowed`; die bisherigen
+Pfadgrenzen, die Umgebungsvariable `DATENPORTAL_INPUT_ROOTS` und die drei
+Prüfsummen bleiben erhalten. Historische Docker-Abnahmen oben bleiben unverändert.
+
+Tatsächlich lokal geprüft: 183 Java-Tests, `jar`, `spotlessCheck` und der gezielte
+`WorkspaceMcpIntegrationTest` erfolgreich. Der neue synthetische Test deckt
+abgewiesene externe Pfade, absolute und relative Freigaben, einen Symlink-Ausbruch,
+fehlende Quellen und unveränderte Bytes mit drei gleichen Prüfsummen ab. Bestehende
+Installation-/Update-Tests prüfen den Erhalt lokaler Konfiguration und Vorgänge.
+Die erzeugten Paketdokumente enthalten keine alten Mount-Aufforderungen.
+Der Paket-Smoke-Test vergleicht nun die lokale Konfiguration vor und nach Update.
+
+Zum Commit-Zeitpunkt noch offen: CI, Veröffentlichung, Download-Prüfung und Update
+des bestehenden Betriebsordners mit Prüfung über das veröffentlichte Paket.
+Diese Betriebsabnahme wird unter `.datenportal-integrator/setup/` im Betriebsordner
+protokolliert. Es wird kein fachlicher Integrations- oder Publikationslauf ausgelöst.

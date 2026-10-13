@@ -225,19 +225,19 @@ final class WorkspaceFiles {
     if (!Files.isRegularFile(source))
       throw new Problem(
           "input_path_unavailable",
-          "Originalpfad ist nicht zugänglich; Verzeichnis mit --mount-ro einbinden, Datei nicht rekonstruieren.",
+          "Originaldatei ist nicht vorhanden; vorhandenen, lesbaren absoluten Originalpfad angeben, Datei nicht rekonstruieren.",
           "path",
           value);
     var roots = new ArrayList<Path>();
     roots.add(s.root.getParent());
     for (String root : s.strings("input_roots", List.of())) roots.add(s.path(root));
-    String mounted = System.getenv("DATENPORTAL_INPUT_ROOTS");
-    if (mounted != null)
-      for (String root : mounted.split("\n")) if (!root.isBlank()) roots.add(Path.of(root));
+    String configuredRoots = System.getenv("DATENPORTAL_INPUT_ROOTS");
+    if (configuredRoots != null)
+      for (String root : configuredRoots.split("\n")) if (!root.isBlank()) roots.add(Path.of(root));
     if (roots.stream().noneMatch(root -> beneath(source, root)))
       throw new Problem(
-          "input_mount_required",
-          "Originalpfad mit --mount-ro einbinden oder input_roots freigeben.",
+          "input_path_not_allowed",
+          "Originalpfad ist nicht freigegeben; Eingangsverzeichnis in input_roots in config/local.toml ergänzen und MCP-Verbindungen neu starten.",
           "path",
           value);
     Path base = packagePath(".datenportal-integrator/input");

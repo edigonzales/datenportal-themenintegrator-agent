@@ -40,7 +40,7 @@
       "items": {
         "type": "string"
       },
-      "description": "Zusätzliche freigegebene Eingangsverzeichnisse; in Docker mit --mount-ro einbinden."
+      "description": "Zusätzliche freigegebene Eingangsverzeichnisse für den Java-Prozess; relative Pfade beziehen sich auf root. Nach Änderungen MCP-Verbindungen neu starten."
     },
     "compose_files": {
       "type": "array",

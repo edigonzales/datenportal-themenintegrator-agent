@@ -3,6 +3,8 @@ root = ".."
 topics_repo = "../datenportal-themenrepo"
 state_dir = ".datenportal-integrator/runs"
 model_dirs = []
+# Additional input directories, relative to root or absolute; e.g. ["../lieferungen"].
+input_roots = []
 timeout_seconds = 300
 stack_timeout_seconds = 1800
 

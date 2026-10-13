@@ -13,7 +13,7 @@ cd /absoluter/pfad/betrieb
 cp config/local.example.toml config/local.toml
 ```
 
-`topics_repo` auf das fachliche Themenrepository setzen. `model_dirs` ergänzt bei Bedarf weitere Modellverzeichnisse. Die beiden MCPs werden aus dem Paket als stdio-Prozesse gestartet. Es gibt keine MCP-Image-, Port- oder Compose-Konfiguration. Für zusätzliche Eingangsordner `input_roots` in der lokalen Konfiguration setzen.
+`topics_repo` auf das fachliche Themenrepository setzen. `model_dirs` ergänzt bei Bedarf weitere Modellverzeichnisse. Die beiden MCPs werden aus dem Paket als stdio-Prozesse gestartet. Es gibt keine MCP-Image-, Port- oder Compose-Konfiguration. Für zusätzliche Eingangsordner `input_roots` auf oberster Ebene in `config/local.toml` setzen, zum Beispiel `input_roots = ["../lieferungen"]`. Relative Pfade beziehen sich auf den konfigurierten Betriebs-Root. Standardmässig ist dessen übergeordnetes Verzeichnis freigegeben. Nach Änderungen beide MCP-Verbindungen neu starten; ein erneutes `init` ist dafür nicht erforderlich. Die Pfadfreigabe beschränkt den Dateiimport im Java-Prozess und ist keine Betriebssystem-Sandbox.
 
 ```bash
 bin/datenportal-agent init

@@ -13,6 +13,7 @@ cp "$package/tests/fixtures/offices.xtf" "$fixture/topics/shared/data/offices.xt
 cat > "$fixture/work space/config/local.toml" <<'CONFIG'
 root = ".."
 topics_repo = "../topics"
+input_roots = ["../external-input"]
 [datasheet]
 transport = "stdio"
 [interlis]
@@ -21,6 +22,8 @@ CONFIG
 "$fixture/work space/bin/datenportal-agent" init > "$fixture/init.json"
 "$fixture/work space/bin/datenportal-agent" doctor > "$fixture/doctor.json"
 # init exits unsuccessfully if positive/negative validation or MCP setup fails.
+cp "$fixture/work space/config/local.toml" "$fixture/config-before-update.toml"
 "$package/bin/datenportal-agent" workspace update "$fixture/work space" > "$fixture/update.json"
+cmp "$fixture/config-before-update.toml" "$fixture/work space/config/local.toml"
 "$fixture/work space/bin/datenportal-agent" init > "$fixture/reinit.json"
 printf 'Package installation, both MCPs, validation and update passed: %s\n' "$fixture"
