@@ -1407,3 +1407,34 @@ Zum Commit-Zeitpunkt noch offen: CI-Publikation und Abnahme der veröffentlichte
 Version im bestehenden Betriebsordner. Nachweise dafür werden dort unter
 `.datenportal-integrator/setup/` gespeichert. Der bestehende fachliche Vorgang
 wird dabei nur gelesen; seine nächsten Schritte bleiben beim Fachagenten.
+
+## 2026-10-13: MCP-Verbindungen nach parallelen Antworten stabil halten
+
+Der Stillstand in OpenCode wurde mit dem veröffentlichten Paket 0.2.8 reproduziert:
+Bei 400 gleichzeitig ausstehenden Datei-Aufrufen kam nur eine Antwort zurück.
+Der SDK-Fehler `Failed to enqueue message` beendete die Verarbeitung, während der
+Hauptthread weiter auf stdin-EOF wartete. Der Prozess blieb deshalb sichtbar,
+obwohl er keine weiteren Werkzeuge ausführte. Auslöser sind konkurrierende
+Antworten im stdio-Transport des Java-MCP-SDK 2.0.1, kein Leerlauf-Zeitlimit.
+
+Beide öffentlichen Server serialisieren jetzt das Einreihen ihrer Antworten;
+die Werkzeuge selbst bleiben parallel ausführbar. Auch asynchrones Einreihen
+wird vollständig abgewartet. Es gibt keinen automatischen Wiederholungsversuch
+für fachliche Operationen. Ein fataler Transportabbruch beendet den Prozess auch
+dann, wenn der Client stdin noch offen hält, und gibt wartende Sender frei.
+
+Tatsächlich lokal geprüft: 193 Unit-Tests, Formatprüfung und der neue unabhängige
+MCP-Prozesstest erfolgreich. Je Server wurden 1'200 gemischte erfolgreiche und
+abgewiesene Aufrufe mit eindeutigen Antwortkennungen sowie anschliessende Pings
+geprüft. Zusätzlich: EOF, fataler Protokollfehler ohne EOF, asynchroner
+Enqueue-Fehler und Freigabe wartender Sender. Die Prozessregression läuft künftig
+in der Linux- und macOS-CI. In einer isolierten OpenCode-Sitzung kamen alle sechs
+parallelen Lese-/Schemaaufrufe einschliesslich erwarteter Fehler korrekt zurück.
+
+Auch alle 19 Integrationstests mit den konfigurierten Fach-MCPs, ilivalidator
+und dem isolierten Jenkins-Validierungstask sind erfolgreich.
+Zum Commit-Zeitpunkt sind Veröffentlichung, Paketupdate und der längere
+OpenCode-Verbindungstest noch offen.
+Die Ergebnisse der installierten Version werden im Betriebsordner unter
+`.datenportal-integrator/setup/mcp-stability-release-check.json` festgehalten.
+Technische Tests führen keine fachlichen Freigaben, Lieferungen oder Publikation aus.

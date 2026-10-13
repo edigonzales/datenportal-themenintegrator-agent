@@ -4,6 +4,7 @@ import io.modelcontextprotocol.json.jackson3.JacksonMcpJsonMapper;
 import io.modelcontextprotocol.server.*;
 import io.modelcontextprotocol.server.transport.StdioServerTransportProvider;
 import io.modelcontextprotocol.spec.McpSchema;
+import io.modelcontextprotocol.spec.McpServerSession;
 import java.nio.file.*;
 import java.util.*;
 
@@ -238,24 +239,15 @@ public final class Main {
     if (OperatorWorkspace.installed(s.root)) OperatorPolicy.check(s);
     System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", "warn");
     var ended = new java.util.concurrent.CountDownLatch(1);
-    var input =
-        new java.io.FilterInputStream(System.in) {
+    var mapper = new JacksonMcpJsonMapper(new tools.jackson.databind.json.JsonMapper());
+    var transport =
+        new StdioServerTransportProvider(mapper, System.in, System.out) {
           @Override
-          public int read() throws java.io.IOException {
-            int result = super.read();
-            if (result < 0) ended.countDown();
-            return result;
-          }
-
-          @Override
-          public int read(byte[] b, int off, int len) throws java.io.IOException {
-            int result = super.read(b, off, len);
-            if (result < 0) ended.countDown();
-            return result;
+          public void setSessionFactory(McpServerSession.Factory factory) {
+            super.setSessionFactory(
+                raw -> factory.create(new SerializedMcpTransport(raw, ended::countDown)));
           }
         };
-    var mapper = new JacksonMcpJsonMapper(new tools.jackson.databind.json.JsonMapper());
-    var transport = new StdioServerTransportProvider(mapper, input, System.out);
     var workflow = files ? null : new Workflow(s);
     var workspace = files ? new WorkspaceFiles(s) : null;
     var tools = new ArrayList<McpServerFeatures.SyncToolSpecification>();
@@ -322,7 +314,7 @@ public final class Main {
           }
         };
     Runtime.getRuntime().addShutdownHook(new Thread(close));
-    // SDK owns stdin and exits its transport on EOF; wait until input closes.
+    // Follow the transport lifecycle, including failures before stdin reaches EOF.
     ended.await();
     close.run();
   }

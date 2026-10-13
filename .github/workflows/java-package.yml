@@ -27,6 +27,8 @@ jobs:
           java-version: '21'
           cache: gradle
       - run: ./gradlew --no-daemon test jar spotlessCheck
+      - name: Verify concurrent MCP responses and connection shutdown
+        run: ./gradlew --no-daemon integrationTest --tests '*StdioServerIntegrationTest'
   package:
     if: github.event_name == 'workflow_dispatch'
     needs: verify
