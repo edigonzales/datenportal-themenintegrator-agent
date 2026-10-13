@@ -641,6 +641,21 @@ export GRADLE_JAVA_HOME_17="/unavailable-java17"
 
 Die echten Tests prüfen stdio-MCP, beide Fachadapter, positive/negative XTF-/Office-Fälle und GRETL mit gültiger/ungültiger CSV. Ein negativer Fall muss am CSV-Task vor dem Publikations-Workspace stoppen. Tests dürfen weder echte Freigaben erfinden noch INT/PROD verwenden. Vollständige lokale Veröffentlichung und Dialogabnahme in beiden Harnesses erfordern tatsächliche menschliche Stopps und sind separat dokumentiert.
 
+Für den Jenkins-Taskvertrag muss zusätzlich die unter `stack_repo` konfigurierte
+lokale Jenkins-Instanz laufen. `init` und `runtime-up` starten die separaten
+Werkzeugdienste. Der Test gleicht Jenkins-Image und GRETL-Bundle mit der
+vorbereiteten Prüflaufzeit ab. Im Standardstack mit bereits laufendem Garage
+kann Jenkins im Stack-Verzeichnis so gestartet werden:
+
+```sh
+docker compose -f compose.yaml up -d --no-deps --no-build --pull never --no-recreate --wait --wait-timeout 120 jenkins
+```
+
+Bei abweichender Konfiguration die Compose-Dateien aus `compose_files`
+verwenden. Der Regressionstest führt nur die gestageten Validierungs-Tasks in
+einer eigenen Jenkins-Arbeitskopie aus; fachliche Lieferungen benötigen weiterhin
+ihren eigenen Auftrag und ihre Freigaben.
+
 Vor/nach der Abnahme Quellstände der externen Komponenten und erlaubte Themenrepo-Änderungen kontrollieren. Versionierte Doku bleibt vollständig in diesem Repo, deutsch und Markdown. Konkrete Ergebnisse, simulierte Nachweise und offene Abnahmen stehen in [abnahme.md](abnahme.md); diese Datei bei tatsächlichen neuen Nachweisen aktualisieren.
 
 ## HTML-Prüfberichte
