@@ -1224,3 +1224,56 @@ Installations-/Pfadprüfungen und
 `.datenportal-integrator/operator-verification/docs-*.log` für Builds,
 Dokumentationsprüfungen und den reproduzierten beziehungsweise korrigierten
 versionierten Image-Smoke.
+
+## Dauerhafter Pilotdaten-Eingang (2026-10-13)
+
+Entscheidung: Der vorhandene Pilotdatenordner wird gezielt read-only eingebunden.
+Neue Installationen verwenden `../datenportal-pilot-daten` relativ zum
+Betriebsordner. Ein zusätzlicher lokaler Import-MCP samt Laufzeit entfällt;
+ein Home-Mount würde unnötig private Dateien und Entwicklungsquellen lesbar
+machen. Die drei Prüfsummen bleiben erhalten, da ihr Wegfall keinen fehlenden
+Containerzugriff behebt. CLI und MCP-Schnittstellen bleiben unverändert.
+
+Tatsächlich geprüft:
+
+- Im bestehenden Betriebspaket 0.1.20 unter
+  `/Users/stefan/datenportal/datenportal-betrieb` zweimal vollständiges `init`
+  mit den vorhandenen Themenrepo-/Dev-Stack-Mounts und
+  `--mount-ro /Users/stefan/sources/datenportal-pilot-daten`: jeweils `ready=true`.
+  `doctor` bestätigt `ready=true`, `smoke_current=true`, gültige Datenblatt-,
+  INTERLIS- und GRETL-Werkzeuge sowie `host-loopback-verified`.
+- Die erzeugten Startargumente beider MCPs in Codex und OpenCode enthalten nach
+  erneuter Einrichtung den Read-only-Eingang und die beiden bisherigen
+  Read-write-Checkouts. Das Beibehalten gilt bei erneuter Angabe aller Optionen;
+  ein späteres `init` ohne diese Optionen ist keine Mount-Persistenzprüfung.
+- Isolierte synthetische Fixtures mit dem veröffentlichten Image 0.1.20:
+  Installation eines quellcodefreien Betriebspakets, Erzeugung der Client-Profile
+  über `harness-config`, echter stdio-Aufruf von `import_attachment` für einen
+  Geschwisterordner und einen externen absoluten Ordner mit Leerzeichen.
+  Beide Importe liefern `verified=true`, drei identische SHA-256-Werte und
+  unveränderte Originale/Kopien. Schreibversuche auf die Eingänge sind sowohl
+  im Container als auch über `write_file` abgewiesen. Der Read-only-Mount des
+  Geschwisterordners überlagert wirksam den schreibbaren Eltern-Mount.
+- `test jar spotlessCheck operatorWorkspaceArchive` prüft die Dokumentation,
+  Paketverweise und Überschriftenanker sowie die bestehenden Unit-Tests.
+  Das erzeugte Paketarchiv wird zusätzlich gegen seine SHA-256-Datei geprüft.
+
+Grenzen und Einführung:
+
+- Dies sind Konfigurations- und MCP-/Container-Nachweise, keine neuen vollständigen
+  Fachdialognachweise für Codex Desktop/CLI oder OpenCode Desktop/gebündelte CLI.
+  Beide MCP-Verbindungen und bestehende Clientsitzungen müssen neu gestartet werden.
+- Keine Geschäftsdateien verschoben oder geliefert, keine fachlichen Freigaben
+  erteilt und keine bestehenden Vorgänge migriert. Der erste isolierte
+  MCP-Testaufbau scheiterte wegen noch nicht erzeugter Client-Profile; nach deren
+  Einrichtung über die vorhandene Schnittstelle bestehen die Tests.
+- Die aktualisierte Dokumentation liegt im Repository und im neu gebauten Paket.
+  Verwaltete Dateien des installierten Betriebspakets 0.1.20 wurden nicht manuell
+  überschrieben. Die Dokumentation wird dort mit einer späteren regulären
+  Veröffentlichung und Paketaktualisierung verfügbar; die Mount-Einrichtung ist
+  bereits mit 0.1.20 wirksam. Kein Commit, Push oder Release in diesem Auftrag.
+
+Lokale Nachweise: `.datenportal-integrator/pilot-verification/` (Testskripte,
+Import- und Client-Ergebnisse), `.datenportal-integrator/pilot-doc-checks.log`
+(Build) sowie `.datenportal-integrator/setup/pilot-*.json` und `pilot-*.log`
+im eingerichteten Betriebsordner (`init`, erneutes `init`, `doctor`).

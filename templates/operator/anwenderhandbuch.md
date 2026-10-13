@@ -26,7 +26,7 @@ einen unbekannten Befehl oder verlangt bereits vor der Installation eine lokale
 Konfiguration (`configuration_missing`), zuerst Image-Version und Veröffentlichung
 prüfen; kein Entwicklungscheckout als Installationsersatz erforderlich.
 
-### 2. Fachliche Repositories bereitstellen
+### 2. Fachliche Repositories und Eingangsordner bereitstellen
 
 Für eine neue Einrichtung im Terminal:
 
@@ -35,6 +35,7 @@ mkdir -p "$HOME/datenportal"
 cd "$HOME/datenportal"
 git clone https://github.com/sogis/datenportal-themenrepo.git
 git clone https://codeberg.org/edigonzales/datenportal-dev-stack.git
+mkdir -p datenportal-pilot-daten
 ```
 
 Das Themenrepo enthält Datenblätter, Modelle und Lieferjobs. Der Dev-Stack enthält
@@ -42,6 +43,8 @@ Skripte für die lokale Testumgebung und muss bereits bei `init` vorhanden sein.
 `init` klont keine Repositories. Hast du diese Checkouts bereits, überspringe die
 Clone-Befehle und verwende ihre vorhandenen Pfade in Schritt 4. Nichts verschieben.
 Separate Quellcheckouts der Fach-MCPs, von GRETL oder Jenkins sind nicht nötig.
+Der Pilotdatenordner enthält die Originaldateien. Verwende auch hier einen
+vorhandenen Ordner weiter; kein erneutes Klonen, Verschieben oder Kopieren nötig.
 
 ### 3. Betriebsordner erstellen und Paket installieren
 
@@ -67,7 +70,8 @@ Der Installationsschritt benötigt keinen Docker-Socket im Container.
 ~/datenportal/
 ├── datenportal-betrieb/       ← im Client öffnen
 ├── datenportal-themenrepo/
-└── datenportal-dev-stack/
+├── datenportal-dev-stack/
+└── datenportal-pilot-daten/  ← Originaldateien, im Container read-only
 ```
 
 `latest` dient dem Erstbezug. Das Paket enthält seine Versionskennung in
@@ -100,17 +104,19 @@ Umgebungsvariablen oder den Credential-Store, nicht in diese Datei.
 | `[runtime].project` | Mehrere Betriebsordner parallel: eigenen Projektnamen und eigene MCP-Ports wählen. |
 | `--mount-rw` | Themenrepo oder Stack liegen ausserhalb von `~/datenportal`; zusätzlich zum Konfigurationseintrag ihre Verzeichnisse einbinden. |
 
-Beispiel für bereits vorhandene Checkouts ausserhalb des gemeinsamen Elternordners:
-Nach Eintragen ihrer tatsächlichen absoluten Pfade in `config/local.toml` die
-Befehle aus Schritt 5 mit folgenden Optionen ausführen (Beispielpfade ersetzen):
+Beispiel für vorhandene Checkouts und Pilotdaten unter `~/sources/`, wie in
+Stefans Einrichtung: Nach Eintragen der Themenrepo- und Stack-Pfade in
+`config/local.toml` die Befehle aus Schritt 5 so ausführen:
 
 ```sh
 ./bin/datenportal-agent \
-  --mount-rw /absolut/datenportal-themenrepo \
-  --mount-rw /absolut/datenportal-dev-stack init
+  --mount-rw "$HOME/sources/datenportal-themenrepo" \
+  --mount-rw "$HOME/sources/datenportal-dev-stack" \
+  --mount-ro "$HOME/sources/datenportal-pilot-daten" init
 ./bin/datenportal-agent \
-  --mount-rw /absolut/datenportal-themenrepo \
-  --mount-rw /absolut/datenportal-dev-stack doctor
+  --mount-rw "$HOME/sources/datenportal-themenrepo" \
+  --mount-rw "$HOME/sources/datenportal-dev-stack" \
+  --mount-ro "$HOME/sources/datenportal-pilot-daten" doctor
 ```
 
 Mount-Verzeichnisse müssen existieren. Bei jedem späteren `init` dieselben
@@ -123,8 +129,8 @@ auch für diese Diagnose die benötigten Optionen mitgeben.
 Bei Standardpfaden:
 
 ```sh
-./bin/datenportal-agent init
-./bin/datenportal-agent doctor
+./bin/datenportal-agent --mount-ro ../datenportal-pilot-daten init
+./bin/datenportal-agent --mount-ro ../datenportal-pilot-daten doctor
 ```
 
 `init` richtet Fachwerkzeuge ein, erstellt `.codex/config.toml` und `opencode.json`
@@ -170,10 +176,12 @@ nur in vertrauenswürdigen Projekten; siehe
 
 ```sh
 cd "$HOME/datenportal/datenportal-betrieb"
-./bin/datenportal-agent codex
+./bin/datenportal-agent --mount-ro ../datenportal-pilot-daten codex
 ```
 
 Der Launcher startet die Host-CLI mit den vorgesehenen Betriebseinstellungen.
+Bei vorhandenen Checkouts unter `~/sources/` dieselben drei Mount-Optionen wie
+beim dortigen `init` verwenden und lediglich `init` durch `codex` ersetzen.
 
 **OpenCode Desktop:** Betriebsordner als Projekt öffnen, Agent **`datenportal`**
 auswählen. Im Projektmenü **More options → Edit project → Extensions** die
@@ -214,28 +222,37 @@ einbeziehen und die Sperren beibehalten.
 
 ## Erste CSV bearbeiten
 
-Ein Betriebsordner wird für mehrere Themen und Sitzungen verwendet. Erstelle
-für die Eingänge im Terminal einen Ordner:
+Ein Betriebsordner wird für mehrere Themen und Sitzungen verwendet. Bei der
+Standardinstallation liegen die Originaldateien im Geschwisterordner
+`../datenportal-pilot-daten`. Falls noch nicht vorhanden:
 
 ```sh
 cd "$HOME/datenportal/datenportal-betrieb"
-mkdir -p eingang
+mkdir -p ../datenportal-pilot-daten
 ```
 
-Kopiere deine CSV unverändert und mit ihrem Originalnamen dorthin, beispielsweise
-mit dem Dateimanager. CSV-Namen dürfen nur ASCII-Buchstaben, Ziffern und
-Unterstriche vor `.csv` enthalten. Eine erforderliche Umbenennung ausdrücklich
-klären; nicht still umbenennen. Der Datei-MCP übernimmt die Datei anschliessend
-in einen getrennten Eingang und prüft drei übereinstimmende SHA-256-Werte.
+Stelle neue CSV-Dateien unverändert und mit ihrem Originalnamen dort bereit,
+beispielsweise mit dem Dateimanager. Bereits vorhandene Dateien im eingerichteten
+Pilotdatenordner direkt verwenden. In Stefans Einrichtung ist dies
+`/Users/stefan/sources/datenportal-pilot-daten`; nichts verschieben.
+CSV-Namen dürfen nur ASCII-Buchstaben, Ziffern und Unterstriche vor `.csv`
+enthalten. Eine erforderliche Umbenennung ausdrücklich klären.
 
 Wähle den Themenintegrations-Skill und passe Datei, Organisation und Identifier an:
 
 ```text
-Integriere eingang/Fahrzeugbestand.csv für mfk, Thema ch.so.fahrzeugbestand2025.
-Verwende das vorhandene Datenblatt im Themenrepo, erstelle ein
-INTERLIS-Validierungsmodell und liefere nach meinen Freigaben lokal.
-Prüfe CSV, Modell, Portal und Downloads.
+Integriere ../datenportal-pilot-daten/Fahrzeugbestand.csv für mfk,
+Thema ch.so.fahrzeugbestand2025. Verwende das vorhandene Datenblatt im
+Themenrepo, erstelle ein INTERLIS-Validierungsmodell und liefere nach
+meinen Freigaben lokal. Prüfe CSV, Modell, Portal und Downloads.
 ```
+
+Bei einem externen Eingang den vollständigen Originalpfad nennen, zum Beispiel
+`/Users/stefan/sources/datenportal-pilot-daten/ch.so.fahrzeugbestand/Fahrzeugbestand_SO_251231.csv`.
+Der Agent löst relative Angaben gegen den Betriebsordner auf und übergibt den
+absoluten Originalpfad an `datenportal_workspace.import_attachment`. Dieses
+Werkzeug erstellt eine getrennte Eingangskopie und prüft drei übereinstimmende
+SHA-256-Werte. Nur die verifizierte Kopie wird an den Integrator übergeben.
 
 Prüfe die angebotenen HTML-Berichte und beantworte die fachlichen Rückfragen.
 CSV-, Modell-/Metadaten- und Publikationsfreigaben erfordern deine tatsächliche
@@ -243,20 +260,42 @@ Antwort zum jeweiligen Prüfstand. Beobachtete Werte sind noch keine bestätigte
 Fachregeln. Für reine Modellierung wähle `datenportal-validierungsmodell`, für eine
 eigenständige Organisationsanlage `datenportal-organisation`.
 
+### Warum ein dauerhaft eingebundener Pilotdatenordner?
+
+Ein einmal eingerichteter Eingang vermeidet Mount-Anpassungen für jede Datei.
+Beide Clients speichern den Read-only-Mount in ihren MCP-Startargumenten; normale
+neue Sitzungen brauchen keine erneute Einrichtung. Bei einem späteren `init`
+alle Mount-Optionen erneut angeben: Ein Aufruf ohne sie kann die gespeicherten
+Mounts entfernen. `doctor` allein speichert keine Client-Konfiguration.
+
+Die vorhandene Docker-/MCP-Lösung genügt dafür; ein zusätzlicher lokaler
+Import-MCP mit eigener Installation und Laufzeit entfällt. Das gesamte Home
+wird nicht eingebunden, weil dies unnötig private Dateien und Entwicklungsquellen
+zugänglich machen würde. Read-only schützt Originale vor Änderungen über diesen
+Mount, auch beim bereits schreibbar eingebundenen Elternordner. Die drei
+Prüfsummen sichern zusätzlich die unveränderte Übernahme ab. Ihr Entfernen würde
+den fehlenden Dateizugriff im Container nicht beheben.
+
 ### Externe Dateien und Chat-Anhänge
 
-Der Agent benötigt den zugänglichen Originalpfad eines Anhangs. Ein Chat-Vorschaubild
-ersetzt die Originaldatei nicht. Liegt sie ausserhalb des eingebundenen Elternordners,
-das betreffende Verzeichnis bereits bei `init` lesbar einbinden, beispielsweise:
+Ein Chat-Anhang garantiert keinen Zugriff auf die tatsächlichen Dateibytes im
+Container. Der Agent benötigt den zugänglichen Originalpfad; Chattext oder eine
+Vorschau dürfen die Originaldatei nicht ersetzen.
+
+Dateien ausserhalb der freigegebenen Eingänge unverändert im Pilotdatenordner
+bereitstellen und dessen Dateipfad nennen. Alternativ einen weiteren gezielten
+Read-only-Mount einrichten. Bei Standardpfaden beispielsweise:
 
 ```sh
-./bin/datenportal-agent --mount-ro "$HOME/Downloads" init
+./bin/datenportal-agent \
+  --mount-ro ../datenportal-pilot-daten --mount-ro "$HOME/Downloads" init
+./bin/datenportal-agent \
+  --mount-ro ../datenportal-pilot-daten --mount-ro "$HOME/Downloads" doctor
 ```
 
-Danach beide MCP-Verbindungen und die Sitzung neu starten. Benötigte zusätzliche
-`--mount-rw`-Optionen ebenfalls angeben. Auch bei späterem `init` diese Optionen
-beibehalten. Ist der Anhangpfad unbekannt, die Originaldatei unverändert unter
-`eingang/` bereitstellen und den Pfad nennen.
+Bei externen Checkouts auch deren beide `--mount-rw`-Optionen und den tatsächlich
+verwendeten Pilotdatenpfad angeben. Danach beide MCP-Verbindungen und die Sitzung
+neu starten. Auch bei späterem `init` alle Optionen beibehalten.
 [Eingangsdateien](agent/eingangsdateien.md) beschreibt die Übernahme genau.
 
 ## Wiederaufnahme und Updates
@@ -273,12 +312,26 @@ oder einzelne Zustandsdateien zu kopieren ist keine vollständige Migration.
 [Lieferung und Wiederaufnahme](agent/lieferung-und-wiederaufnahme.md)
 
 Vor Updates aktive Arbeit abschliessen und MCP-Verbindungen trennen. Im
-Betriebsordner ausführen; gegebenenfalls die benötigten Mount-Optionen ergänzen:
+Betriebsordner bei Standardpfaden ausführen:
 
 ```sh
 ./bin/datenportal-agent --update-agent workspace update "$PWD"
-./bin/datenportal-agent init
-./bin/datenportal-agent doctor
+./bin/datenportal-agent --mount-ro ../datenportal-pilot-daten init
+./bin/datenportal-agent --mount-ro ../datenportal-pilot-daten doctor
+```
+
+Für Stefans bestehende Ordnerstruktur lautet der vollständige Ablauf:
+
+```sh
+./bin/datenportal-agent --update-agent workspace update "$PWD"
+./bin/datenportal-agent \
+  --mount-rw "$HOME/sources/datenportal-themenrepo" \
+  --mount-rw "$HOME/sources/datenportal-dev-stack" \
+  --mount-ro "$HOME/sources/datenportal-pilot-daten" init
+./bin/datenportal-agent \
+  --mount-rw "$HOME/sources/datenportal-themenrepo" \
+  --mount-rw "$HOME/sources/datenportal-dev-stack" \
+  --mount-ro "$HOME/sources/datenportal-pilot-daten" doctor
 ```
 
 Das Update ersetzt nur unveränderte Paketdateien. Bei individuellen Änderungen

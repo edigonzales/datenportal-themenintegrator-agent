@@ -15,10 +15,10 @@ Die [Schritt-für-Schritt-Anleitung](docs/anwenderhandbuch.md#installation-und-k
 führt vom Anlegen der Ordner bis zur ersten CSV:
 
 1. Docker und Client vorbereiten.
-2. Themenrepo und Dev-Stack unter `~/datenportal/` klonen oder vorhandene Checkouts verwenden.
+2. Pilotdatenordner anlegen; Themenrepo und Dev-Stack unter `~/datenportal/` klonen oder vorhandene Checkouts verwenden.
 3. `~/datenportal/datenportal-betrieb` erstellen und mit dem ausdrücklich geladenen `latest`-Image installieren.
 4. Bei abweichenden Pfaden die Konfiguration anpassen.
-5. Im Betriebsordner `./bin/datenportal-agent init` und `./bin/datenportal-agent doctor` ausführen.
+5. Im Betriebsordner `./bin/datenportal-agent --mount-ro ../datenportal-pilot-daten init` und `./bin/datenportal-agent --mount-ro ../datenportal-pilot-daten doctor` ausführen.
 6. **Den Betriebsordner** in Codex oder OpenCode öffnen.
 
 Die Anleitung enthält alle kopierbaren Befehle, einschliesslich `mkdir`,
@@ -46,13 +46,15 @@ In Codex den Skill mit `$`, in OpenCode mit `@` auswählen. Für die erste CSV
 Beispielauftrag nach Auswahl des Themenintegrations-Skills:
 
 ```text
-Integriere eingang/Fahrzeugbestand.csv für mfk, Thema ch.so.fahrzeugbestand2025.
+Integriere ../datenportal-pilot-daten/Fahrzeugbestand.csv für mfk, Thema ch.so.fahrzeugbestand2025.
 Verwende das vorhandene Datenblatt im Themenrepo, erstelle ein
 INTERLIS-Validierungsmodell und liefere nach meinen Freigaben lokal.
 Prüfe CSV, Modell, Portal und Downloads.
 ```
 
-Datei, Organisation und Identifier anpassen. Modellierung innerhalb der
+Datei, Organisation und Identifier anpassen. Bei vorhandenen externen Eingangsordnern
+den absoluten Dateipfad und die vollständigen Mount-Befehle aus dem Handbuch
+verwenden. Modellierung innerhalb der
 Themenintegration bleibt im selben Vorgang. Prüfe die Berichte und erteile die
 angeforderten Freigaben. Die lokale Lieferung benötigt zusätzlich den
 Publikationsstack und Lieferzugänge; `init` allein startet diesen Stack nicht.
@@ -66,8 +68,8 @@ Bei Standardpfaden im Betriebsordner:
 
 ```sh
 ./bin/datenportal-agent --update-agent workspace update "$PWD"
-./bin/datenportal-agent init
-./bin/datenportal-agent doctor
+./bin/datenportal-agent --mount-ro ../datenportal-pilot-daten init
+./bin/datenportal-agent --mount-ro ../datenportal-pilot-daten doctor
 ```
 
 Danach beide MCP-Verbindungen und bestehende Sitzungen neu starten.

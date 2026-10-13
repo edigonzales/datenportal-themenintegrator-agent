@@ -11,14 +11,28 @@ Erlaubt sind ausschliesslich ASCII-Buchstaben, Ziffern und Unterstriche sowie di
 ## Chat-Anhänge übernehmen
 
 Im Betriebspaket übernimmt `datenportal_workspace.import_attachment` diese
-Host-Dateioperation ohne allgemeine Shell. Übergib `organization` und den
+Dateioperation im Docker-Container ohne allgemeine Shell. Der Standard-Eingang
+ist `../datenportal-pilot-daten`, relativ zum Betriebsordner, dauerhaft mit
+`--mount-ro` eingebunden. Vorhandene externe Eingangsordner bleiben an ihrem Ort;
+in Stefans Einrichtung ist dies `/Users/stefan/sources/datenportal-pilot-daten`.
+Löse relative Dateipfade gegen den Betriebsordner auf. Übergib `organization` und den
 zugänglichen absoluten Originalpfad als `path`. Der Helfer prüft den CSV-Namen,
 erstellt eine neue bytegleiche Kopie und liefert `path`, `source_sha256_before`,
 `source_sha256_after`, `copy_sha256` und `verified`. Nur bei `verified=true` und
 drei gleichen Prüfsummen den Kopiepfad an den Integrator weitergeben. Der
 Datei-MCP ist vom fachlichen Integrator getrennt; der Import ist keine Freigabe.
-Bei `input_mount_required` muss der Betreiber das Originalverzeichnis mit
-`--mount-ro` einbinden. Keine Quellcodesuche als Umgehung ausführen.
+Bei `input_mount_required` oder `input_path_unavailable` den Originalpfad prüfen.
+Dateien ausserhalb der eingerichteten Eingänge unverändert dort bereitstellen
+lassen oder durch den Betreiber einen gezielten `--mount-ro` ergänzen lassen.
+Beim erneuten `init` alle bisherigen Mount-Optionen beibehalten und danach beide
+MCP-Verbindungen neu starten. Keine Quellcodesuche als Umgehung ausführen.
+
+Der feste Eingang erspart Mount-Anpassungen pro Datei und einen zusätzlichen
+lokalen Import-MCP samt Laufzeit. Ein Home-Mount würde unnötig private Dateien
+und Entwicklungsquellen zugänglich machen. Read-only schützt das Original über
+diesen Mount; die Prüfsummen sichern die bytegleiche Übernahme. Auf Prüfsummen
+zu verzichten löst keinen fehlenden Containerzugriff. Chat-Anhänge oder
+Vorschauen allein garantieren keinen lesbaren Originalpfad.
 
 Übernimm angefügte CSV-, XTF- und XLSX-Dateien automatisch vor dem ersten Integrator-MCP-Aufruf dieses Vorgangs. Der Benutzer muss Kopieren und Prüfsummenvergleich nicht zusätzlich beauftragen.
 

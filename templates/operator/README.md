@@ -10,11 +10,12 @@ zeigt auch das Erstellen dieses Ordners: Voraussetzungen, fachliche Repositories
 Bereits vorhandene Checkouts werden weiterverwendet. Alle Terminalbefehle führt
 der Betreiber aus; der Fachagent verwendet seine MCP-Werkzeuge.
 
-Bei eingerichteten Standardpfaden im Betriebsordner:
+Bei eingerichteten Standardpfaden im Betriebsordner (Pilotdatenordner einmalig anlegen):
 
 ```sh
-./bin/datenportal-agent init
-./bin/datenportal-agent doctor
+mkdir -p ../datenportal-pilot-daten
+./bin/datenportal-agent --mount-ro ../datenportal-pilot-daten init
+./bin/datenportal-agent --mount-ro ../datenportal-pilot-daten doctor
 ```
 
 Erwartet werden `ready=true`, `smoke_current=true` und fehlerfreie Werkzeugdiagnosen.
@@ -30,7 +31,7 @@ wählen: in Codex `$datenportal-themenintegrator`, in OpenCode `@datenportal-the
 Datei, Organisation und Identifier in diesem Beispiel anpassen:
 
 ```text
-Integriere eingang/Fahrzeugbestand.csv für mfk, Thema ch.so.fahrzeugbestand2025.
+Integriere ../datenportal-pilot-daten/Fahrzeugbestand.csv für mfk, Thema ch.so.fahrzeugbestand2025.
 Verwende das vorhandene Datenblatt im Themenrepo, erstelle ein
 INTERLIS-Validierungsmodell und liefere nach meinen Freigaben lokal.
 Prüfe CSV, Modell, Portal und Downloads.
