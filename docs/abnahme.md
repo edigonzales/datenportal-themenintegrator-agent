@@ -1169,3 +1169,58 @@ Lokale Nachweise liegen unter `.datenportal-integrator/operator-verification/`.
 Das Paket und die Pipeline sind vorbereitet; diese Arbeit veröffentlicht kein
 neues Image und kein CI-Artefakt. Das lokale Paket trägt `0.1.0-dev`; regulärer
 Betrieb mit dem Paket-Launcher verlangt eine veröffentlichte Versionskennung.
+
+## Betriebsdokumentation und versionierter Image-Smoke vom 13. Oktober 2026
+
+Die README und beide Anwenderhandbücher führen jetzt vom Anlegen von
+`~/datenportal/` über die Installation in den leeren Betriebsordner bis zu
+Client-Start, CSV-Eingang und Paketupdate. Entwicklung hat einen separaten
+Einstieg. Die Paketprüfung verwendet zusätzlich die vorhandene vollständige
+Dokumentationsprüfung, einschliesslich Überschriftenankern im gebauten Paket.
+
+Tatsächlich geprüft:
+
+- `test jar spotlessCheck operatorWorkspaceArchive` besteht mit 210 Unit-Tests,
+  darunter Repository- und Paket-Linkprüfungen. Die SHA-256-Prüfung des erzeugten
+  Archivs besteht. Der abschliessende versionierte Image-Smoke besteht auf ARM64.
+- Die mit OpenCode Desktop ausgelieferte macOS-CLI unter
+  `/Applications/OpenCode.app/Contents/Resources/opencode-cli` meldet 2.0.27;
+  ihre Hilfe bestätigt das Verzeichnisargument. Projekt-Extensions und die
+  `mcp list`-Location-Grenze beruhen auf den oben dokumentierten Client-Prüfungen.
+  Die aktuelle offizielle Codex-MCP-Dokumentation bestätigt die Voraussetzung
+  einer vertrauenswürdigen Projektkonfiguration.
+- Installation per `mkdir`, Docker-Bind-Mount, Host-UID/GID und
+  `workspace install /workspace` in leere isolierte Testordner mit dem lokal
+  gebauten Image `datenportal-operator:docs-verify` (Version 0.1.18) bestanden.
+  Das Paket enthält keine Integrator-Quellen oder Gradle-Launcher.
+- Standardpfade und externe fachliche Checkouts mit Leerzeichen wurden mit
+  ausdrücklich synthetischen Pfadfixtures geprüft. Beide Verzeichnisse sind im
+  Container lesbar; die Vorschläge für beide MCPs enthalten die benötigten
+  Runtime-/Mount-Argumente. Wiederholtes bedingtes Kopieren der Konfigurationsvorlage
+  erhält die bestehende Datei. Das ist kein neuer vollständiger `init`- oder
+  Liefernachweis; der vollständige Init-Nachweis steht im vorherigen Abschnitt.
+- Der Fehler aus CI-Lauf 38374183353 wurde lokal reproduziert: Der ursprüngliche
+  Image-Smoke startet eine unversionierte Klasse im selben Java-Package wie
+  `Main`. Deren zuerst definierte Package-Metadaten lassen `Main.version()` auf
+  `0.1.0-dev` zurückfallen. Mit 0.1.18 führt dies zu
+  `operator_package_version_mismatch`; lokale Dev-Versionen verdeckten den Fehler.
+  Ein vorgeschalteter Launcher im Default-Package lädt jetzt zuerst `Main` aus
+  dem versionierten JAR. Der korrigierte Smoke mit 0.1.18 besteht; die eigentliche
+  Versionsprüfung und alle Betriebsregeln bleiben unverändert.
+
+Veröffentlichung und Grenzen:
+
+- Der tatsächliche Pull von `latest` lieferte beim Test noch 0.1.17.
+  Der dokumentierte Installationsaufruf meldete dort `configuration_missing`,
+  bevor ein Paket installiert wurde. CI-Lauf 38374183353 ist beim Image-Smoke
+  fehlgeschlagen; die `latest`-Promotion wurde übersprungen. Die neue Anleitung
+  setzt ausdrücklich eine erfolgreiche Paketveröffentlichung voraus.
+- Die lokalen Pfadfixtures ersetzen weder neue GUI-Fachdialogtests noch eine
+  Registry-Veröffentlichung. Es wurden keine Geschäftsdaten geliefert und keine
+  fachlichen Freigaben erteilt. Dieser Auftrag enthält keinen Commit oder Push.
+
+Lokale Nachweise: `.datenportal-integrator/documentation-verification/` für
+Installations-/Pfadprüfungen und
+`.datenportal-integrator/operator-verification/docs-*.log` für Builds,
+Dokumentationsprüfungen und den reproduzierten beziehungsweise korrigierten
+versionierten Image-Smoke.

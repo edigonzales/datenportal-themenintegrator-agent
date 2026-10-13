@@ -99,8 +99,20 @@ public class ImageSmoke implements CsvConverter {
 }
 JAVA
     javac --release 25 -cp "$jar" -d /tmp /tmp/ImageSmoke.java
-    java -cp "/tmp:$jar" ch.so.agi.integrator.ImageSmoke
-    java -cp "/tmp:$jar" ch.so.agi.integrator.ConverterMain ch.so.agi.integrator.ImageSmoke /tmp/input.csv /tmp/output.csv
+    # The first loaded class defines package metadata for this class loader.
+    # Preload Main from the versioned JAR before the same-package test class.
+    # Classpath ordering alone cannot fix an unversioned ImageSmoke entrypoint.
+    cat > /tmp/ImageSmokeLauncher.java <<"JAVA"
+public class ImageSmokeLauncher {
+  public static void main(String[] args) throws Exception {
+    Class.forName("ch.so.agi.integrator.Main");
+    ch.so.agi.integrator.ImageSmoke.main(args);
+  }
+}
+JAVA
+    javac --release 25 -cp "$jar:/tmp" -d /tmp /tmp/ImageSmokeLauncher.java
+    java -cp "$jar:/tmp" ImageSmokeLauncher
+    java -cp "$jar:/tmp" ch.so.agi.integrator.ConverterMain ch.so.agi.integrator.ImageSmoke /tmp/input.csv /tmp/output.csv
     grep -q 2026 /tmp/output.csv
     grep -q 2025 /tmp/input.csv
   '

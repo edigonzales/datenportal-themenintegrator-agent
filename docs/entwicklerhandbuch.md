@@ -1,5 +1,28 @@
 # Entwicklerhandbuch
 
+## Entwicklungscheckout einrichten
+
+Dieser Checkout dient Änderungen an Java-Kern, Tests und Paketbau. Für
+Fachaufträge das [Betriebspaket](anwenderhandbuch.md#installation-und-konfiguration)
+verwenden. Bestehende fachliche Checkouts können weiterverwendet werden. Für
+eine neue Entwicklungsumgebung mit lokalem Docker, Compose, Git und Bash:
+
+```sh
+mkdir -p "$HOME/datenportal-entwicklung"
+cd "$HOME/datenportal-entwicklung"
+git clone https://github.com/edigonzales/datenportal-themenintegrator-agent.git
+git clone https://github.com/sogis/datenportal-themenrepo.git
+git clone https://codeberg.org/edigonzales/datenportal-dev-stack.git
+cd datenportal-themenintegrator-agent
+./bin/datenportal-agent init
+./bin/datenportal-agent gradle test jar spotlessCheck
+```
+
+Für Implementierungsarbeit diesen Quellcheckout öffnen. Lokale Entwicklung und
+Fachbetrieb besitzen getrennte Arbeitsordner; Vorgänge werden nicht automatisch
+übertragen. [Docker-Launcher und Initialisierung](#docker-launcher-und-initialisierung)
+erläutert die Entwicklungsmodi.
+
 ## Vollständige synthetische Docker-Abnahme
 
 ```sh

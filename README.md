@@ -1,121 +1,83 @@
 # Datenportal-Themenintegrator
 
-Der Agent unterstützt die Integration von CSV-, XTF- und XLSX-Lieferungen,
-INTERLIS-Validierungsmodelle und neue Organisationen. Er erstellt prüfbare
-Kandidaten und HTML-Berichte; fachliche Änderungen und Publikationen benötigen
-deine Freigabe.
+Der Agent unterstützt CSV-, XTF- und XLSX-Lieferungen, INTERLIS-Validierungsmodelle
+und neue Organisationen. Er erstellt prüfbare Kandidaten und HTML-Berichte;
+fachliche Änderungen und Publikationen benötigen deine Freigabe.
 
-## Mit Docker starten
+## Mit dem Betriebspaket starten
 
-Du brauchst lokales Docker mit Compose, Git, Bash und einen eingerichteten
-Client: Codex oder OpenCode 2.x stable. Auf macOS in Docker Desktop ab 4.34
-**Settings → Resources → Network → Enable host networking** aktivieren und
-**Apply and restart** wählen. Unter Linux einen lokalen Docker Engine verwenden.
+Für die Facharbeit verwendest du einen **quellcodefreien Betriebsordner**.
+Der Integrator läuft im veröffentlichten Docker-Image. Du brauchst Docker mit
+Compose, Git, Bash, Codex oder OpenCode sowie Themenrepo und Dev-Stack.
+Ein Quellcheckout dieses Integrators oder Host-JDK ist nicht erforderlich.
 
-Die drei Checkouts liegen im Standardfall nebeneinander:
+Die [Schritt-für-Schritt-Anleitung](docs/anwenderhandbuch.md#installation-und-konfiguration)
+führt vom Anlegen der Ordner bis zur ersten CSV:
 
-```sh
-mkdir datenportal-arbeitsbereich
-cd datenportal-arbeitsbereich
-git clone https://github.com/edigonzales/datenportal-themenintegrator-agent.git
-git clone https://github.com/sogis/datenportal-themenrepo.git
-git clone https://codeberg.org/edigonzales/datenportal-dev-stack.git
-cd datenportal-themenintegrator-agent
-```
+1. Docker und Client vorbereiten.
+2. Themenrepo und Dev-Stack unter `~/datenportal/` klonen oder vorhandene Checkouts verwenden.
+3. `~/datenportal/datenportal-betrieb` erstellen und mit dem ausdrücklich geladenen `latest`-Image installieren.
+4. Bei abweichenden Pfaden die Konfiguration anpassen.
+5. Im Betriebsordner `./bin/datenportal-agent init` und `./bin/datenportal-agent doctor` ausführen.
+6. **Den Betriebsordner** in Codex oder OpenCode öffnen.
 
-Bestehende Checkouts können weiterverwendet werden. Bei abweichenden Pfaden,
-belegten Ports 8000/8080 oder zusätzlichen Eingabeordnern zuerst
-[die betreffenden Einstellungen](docs/anwenderhandbuch.md#was-muss-ich-konfigurieren)
-anpassen. Bei Standardpfaden und freien Ports ist keine manuelle
-Konfigurationsdatei nötig.
-
-| Du stellst bereit | Der Agent übernimmt | Erst später erforderlich |
-|---|---|---|
-| Docker, Client und die drei Checkouts | Agent-Image laden und festhalten | GitHub-Zugang und Git-Identität für Schreibzugriffe |
-| Abweichende Pfade und zusätzliche Mounts | Fehlende Standardkonfiguration anlegen | Jenkins-Zugang für lokale Lieferung |
-| Freie Ports; bei mehreren Arbeitsbereichen eigener Projektname | Fachwerkzeuge, Originalmodelle und Prüfumgebung vorbereiten | INT-/PROD-Adressen und Zugänge |
-| Gewünschte lokale Einstellungen | Eigene Dienste starten, MCP-Einträge erstellen und synthetisch prüfen | Publikationsstack und fachliche Freigaben |
-
-```sh
-./bin/datenportal-agent init
-./bin/datenportal-agent doctor
-```
-
-`init` klont keine Repositories und publiziert keine Geschäftsdaten. Für den
-Erststart sind weder Host-Java/Gradle noch Fach-MCP-Quellcheckouts oder
-Jenkins-Zugangsdaten nötig. Der Dev-Stack-Checkout muss vorhanden sein; seine
-Publikationsumgebung wird erst für eine spätere Lieferung benötigt.
-
-Bei Erfolg meldet `init` `ready: true`. Prüfe bei `doctor`
-`initialization.ready`, die beiden MCP-Verbindungen und GRETL auf Fehler;
-der Exit-Code allein bestätigt keine Bereitschaft.
-[Die vollständige Einrichtung](docs/anwenderhandbuch.md#installation-und-konfiguration)
-erklärt die Ausgaben und trennt eigene Vorbereitung von automatischen Schritten.
+Die Anleitung enthält alle kopierbaren Befehle, einschliesslich `mkdir`,
+Docker-Installation und des macOS-Pfads zur mit OpenCode Desktop gelieferten CLI.
+Voraussetzung ist eine erfolgreiche [Veröffentlichung des Betriebspakets](https://github.com/edigonzales/datenportal-themenintegrator-agent/actions/workflows/agent-image.yml).
+Danach bleibt die installierte Version bis zum bewussten Update festgehalten.
+Das gleich versionierte Paket wird auch als CI-Artefakt samt SHA-256 angeboten.
 
 ## Ersten Auftrag starten
 
-Für fachliche Aufträge das **quellcodefreie Betriebspaket** verwenden. Es enthält
-dieselben drei Skills für Codex Desktop/CLI und OpenCode Desktop/CLI, eigene
-Betriebsanweisungen und zwei MCP-Einträge: `datenportal_integrator` und den
-begrenzten Dateihelfer `datenportal_workspace`. Allgemeine Shell und
-Implementierungsquellen stehen dort nicht zur Verfügung.
+Im Betriebsordner stehen **drei Skills und zwei MCP-Server** bereit:
+`datenportal_integrator` führt fachliche Schritte aus; `datenportal_workspace`
+übernimmt Eingangsdateien und zulässige Dateioperationen. Datenblatt- und
+INTERLIS-MCP verwendet der Integrator intern. In OpenCode den Agenten
+`datenportal` wählen.
 
-Das Paket wird mit jeder neuen Image-Version als CI-Artefakt samt SHA-256
-bereitgestellt und liegt im Image unter `/opt/datenportal-agent/workspace`.
-Betreiber installieren mit `workspace install <absoluter Zielordner>` aus dem
-Image oder entpacken das zugehörige Archiv. Danach im Betriebsordner `init` und
-`doctor` ausführen. [Installation und Updates](docs/anwenderhandbuch.md#quellcodefreies-betriebspaket).
+| Auftrag | Skill |
+|---|---|
+| Themenintegration, CSV-Prüfung, Daten-/Metadatenlieferung | [datenportal-themenintegrator](skills/datenportal-themenintegrator/SKILL.md) |
+| Eigenständiges Validierungsmodell | [datenportal-validierungsmodell](skills/datenportal-validierungsmodell/SKILL.md) |
+| Eigenständige Organisation | [datenportal-organisation](skills/datenportal-organisation/SKILL.md) |
 
-Den Betriebsordner als Projekt in Codex oder OpenCode öffnen und die von
-`init` eingerichtete MCP-Verbindung prüfen. In Codex muss das Projekt als
-vertrauenswürdig gelten. Für Codex CLI: `./bin/datenportal-agent codex`.
-
-Skill auswählen und einen konkreten Auftrag formulieren, beispielsweise:
+In Codex den Skill mit `$`, in OpenCode mit `@` auswählen. Für die erste CSV
+[Eingangsordner erstellen und Datei bereitstellen](docs/anwenderhandbuch.md#erste-csv-bearbeiten).
+Beispielauftrag nach Auswahl des Themenintegrations-Skills:
 
 ```text
-$datenportal-themenintegrator
-Prüfe die angehängte CSV für die Organisation agi. Erkläre Spalten,
-fehlende Werte und mögliche Typfehler. Zeige mir den HTML-Prüfbericht
-und warte danach auf meine fachliche Entscheidung.
+Integriere eingang/Fahrzeugbestand.csv für mfk, Thema ch.so.fahrzeugbestand2025.
+Verwende das vorhandene Datenblatt im Themenrepo, erstelle ein
+INTERLIS-Validierungsmodell und liefere nach meinen Freigaben lokal.
+Prüfe CSV, Modell, Portal und Downloads.
 ```
 
-In OpenCode beginnt derselbe Prompt mit `@datenportal-themenintegrator`.
-Die drei Skills verwenden denselben Integrator-MCP und werden gemeinsam mit
-diesem Checkout unter `.agents/skills/` bereitgestellt:
-
-| Auftrag | Skill und Beispiel |
-|---|---|
-| Thema, CSV-Prüfung oder Metadatenänderung | [datenportal-themenintegrator](skills/datenportal-themenintegrator/SKILL.md): „Prüfe diese CSV und warte nach dem Bericht.“ |
-| Eigenständiges Validierungsmodell | [datenportal-validierungsmodell](skills/datenportal-validierungsmodell/SKILL.md): „Leite für diese CSV und ihr Datenblatt ein Modell ab; publiziere nichts.“ |
-| Eigenständige Organisation | [datenportal-organisation](skills/datenportal-organisation/SKILL.md): „Bereite eine Organisation mit diesen Teams und dieser Dienststelle vor; lege kein Thema an.“ |
-
-In Codex den jeweiligen Namen mit `$`, in OpenCode mit `@` auswählen.
-Bei Themenintegration mit ausdrücklich beauftragtem Modell lädt der Hauptskill
-die Modellanleitung hinzu und verwendet denselben Vorgang weiter.
-[Neun Anwendungsszenarien](docs/anwenderhandbuch.md#mit-dem-agenten-arbeiten)
-zeigen erwartete Ergebnisse, menschliche Entscheidungen und kopierbare Prompts.
-Neue CSV-Validierungsmodelle verwenden das kommentarfreie Profil `SO-DATA`;
-weitere Profile sind `CORE` und `SO-GIS`.
+Datei, Organisation und Identifier anpassen. Modellierung innerhalb der
+Themenintegration bleibt im selben Vorgang. Prüfe die Berichte und erteile die
+angeforderten Freigaben. Die lokale Lieferung benötigt zusätzlich den
+Publikationsstack und Lieferzugänge; `init` allein startet diesen Stack nicht.
 
 ## Weiterarbeiten und aktualisieren
 
-Normale Starts verwenden das gespeicherte Agent-Image. Ein Update erfolgt
-bewusst; lokale Konfiguration und Fachwerkzeug-Pins bleiben erhalten:
+Denselben Betriebsordner für weitere Themen und Sitzungen verwenden.
+[Wiederaufnahme und Updates](docs/anwenderhandbuch.md#wiederaufnahme-und-updates)
+erklärt vorhandene Vorgänge, Paketkonflikte und zusätzliche Mounts.
+Bei Standardpfaden im Betriebsordner:
 
 ```sh
-./bin/datenportal-agent --update-agent --version
+./bin/datenportal-agent --update-agent workspace update "$PWD"
 ./bin/datenportal-agent init
 ./bin/datenportal-agent doctor
 ```
 
-Danach bestehende Client-Verbindungen neu starten. Für die Bereinigung alter
-Konfigurationen und gesonderte Werkzeugupdates siehe
-[Betrieb und Updates](docs/anwenderhandbuch.md#betrieb-und-updates).
+Danach beide MCP-Verbindungen und bestehende Sitzungen neu starten.
 
-- [Anwenderhandbuch](docs/anwenderhandbuch.md): Einrichtung, Anwendungsszenarien, Berichte und Publikation.
-- [Entwicklerhandbuch](docs/entwicklerhandbuch.md): Architektur, Schnittstellen, Entwicklungsmodi, Tests und Image-Veröffentlichung.
-- [Abnahmestand](docs/abnahme.md): tatsächlich geprüfte Revisionen und Images, simulierte Fälle und offene Nachweise.
+## Entwicklung
 
-`--runtime docker-build`, `--runtime local`, Docker-stdio und GRETL `ephemeral`
-bleiben für Entwicklung und isolierte Tests verfügbar. Ihre Verwendung steht
-im Entwicklerhandbuch. Der Standardbetrieb benötigt keinen lokalen Agent-Build.
+Nur für Änderungen am Integrator selbst dessen Quellrepository klonen.
+[Entwicklung einrichten](docs/entwicklerhandbuch.md#entwicklungscheckout-einrichten)
+beschreibt den separaten Arbeitsbereich und die Build-/Testbefehle.
+
+- [Anwenderhandbuch](docs/anwenderhandbuch.md): Installation, vier Client-Startwege und fachliche Abläufe.
+- [Entwicklerhandbuch](docs/entwicklerhandbuch.md): Architektur, Schnittstellen, Tests und Image-Veröffentlichung.
+- [Abnahmestand](docs/abnahme.md): tatsächlich geprüfte Stände, simulierte Fälle und offene Nachweise.

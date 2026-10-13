@@ -18,6 +18,7 @@ class OperatorWorkspaceTest {
   @Test
   void distributionIsSelfContainedAndHasNoImplementation() throws Exception {
     assertTrue(OperatorWorkspace.installed(bundle()));
+    DocumentationTest.verifyGuidance(bundle());
     var inventory = OperatorWorkspace.inventory(bundle());
     assertTrue(inventory.containsKey("docs/anwenderhandbuch.md"));
     assertFalse(

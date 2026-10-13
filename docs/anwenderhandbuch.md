@@ -4,126 +4,136 @@ Der Integrator unterstützt drei Vorgänge: ein Thema integrieren (`topic`), ein
 
 ## Installation und Konfiguration
 
-Für den Fachbetrieb die [Installation des quellcodefreien Betriebspakets](#quellcodefreies-betriebspaket)
-verwenden und anschliessend den Betriebsordner im Client öffnen. Dafür sind
-Themenrepo und Dev-Stack erforderlich, aber kein Integrator-Quellcheckout.
-Die nachfolgende Checkout-Anleitung beschreibt die Entwicklung und bestehende
-Installationen im bisherigen Repository.
+Für den Fachbetrieb öffnest du den **Betriebsordner** in Codex oder OpenCode.
+Er enthält drei Skills, Anleitungen, Konfiguration und Arbeitsdaten. Java und
+Integrator laufen im Docker-Image. Ein Integrator-Quellcheckout und Host-JDK
+sind dafür nicht erforderlich. Alle Shell-Befehle dieser Anleitung führst du
+selbst im Terminal aus; im Fachdialog arbeitet der Agent über seine MCP-Werkzeuge.
 
-Der normale Start verwendet das veröffentlichte Docker-Image. Du brauchst
-keinen Java-, Gradle- oder Fachwerkzeug-Build auf dem Rechner. Der lokale
-Integrator-Ordner enthält den Launcher, die drei Skills, deine Konfiguration und die
-Arbeitsdaten. Alle folgenden Befehle werden dort ausgeführt.
+### 1. Voraussetzungen prüfen
 
-### Repositories bereitstellen
-
-Installiere und starte zuerst Docker mit Compose. Dazu brauchst du
-Git, Bash mit den üblichen Unix-Werkzeugen und entweder Codex oder OpenCode 2.x
-stable als Client. Die Anmeldung beim gewählten KI-Client richtest du im Client
-selbst ein; `init` installiert und konfiguriert keinen KI-Anbieter.
-
+Benötigt werden lokales Docker mit Compose, Git, Bash und ein eingerichteter
+Codex- oder OpenCode-Client. Anmeldung und Modellzugang richtest du im Client ein.
 Auf macOS in Docker Desktop ab 4.34 **Settings → Resources → Network → Enable
-host networking** aktivieren und **Apply and restart** wählen. Docker beschreibt
-diese Einstellung in der [Host-Networking-Anleitung](https://docs.docker.com/engine/network/drivers/host/).
-Unter Linux einen lokalen Docker Engine verwenden. Remote-Docker-Kontexte
-werden wegen der lokalen Dateien nicht unterstützt. Docker muss auch für den
-später gestarteten Desktop-Client erreichbar sein.
+host networking** aktivieren und **Apply and restart** wählen. Unter Linux einen
+lokalen Docker Engine verwenden. Remote-Docker-Kontexte sind nicht unterstützt.
+Siehe [Docker Host Networking](https://docs.docker.com/engine/network/drivers/host/).
 
-Diese drei Checkouts müssen vor `init` vorhanden sein. Ein Checkout ist die
-lokale Arbeitskopie eines Git-Repositories. Bestehende Checkouts können
-weiterverwendet werden; der Agent klont keine fehlenden Repositories.
+Für den Download brauchst du Zugriff auf die Git-Hosts, Docker Hub und
+`downloads.interlis.ch`; für private Repositories die entsprechenden Git-Rechte.
+Voraussetzung ist eine erfolgreiche Veröffentlichung des Betriebspakets:
+[Image-Pipeline](https://github.com/edigonzales/datenportal-themenintegrator-agent/actions/workflows/agent-image.yml).
+Ein fehlgeschlagener Lauf aktualisiert `latest` nicht. Meldet `workspace install`
+einen unbekannten Befehl oder verlangt bereits vor der Installation eine lokale
+Konfiguration (`configuration_missing`), zuerst Image-Version und Veröffentlichung
+prüfen; kein Entwicklungscheckout als Installationsersatz erforderlich.
 
-| Repository | Zweck | Bereitstellung |
-|---|---|---|
-| [datenportal-themenintegrator-agent](https://github.com/edigonzales/datenportal-themenintegrator-agent) | Launcher, Skill und Arbeitsdaten | Selbst klonen oder vorhandenen Checkout verwenden |
-| [datenportal-themenrepo](https://github.com/sogis/datenportal-themenrepo) | Themen, Datenblätter und Publikationstasks | Selbst klonen oder vorhandenen Checkout verwenden |
-| [datenportal-dev-stack](https://codeberg.org/edigonzales/datenportal-dev-stack) | Startskripte für spätere lokale Publikation | Selbst klonen; muss auch bei der Einrichtung vorhanden sein |
+### 2. Fachliche Repositories bereitstellen
+
+Für eine neue Einrichtung im Terminal:
 
 ```sh
-mkdir datenportal-arbeitsbereich
-cd datenportal-arbeitsbereich
-git clone https://github.com/edigonzales/datenportal-themenintegrator-agent.git
+mkdir -p "$HOME/datenportal"
+cd "$HOME/datenportal"
 git clone https://github.com/sogis/datenportal-themenrepo.git
 git clone https://codeberg.org/edigonzales/datenportal-dev-stack.git
-cd datenportal-themenintegrator-agent
 ```
 
-Die Standardpfade erwarten diese Anordnung:
+Das Themenrepo enthält Datenblätter, Modelle und Lieferjobs. Der Dev-Stack enthält
+Skripte für die lokale Testumgebung und muss bereits bei `init` vorhanden sein.
+`init` klont keine Repositories. Hast du diese Checkouts bereits, überspringe die
+Clone-Befehle und verwende ihre vorhandenen Pfade in Schritt 4. Nichts verschieben.
+Separate Quellcheckouts der Fach-MCPs, von GRETL oder Jenkins sind nicht nötig.
 
-```text
-datenportal-arbeitsbereich/
-  datenportal-themenintegrator-agent/
-  datenportal-themenrepo/
-  datenportal-dev-stack/
-```
+### 3. Betriebsordner erstellen und Paket installieren
 
-Netzwerkzugriff auf die Git-Hosts, Docker Hub und `downloads.interlis.ch` ist
-für die Bereitstellung nötig. Für zugriffsbeschränkte Repositories brauchst
-du passende Git-Rechte. Separate Quellcheckouts der Fach-MCPs oder von GRETL
-sind nicht nötig. Jenkins-Quellen benötigen nur Entwickler eigener Jenkins-Images.
-
-### Was muss ich konfigurieren?
-
-Bei der obigen Verzeichnisstruktur und freien Ports **8000** und **8080** kannst
-du direkt zum nächsten Abschnitt gehen. `init` legt die fehlende
-`config/local.toml` mit den Standardwerten aus dem Agent-Image an.
-
-| Du stellst bereit oder entscheidest | Der Agent erledigt automatisch | Erst für spätere Arbeit nötig |
-|---|---|---|
-| Docker, Client und drei Checkouts | Agent-Image laden und ausgewählten Stand speichern | GitHub-Zugang und Git-Identität für Repository-Schreibzugriffe |
-| Abweichende Repository-Pfade und zusätzliche Mounts | Fehlende Standardkonfiguration erstellen | Jenkins-Zugang für lokale Lieferung |
-| Freie MCP-Ports; bei mehreren Arbeitsbereichen eigener Projektname | Fachwerkzeuge, Originalmodelle und GRETL-Prüfumgebung vorbereiten | INT-/PROD-Adressen, Profile und Zugänge |
-| Gewünschte lokale Einstellungen | Eigene Dienste starten, Client-Einträge erstellen und synthetisch prüfen | Publikationsumgebung und fachliche Freigaben |
-
-Nur bei Abweichungen die Konfiguration **vor dem ersten `init`** anlegen:
+Die folgenden Befehle installieren in einen **leeren** Ordner. Ein bereits
+installierter Ordner wird später mit `workspace update` aktualisiert.
 
 ```sh
-cp config/local.example.toml config/local.toml
+betrieb="$HOME/datenportal/datenportal-betrieb"
+mkdir -p "$betrieb"
+agent_image='sogis/datenportal-themenintegrator-agent:latest'
+docker pull "$agent_image"
+docker run --rm --network none --user "$(id -u):$(id -g)" \
+  --mount "type=bind,source=$betrieb,target=/workspace" \
+  "$agent_image" workspace install /workspace
+cd "$betrieb"
 ```
 
-Die Datei ist Git-ignoriert. Bestehende lokale Einstellungen werden von `init`
-nicht überschrieben. Passe nur die betreffenden Werte an:
+`/workspace` bezeichnet hier nur das Installationsziel im Container. Auf deinem
+Rechner liegen die Dateien unter `$HOME/datenportal/datenportal-betrieb`.
+Der Installationsschritt benötigt keinen Docker-Socket im Container.
 
-| Einstellung | Wann ändern? | Bedeutung |
-|---|---|---|
-| `topics_repo`, `stack_repo` | Checkouts liegen anders | Relative Pfade beziehen sich auf `root`; `root = ".."` bezeichnet bei `config/local.toml` den Integrator-Ordner. Absolute Pfade sind ebenfalls möglich. |
-| `[datasheet].url`, `[interlis].url` | Port 8000 oder 8080 ist belegt | Einen freien lokalen Port wählen, beispielsweise `http://127.0.0.1:18080/mcp`; `/mcp` beibehalten. |
-| `[runtime].project` | Mehrere Integrator-Arbeitsbereiche | Eigenen Namen wie `datenportal-test` und eigene MCP-Ports wählen. |
-| `--mount-ro`, `--mount-rw` | Benötigte Ordner liegen ausserhalb des gemeinsamen Elternordners | Eingänge lesbar, Arbeitsverzeichnisse schreibbar einbinden; [Beispiel](#mounts-und-aufruf-aus-codex-oder-opencode). |
+```text
+~/datenportal/
+├── datenportal-betrieb/       ← im Client öffnen
+├── datenportal-themenrepo/
+└── datenportal-dev-stack/
+```
 
-Die übrigen Werte der Vorlage können für den Standardstart bleiben: verwaltete
-HTTP-Fachdienste, festgelegte Images und GRETL im Compose-Modus. Der
-GRETL-Prüfcontainer verwendet ein Jenkins-Image, startet aber keinen
-Jenkins-Server. Es ist keine Datenbank einzurichten.
+`latest` dient dem Erstbezug. Das Paket enthält seine Versionskennung in
+`workspace-version`; der Launcher verwendet anschliessend diese veröffentlichte
+Version und hält die konkrete Image-Identität fest. Normale Starts wechseln
+nicht automatisch auf ein neueres Image. Alternativ kann das gleich versionierte
+CI-Archiv samt Prüfsummendatei heruntergeladen, mit `shasum -a 256 -c DATEI.sha256`
+geprüft und in einen leeren Betriebsordner entpackt werden.
 
-### Erstinitialisierung mit dem veröffentlichten Image
+### 4. Konfiguration prüfen
+
+Bei der gezeigten Ordnerstruktur und freien Ports 8000/8080 direkt zu Schritt 5
+gehen. `init` erstellt die fehlende `config/local.toml` aus der Vorlage.
+Nur bei Abweichungen zuerst die Vorlage kopieren, ohne eine bestehende Datei zu
+überschreiben:
+
+```sh
+if [ ! -e config/local.toml ]; then
+  cp config/local.example.toml config/local.toml
+fi
+```
+
+Öffne danach `config/local.toml` in einem Texteditor. Zugangsdaten gehören in
+Umgebungsvariablen oder den Credential-Store, nicht in diese Datei.
+
+| Einstellung | Wann anpassen? |
+|---|---|
+| `topics_repo`, `stack_repo` | Vorhandene Checkouts liegen anders. Absolute Pfade sind erlaubt; relative Pfade beziehen sich auf `root`, bei `root = ".."` auf den Betriebsordner. |
+| `[datasheet].url`, `[interlis].url` | Ports 8000/8080 sind belegt; freie lokale Ports mit Pfad `/mcp` wählen. |
+| `[runtime].project` | Mehrere Betriebsordner parallel: eigenen Projektnamen und eigene MCP-Ports wählen. |
+| `--mount-rw` | Themenrepo oder Stack liegen ausserhalb von `~/datenportal`; zusätzlich zum Konfigurationseintrag ihre Verzeichnisse einbinden. |
+
+Beispiel für bereits vorhandene Checkouts ausserhalb des gemeinsamen Elternordners:
+Nach Eintragen ihrer tatsächlichen absoluten Pfade in `config/local.toml` die
+Befehle aus Schritt 5 mit folgenden Optionen ausführen (Beispielpfade ersetzen):
+
+```sh
+./bin/datenportal-agent \
+  --mount-rw /absolut/datenportal-themenrepo \
+  --mount-rw /absolut/datenportal-dev-stack init
+./bin/datenportal-agent \
+  --mount-rw /absolut/datenportal-themenrepo \
+  --mount-rw /absolut/datenportal-dev-stack doctor
+```
+
+Mount-Verzeichnisse müssen existieren. Bei jedem späteren `init` dieselben
+benötigten Mount-Optionen angeben: Sie werden aus dem aktuellen Aufruf in die
+Client-Einträge übernommen. `harness-config` zeigt nur einen Konfigurationsvorschlag;
+auch für diese Diagnose die benötigten Optionen mitgeben.
+
+### 5. Initialisieren und Ergebnis prüfen
+
+Bei Standardpfaden:
 
 ```sh
 ./bin/datenportal-agent init
 ./bin/datenportal-agent doctor
 ```
 
-Der Launcher lädt beim ersten Aufruf das Agent-Image für deinen Rechner
-(`linux/amd64` oder `linux/arm64`). Er übernimmt Docker-Socket, Netzwerk,
-Arbeitsverzeichnis und Dateirechte. Ein eigenes `docker run` ist nicht nötig.
-Der gewählte Digest bleibt für weitere Starts gespeichert.
+`init` richtet Fachwerkzeuge ein, erstellt `.codex/config.toml` und `opencode.json`
+und führt einen isolierten synthetischen Selbsttest durch. Es erstellt keine
+fachlichen Freigaben und führt keine Geschäftsdatenlieferung aus.
 
-`init` prüft die Checkouts, lädt ilivalidator und die konfigurierten Images,
-übernimmt Originalmodelle aus dem Datenblatt-Image und startet die eigenen
-Datenblatt-, INTERLIS- und GRETL-Dienste. Es richtet die projektlokalen
-Client-Einträge ein und führt eine isolierte synthetische Prüfung aus.
-**Es startet keinen Publikationsstack, keinen Seed und keinen Geschäftsdaten-Upload.**
-
-Eine erfolgreiche Initialisierung enthält diesen Ausschnitt; der tatsächliche
-Berichtspfad wird in der Ausgabe genannt:
-
-```json
-{"ready": true, "report": "/ihr/arbeitsbereich/.datenportal-integrator/init.json"}
-```
-
-Bei `doctor` prüfe die Ergebnisse, nicht nur den Exit-Code. Die Ausgabe
-kann auch bei gemeldeten Problemen mit Exit-Code 0 enden. Für den Standardbetrieb
-sollen insbesondere folgende Felder erfolgreich sein (gekürztes Beispiel):
+Erwartet wird bei `init` **`ready: true`**. Bei `doctor` insbesondere prüfen:
 
 ```json
 {
@@ -134,102 +144,167 @@ sollen insbesondere folgende Felder erfolgreich sein (gekürztes Beispiel):
 }
 ```
 
-Prüfe ausserdem `gretl_runtime` auf gemeldete Fehler. `initialization.ready`
-besagt, dass ein aktueller erfolgreicher Funktionstest gespeichert ist; ein
-inzwischen ausgefallener Dienst kann daneben einen aktuellen Fehler melden.
-Fehlende lokale Publikationszugänge unter `publication` und ein noch nicht
-laufender Publikationsstack verhindern reine Modellierung nicht.
+Auch `gretl_runtime` muss fehlerfrei sein. Der Exit-Code allein reicht nicht;
+ein inzwischen ausgefallener Dienst kann trotz gespeichertem erfolgreichen
+Selbsttest einen aktuellen Fehler melden. Bei Fehlern den genannten Bericht
+prüfen, Ursache beheben und `init` wiederholen. `--skip-smoke` bestätigt keine
+vollständige Bereitschaft. Widersprüchliche Client-Einstellungen gezielt abgleichen,
+keine Zugriffssperren abschalten.
 
-Bei `ready: false` oder einem Werkzeugfehler den genannten Fehler und Bericht
-prüfen, die Ursache beheben und `init` wiederholen. `init --skip-smoke` bestätigt
-keine vollständige Bereitschaft. Mehr dazu unter [Wiederaufnahme und Bereitschaft](#wiederaufnahme-und-bereitschaft).
+**Lokale Lieferung benötigt zusätzlich Jenkins, Portal und Lieferzugänge.**
+`init` startet nur die Fachwerkzeugdienste, nicht den Publikationsstack.
+Der Integrator verwendet diesen später über die Dev-Stack-Schnittstellen.
+Fehlende Publikationszugänge verhindern reine CSV-Prüfung oder Modellierung nicht.
+Die Einzelheiten stehen unter [Betrieb und Zugänge](agent/betrieb-und-zugaenge.md).
 
-### Client öffnen und ersten Auftrag starten
+### 6. Betriebsordner im Client öffnen
 
-Öffne **datenportal-themenintegrator-agent** als Projekt im gewählten
-Client. `init` erstellt `.codex/config.toml` und `opencode.json`; eine zusätzliche
-persönliche MCP-Konfiguration ist normalerweise nicht nötig.
+Öffne immer `~/datenportal/datenportal-betrieb`, nicht den gemeinsamen
+Elternordner oder den Integrator-Quellcheckout. Nach Änderungen an Client-Einträgen
+MCP-Verbindungen und bestehende Sitzungen neu starten.
 
-- **Codex:** Projekt als vertrauenswürdig bestätigen und die MCP-Verbindung
-  prüfen. Projektkonfigurationen gelten nur für vertrauenswürdige Projekte;
-  siehe [offizielle MCP-Dokumentation](https://learn.chatgpt.com/docs/extend/mcp?surface=cli).
-  Für die CLI kann `./bin/datenportal-agent codex` verwendet werden.
-- **OpenCode 2.x stable:** Projekt öffnen, den Integrator-MCP verbinden und
-  seinen Status prüfen. Desktop- und Shell-Version getrennt beachten; Details
-  unter [Codex Desktop, Codex CLI und OpenCode](#codex-desktop-codex-cli-und-opencode).
+**Codex Desktop:** Betriebsordner als Projekt öffnen und seine
+Projektkonfiguration als vertrauenswürdig bestätigen. Projektlokale MCPs gelten
+nur in vertrauenswürdigen Projekten; siehe
+[offizielle OpenAI-Dokumentation](https://learn.chatgpt.com/docs/extend/mcp).
 
-Wähle anschliessend den zum Auftrag passenden Skill; für Themenintegration
-in Codex `$datenportal-themenintegrator`, in OpenCode `@datenportal-themenintegrator`.
-Die folgenden Startprompts und
-Anwendungsszenarien zeigen konkrete fachliche Aufträge.
+**Codex CLI:** Bei bereits installierter und angemeldeter Codex-CLI:
+
+```sh
+cd "$HOME/datenportal/datenportal-betrieb"
+./bin/datenportal-agent codex
+```
+
+Der Launcher startet die Host-CLI mit den vorgesehenen Betriebseinstellungen.
+
+**OpenCode Desktop:** Betriebsordner als Projekt öffnen, Agent **`datenportal`**
+auswählen. Im Projektmenü **More options → Edit project → Extensions** die
+Bereiche **MCPs** und **Skills** prüfen (geprüft mit Desktop 2.0.27).
+
+**Mit OpenCode Desktop gelieferte CLI, macOS:** Bei Installation unter
+`/Applications/OpenCode.app` im Terminal:
+
+```sh
+cd "$HOME/datenportal/datenportal-betrieb"
+"/Applications/OpenCode.app/Contents/Resources/opencode-cli" --version
+"/Applications/OpenCode.app/Contents/Resources/opencode-cli" .
+```
+
+Keine zusätzliche globale OpenCode-CLI voraussetzen. Bei einem anderen
+Installationsort den App-Pfad anpassen. In Version 2.0.27 kann `mcp list` die
+Default-Location des Hintergrundservers statt des aktuellen Projekts anzeigen.
+Deshalb Projektpfad und projektspezifische Extensions prüfen; eine leere Liste
+allein belegt keinen fehlenden MCP-Eintrag.
+
+Erwartet werden diese **zwei MCP-Server**:
+
+| Server | Aufgabe |
+|---|---|
+| `datenportal_integrator` | Prüfen, modellieren, Vorgänge bearbeiten und liefern |
+| `datenportal_workspace` | Anhänge übernehmen und zulässige Arbeitsdateien lesen oder schreiben |
+
+Datenblatt- und INTERLIS-MCP werden intern verwaltet; nicht zusätzlich registrieren.
+Die **drei Skills** unter `.agents/skills/` sind `datenportal-themenintegrator`,
+`datenportal-validierungsmodell` und `datenportal-organisation`. In Codex mit `$`,
+in OpenCode mit `@` auswählen. Modellierung innerhalb einer Themenintegration
+nutzt denselben Vorgang. Ein funktionierender MCP-Handshake ersetzt keinen
+vollständig geprüften Fachdialog; Desktop-/CLI-Nachweise sind getrennt zu bewerten.
+Im Betriebsprofil sind allgemeine Shell und Zugriffe auf Implementierungsquellen
+gesperrt. Der Agent verwendet öffentliche Werkzeugschemas, Skills und Prüfberichte.
+Bei fehlenden Informationen fragt er nach; bei Einrichtungsfehlern den Betreiber
+einbeziehen und die Sperren beibehalten.
+
+## Erste CSV bearbeiten
+
+Ein Betriebsordner wird für mehrere Themen und Sitzungen verwendet. Erstelle
+für die Eingänge im Terminal einen Ordner:
+
+```sh
+cd "$HOME/datenportal/datenportal-betrieb"
+mkdir -p eingang
+```
+
+Kopiere deine CSV unverändert und mit ihrem Originalnamen dorthin, beispielsweise
+mit dem Dateimanager. CSV-Namen dürfen nur ASCII-Buchstaben, Ziffern und
+Unterstriche vor `.csv` enthalten. Eine erforderliche Umbenennung ausdrücklich
+klären; nicht still umbenennen. Der Datei-MCP übernimmt die Datei anschliessend
+in einen getrennten Eingang und prüft drei übereinstimmende SHA-256-Werte.
+
+Wähle den Themenintegrations-Skill und passe Datei, Organisation und Identifier an:
+
+```text
+Integriere eingang/Fahrzeugbestand.csv für mfk, Thema ch.so.fahrzeugbestand2025.
+Verwende das vorhandene Datenblatt im Themenrepo, erstelle ein
+INTERLIS-Validierungsmodell und liefere nach meinen Freigaben lokal.
+Prüfe CSV, Modell, Portal und Downloads.
+```
+
+Prüfe die angebotenen HTML-Berichte und beantworte die fachlichen Rückfragen.
+CSV-, Modell-/Metadaten- und Publikationsfreigaben erfordern deine tatsächliche
+Antwort zum jeweiligen Prüfstand. Beobachtete Werte sind noch keine bestätigten
+Fachregeln. Für reine Modellierung wähle `datenportal-validierungsmodell`, für eine
+eigenständige Organisationsanlage `datenportal-organisation`.
+
+### Externe Dateien und Chat-Anhänge
+
+Der Agent benötigt den zugänglichen Originalpfad eines Anhangs. Ein Chat-Vorschaubild
+ersetzt die Originaldatei nicht. Liegt sie ausserhalb des eingebundenen Elternordners,
+das betreffende Verzeichnis bereits bei `init` lesbar einbinden, beispielsweise:
+
+```sh
+./bin/datenportal-agent --mount-ro "$HOME/Downloads" init
+```
+
+Danach beide MCP-Verbindungen und die Sitzung neu starten. Benötigte zusätzliche
+`--mount-rw`-Optionen ebenfalls angeben. Auch bei späterem `init` diese Optionen
+beibehalten. Ist der Anhangpfad unbekannt, die Originaldatei unverändert unter
+`eingang/` bereitstellen und den Pfad nennen.
+[Eingangsdateien](agent/eingangsdateien.md) beschreibt die Übernahme genau.
+
+## Wiederaufnahme und Updates
+
+Sitzungen dürfen geschlossen werden; Vorgänge und Eingänge bleiben im
+Betriebsordner gespeichert. Zur Wiederaufnahme vorhandene `run_id` nennen und
+keinen zweiten Vorgang für denselben Auftrag starten. Bei einem unklaren Upload
+zuerst den bestehenden externen Lauf klären.
+
+Vorgänge aus einem früheren Entwicklungsordner werden nicht automatisch
+übernommen. Den alten Arbeitsbereich erhalten und eine Übernahme mit allen
+referenzierten Ressourcen und Pfaden gezielt prüfen. Nur `state_dir` umzusetzen
+oder einzelne Zustandsdateien zu kopieren ist keine vollständige Migration.
+[Lieferung und Wiederaufnahme](agent/lieferung-und-wiederaufnahme.md)
+
+Vor Updates aktive Arbeit abschliessen und MCP-Verbindungen trennen. Im
+Betriebsordner ausführen; gegebenenfalls die benötigten Mount-Optionen ergänzen:
+
+```sh
+./bin/datenportal-agent --update-agent workspace update "$PWD"
+./bin/datenportal-agent init
+./bin/datenportal-agent doctor
+```
+
+Das Update ersetzt nur unveränderte Paketdateien. Bei individuellen Änderungen
+wird ein Konfliktbericht ausgegeben; Änderungen bewusst abgleichen und erneut
+aktualisieren. Vor erfolgreicher Paketaktualisierung keine Fachsitzung starten:
+Image und Paket müssen dieselbe Version besitzen. Eigene Konfiguration,
+Zugangsdaten, Eingänge und Vorgänge werden nicht automatisch verschoben oder
+überschrieben. Fachwerkzeug-Pins sind gesondert zu aktualisieren. Danach beide
+MCP-Verbindungen und die Sitzung neu starten.
 
 ## Mit dem Agenten arbeiten
 
 ### Quellcodefreies Betriebspaket
 
-Fachliche Aufträge verwenden den installierten Betriebsordner. Der
-Entwicklungscheckout bleibt für ausdrückliche Implementierungsaufträge.
-Das versionierte Paket enthält Skills, Referenzen, Anwenderdokumentation und
-Docker-Launcher, aber keine Java-Quellen, Tests oder lokalen Build-Werkzeuge.
-
-Nach Veröffentlichung der betreffenden Image-Version kann der Betreiber einen
-leeren Arbeitsplatz ohne Quellcheckout aus dem Image installieren:
-
-```sh
-arbeitsplatz="$PWD/datenportal-arbeitsplatz"
-agent_image='sogis/datenportal-themenintegrator-agent:<Version>'
-mkdir -p "$arbeitsplatz"
-docker run --rm --network none --user "$(id -u):$(id -g)" \
-  --mount "type=bind,source=$arbeitsplatz,target=/workspace" \
-  "$agent_image" workspace install /workspace
-```
-
-Alternativ das gleich versionierte CI-Archiv nach Prüfsummenvergleich entpacken.
-Im Arbeitsplatz die Themenrepo- und Stackpfade einrichten und `init` ausführen.
-Eigene Konfiguration und Zugangsdaten bleiben erhalten. Bestehende Vorgänge
-nicht kopieren oder durch neue ersetzen: gegebenenfalls `state_dir` bewusst auf
-den bisherigen absoluten Speicherort setzen und mit derselben `run_id` fortsetzen.
-Erforderliche erneute Prüfungen und Freigaben entscheidet der Kern.
-
-`init` erzeugt `.codex/config.toml` und `opencode.json`. Beide Clients verwenden
-`datenportal_integrator` und `datenportal_workspace`; Datenblatt- und
-INTERLIS-MCP bleiben intern. Der Dateihelfer importiert Anhänge mit drei gleichen
-SHA-256-Prüfsummen und liest ausschliesslich zulässige Anleitungen, Fachdateien
-und Berichte. Er schreibt nur Konverterrezepte und Java-/JUnit-Dateien unter
-`topics/<org>/<id>/`. Entwicklungsquellen, Secrets und interne Vorgangszustände
-werden abgewiesen. Fachliche Java-Konverter laufen im installierten Betrieb in
-eigenen Containern ohne Netzwerk, Zugangsdaten oder Entwicklungscheckout.
-
-Codex deaktiviert Shell-Werkzeuge und verwendet ein Dateiberechtigungsprofil.
-Alte `sandbox_mode`-/`sandbox_workspace_write`-Einstellungen werden als Konflikt
-gemeldet. OpenCode verwendet den primären Fachagenten `datenportal`, direkte
-MCP-Werkzeuge und projektweite Zugriffssperren. Konfigurationsbereitschaft ist
-von tatsächlichen Desktop-/CLI-Nachweisen zu unterscheiden; siehe
-[Abnahme](abnahme.md).
-
-Ein Paketupdate ersetzt nur unveränderte Paketdateien; Konflikte werden vor
-dem Schreiben gemeldet. Betreiber führen im Betriebsordner aus:
-
-```sh
-./bin/datenportal-agent --update-agent workspace update "$PWD"
-./bin/datenportal-agent init
-```
-
-Danach die Client-Verbindungen neu starten. Ohne ausdrückliches Update bleibt
-der aufgezeichnete Image-Stand erhalten. Der CLI-Fallback `schema`/`call` ist im
-Fachbetrieb eine Betreiberhandlung; der Agent verwendet `operation_schema`.
+Die vollständige [Installation und Konfiguration](#installation-und-konfiguration)
+steht am Anfang dieses Handbuchs. [Wiederaufnahme und Updates](#wiederaufnahme-und-updates)
+beschreibt den laufenden Betrieb.
 
 ### Arbeitsbereich öffnen und Skill auswählen
 
-Diese Anleitung richtet sich an Codex und OpenCode 2.x stable. Für den ersten
-Start zuerst die [Repositories bereitstellen](#repositories-bereitstellen) und
-die [Initialisierung](#erstinitialisierung-mit-dem-veröffentlichten-image)
-abschliessen. Anschliessend das Repository `datenportal-themenintegrator-agent`
-als Projekt öffnen und die [MCP-Verbindung](#codex-desktop-codex-cli-und-opencode)
-prüfen; `init` erzeugt die Konfiguration für OpenCode 2.x automatisch.
-
-Wähle den Skill nach dem fachlichen Auftrag. Alle drei nutzen dieselbe
-MCP-Verbindung und sind gemeinsam unter `.agents/skills/` verfügbar:
+Öffne nach der [Einrichtung](#installation-und-konfiguration) den Betriebsordner
+als Projekt und prüfe seine zwei MCPs und drei Skills. Wähle den Skill nach dem
+fachlichen Auftrag. Alle drei nutzen den Integrator und den Dateihelfer und sind
+gemeinsam unter `.agents/skills/` verfügbar:
 
 | Auftrag | Skill |
 |---|---|
@@ -630,7 +705,7 @@ Fachdienste startet der Integrator bei Bedarf. Die Dienste bleiben nach dem
 Schliessen des Chats verfügbar; Docker-Autostart auf dem Rechner richtet der
 Agent nicht ein.
 
-Mit `docker compose down` **im Integrator-Ordner** kannst du die eigenen
+Mit `docker compose down` **im Betriebsordner** kannst du die eigenen
 Fachdienste anhalten. Dabei bleibt der Gradle-Cache erhalten. Keine Volumes zur
 normalen Fehlerbehebung löschen. Der Publikationsstack gehört zum separaten
 Dev-Stack und wird dadurch nicht angehalten.
@@ -651,27 +726,11 @@ Nachweise werden wiederverwendet; veränderte Grundlagen verlangen neue Prüfung
 
 ### Agent-Image aktualisieren
 
-Der erste Start lädt `latest`; danach bleibt die Auswahl unter
-`.datenportal-integrator/launcher/release-image` festgehalten. Fehlt das lokale
-Image, lädt der Launcher denselben Digest nach. Es findet kein stiller Wechsel
-auf ein neueres Image statt.
-
-Vor einem Update laufende Bearbeitungen abschliessen und MCP-Verbindungen
-trennen. Den Integrator-Checkout mit Git aktualisieren, damit Launcher, Skill und
-Anleitung zum neuen Stand gehören; eigene Änderungen vorher prüfen und erhalten.
-Dann ausdrücklich ausführen:
-
-```sh
-./bin/datenportal-agent --update-agent --version
-./bin/datenportal-agent init
-./bin/datenportal-agent doctor
-```
-
-Erst erfolgreicher Download und Starttest ersetzen die gespeicherte Auswahl.
-Danach den MCP im Client neu verbinden. Das Agent-Update ersetzt keine vorhandene
-`config/local.toml`, keine Fachwerkzeug-Pins und keine fachlichen Kandidaten.
-Für Entwicklungsstände ohne veröffentlichtes Image siehe
-[Docker-Launcher und Initialisierung](entwicklerhandbuch.md#docker-launcher-und-initialisierung).
+Im Betriebspaket Image und Paket gemeinsam über
+[Wiederaufnahme und Updates](#wiederaufnahme-und-updates) aktualisieren. Ein
+Git-Pull oder ein isoliertes Image-Update ersetzt die Paketaktualisierung nicht.
+Entwicklungsstände beschreibt das
+[Entwicklerhandbuch](entwicklerhandbuch.md#docker-launcher-und-initialisierung).
 
 ### Fachwerkzeuge aktualisieren
 
@@ -682,7 +741,7 @@ Ein unveränderlicher Digest bezeichnet immer denselben Inhalt; `--update-tools`
 macht daraus keine automatische Suche nach `latest`.
 
 Vor einem Werkzeugwechsel MCP-Verbindungen trennen und die **eigenen** Dienste
-mit der bisherigen Compose-Konfiguration anhalten. Im Integrator-Ordner:
+mit der bisherigen Compose-Konfiguration anhalten. Im Betriebsordner:
 
 ```sh
 docker compose down
@@ -699,7 +758,7 @@ zwei getrennte Vorgänge.
 
 ### Mounts und Aufruf aus Codex oder OpenCode
 
-Der Launcher bindet den gemeinsamen Elternordner der Checkouts schreibbar unter
+Der Launcher bindet den gemeinsamen Elternordner des Betriebsordners und der fachlichen Checkouts schreibbar unter
 dem gleichen absoluten Pfad ein. Eingangsdateien ausserhalb dieses Ordners
 benötigen einen zusätzlichen Mount. Gib ihn bereits bei `init` an, damit
 die erzeugten Client-Einträge ihn bei späteren Aufrufen behalten:
@@ -712,11 +771,11 @@ die erzeugten Client-Einträge ihn bei späteren Aufrufen behalten:
 Für abweichende Themen-/Stack-Checkouts oder einen externen Arbeitsordner
 `--mount-rw` verwenden. Die Konfiguration muss diese Pfade ebenfalls enthalten.
 Mounts verlangen vorhandene Verzeichnisse; Symlinks werden aufgelöst. Übernommene
-Chat-Anhänge liegen bereits im Integrator-Ordner und benötigen keinen Zusatzmount.
+Chat-Anhänge liegen bereits im Betriebsordner und benötigen keinen Zusatzmount.
 
 Die Konfigurationsauswahl erfolgt über `--config /absoluter/pfad/local.toml`,
 alternativ `DATENPORTAL_INTEGRATOR_CONFIG`, sonst `config/local.toml` im
-Integrator-Ordner. Eine externe Konfigurationsdatei muss ebenfalls erreichbar
+Betriebsordner. Eine externe Konfigurationsdatei muss ebenfalls erreichbar
 sein. Zugangsdatenwerte gehören nicht in diese Datei.
 
 `DATENPORTAL_FORWARD_ENV` benennt weitergereichte Umgebungsvariablen. `init`
@@ -865,101 +924,19 @@ seiner ID fortsetzen; bei unbestätigtem Upload zunächst aufklären.
 
 ## Codex Desktop, Codex CLI und OpenCode
 
-Im Integrator-Arbeitsbereich liegen `.codex/config.toml`, `opencode.json` und der gemeinsame Skill unter `.agents/skills/`. Der gemeinsame MCP-Befehl ist `bin/datenportal-agent … serve`; `init` erstellt und aktualisiert aktuelle Launcher-Einträge. Vorhandene persönliche Einstellungen bleiben erhalten. Für absolute, benutzerlokale Einträge:
+Die vier getrennten Startwege und die Kontrolle von MCPs und Skills stehen unter
+[Betriebsordner im Client öffnen](#6-betriebsordner-im-client-öffnen).
+`init` erzeugt beide vollständigen Client-Dateien inklusive Betriebsregeln.
+Keine vereinfachten Einzel-MCP-Konfigurationen darüberkopieren oder dieselben
+Server zusätzlich global registrieren. Zur Diagnose dient
+`./bin/datenportal-agent harness-config`; benötigte Mounts dabei mitgeben.
+Persönliche Einstellungen und Zugänge bleiben erhalten; fremde MCPs werden
+im Betriebsprofil deaktiviert. Konflikte werden vor dem Schreiben gemeldet.
+Sicherungen liegen unter `.datenportal-integrator/harness-backups/`.
 
-```sh
-./bin/datenportal-agent harness-config
-```
-
-Die Ausgabe enthält den absoluten Launcherpfad und den tatsächlich gewählten Konfigurationspfad. Eine benutzerlokale Einrichtung mit `~/.codex/config.toml` ist nur nötig, wenn bewusst kein projektlokaler Eintrag verwendet wird. Den gleichen Server nicht zusätzlich global einrichten; nach Änderungen die Verbindung neu starten. Bereits vorhandene Zugangsdatenumgebung erhalten; die Ausgabe enthält keine Zugangsdatenwerte. Den Integrator-Ordner als Arbeitsbereich öffnen. Desktop kann HTML-Berichte im Dateipanel öffnen; im CLI reicht der lokale Dateilink oder ein Browser.
-
-Für Codex CLI:
-
-```sh
-./bin/datenportal-agent codex
-# Alternativ, wenn die Projektkonfiguration geladen wird:
-codex -C /pfad/datenportal-themenintegrator-agent
-codex mcp list
-```
-
-Der Launcher-Befehl `codex` übergibt den MCP-Eintrag ausdrücklich als Konfigurationsoverride. Er verändert die persönliche Konfiguration nicht. Zusätzliche Codex-Argumente werden weitergereicht.
-
-Für OpenCode 2.x stable erzeugt `init` den Integrator-Eintrag direkt unter
-`mcp.servers.datenportal_integrator`. `harness-config` gibt dieselbe V2-Struktur
-mit absoluten Launcherpfaden aus. Ein Beispiel der projektlokalen Konfiguration
-mit Standardpfaden ist:
-
-```json
-{
-  "$schema": "https://opencode.ai/config.json",
-  "mcp": {
-    "servers": {
-      "datenportal_integrator": {
-        "type": "local",
-        "command": ["bin/datenportal-agent", "--config", "config/local.toml", "serve"],
-        "disabled": false,
-        "environment": {
-          "DATENPORTAL_FORWARD_ENV": "DATENPORTAL_LOCAL_USER DATENPORTAL_LOCAL_TOKEN"
-        },
-        "timeout": {
-          "startup": 180000,
-          "catalog": 1800000,
-          "execution": 1800000
-        }
-      }
-    }
-  }
-}
-```
-
-Der Ausschnitt enthält nur Namen von Umgebungsvariablen, keine Zugangsdaten.
-Die Timeout-Werte sind Millisekunden: drei Minuten für den Start und je
-30 Minuten für Katalog und Werkzeugaufrufe.
-
-`init` erhält individuelle Timeouts, Deaktivierung, Umgebungszuordnungen,
-fremde V2-Server und globale Einstellungen. Fehlende Timeout-Felder erhalten
-die oben genannten Werte. Launcher, Runtime, Mounts und Konfigurationspfad
-folgen dem aktuellen Aufruf. Beide Client-Dateien werden vor dem Schreiben
-geprüft; Sicherungen liegen unter `.datenportal-integrator/harness-backups/`.
-Unbekannte Startbefehle, alte Formate und ungültige Felder führen zu
-`harness_conflict`, ohne eine der beiden Dateien zu verändern. Die Meldung nennt
-das Feld, keine Zugangsdatenwerte. Siehe [Konfiguration umstellen](#vorhandene-lokale-konfiguration-umstellen).
-
-Danach OpenCode neu verbinden. Der gespeicherte Image-Stand wird nicht allein
-durch eine Änderung am Checkout aktualisiert. Verbindung prüfen und starten:
-
-```sh
-cd /pfad/datenportal-themenintegrator-agent
-opencode mcp list
-opencode
-```
-
-OpenCode startet den Launcher aus `opencode.json`. Die Terminalbefehle setzen
-eine OpenCode-2.x-CLI voraus: `opencode mcp list` zeigt den Verbindungsstatus,
-`/mcps` öffnet die Serverauswahl in der Terminalsitzung. Grundlage sind die
-[OpenCode-2.x-MCP-Anweisungen](https://opencode.ai/v2/docs/mcp-servers/).
-Im Desktop `2.0.26` ist der projektspezifische Eintrag unter dem Projektmenü
-„More options → Edit project → Extensions → MCPs“ sichtbar. Die globalen
-Settings zeigen dagegen die projektübergreifenden Erweiterungen. Desktop und
-Shell-CLI können unterschiedliche Versionen haben; `opencode --version` prüft
-nur die CLI. Im Desktop wird der Skill über `@datenportal-themenintegrator`
-angeboten; `/mcps` ist dort kein entsprechender Composer-Befehl.
-Den optionalen lokalen Betrieb mit JDK 25 beschreibt das
-[Entwicklerhandbuch](entwicklerhandbuch.md#docker-launcher-und-initialisierung).
-
-Das Integrator-Repository als Projekt öffnen und den Skill in OpenCode mit
-`@datenportal-themenintegrator`, in Codex mit `$datenportal-themenintegrator`
-auswählen. Vollständige [Startprompts und Anwendungsszenarien](#mit-dem-agenten-arbeiten)
-stehen im Anwendungsteil dieses Handbuchs. Die Anhangübernahme erfolgt automatisch
-nach der Regel [Chat-Anhänge übernehmen](agent/eingangsdateien.md#chat-anhänge-übernehmen);
-Kopieren und Prüfsummenvergleich müssen nicht im Prompt wiederholt werden.
-Wenn die GUI keinen zugänglichen Originalpfad übermittelt, fragt der Agent gezielt danach.
-
-Die aktuelle technische und menschliche Abnahme ist in [abnahme.md](abnahme.md)
-dokumentiert. Dortige Beta-Nachweise bleiben historische Ergebnisse und sind
-keine Abnahme von OpenCode 2.x stable. Die hier anhand der V2-Dokumentation
-beschriebene Bedienung ersetzt keinen durchgeführten GUI-Dialogtest. Ein
-erfolgreicher MCP-Handshake ersetzt keine vollständige fachliche Abnahme.
+Die tatsächlichen Desktop-/CLI-Prüfungen und offenen Fachdialog-Nachweise stehen
+in [Abnahme](abnahme.md). Sie sind von der blossen Konfigurationsbereitschaft
+zu unterscheiden.
 
 ## Durchgängiges Thema: CSV, XLSX und XTF
 
