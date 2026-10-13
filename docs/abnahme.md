@@ -1,5 +1,45 @@
 # Abnahmestand
 
+## Fachintegration vom 13. Oktober 2026
+
+Die Nachprüfung auf Basis von `c6ddc97` verwendet die inzwischen vorhandene
+`config/local.toml` und die tatsächlich konfigurierten Fachwerkzeuge.
+
+### Tatsächlich geprüft
+
+- Der erste vollständige Lauf hatte **26 Tests, 25 bestanden und einen Fehler**:
+  `bothRealMcpAdaptersAndGretlEarlyValidation` fand keinen laufenden Jenkins im
+  konfigurierten lokalen Stack. Die vorausgehenden MCP- und GRETL-Prüfungen
+  dieses Tests waren erfolgreich.
+- Die konfigurierte Jenkins-Instanz wurde mit dem vorhandenen Image gestartet.
+  Ihr Themenrepo-Mount entspricht dem vorgesehenen Checkout; Image und
+  GRETL-Bundle stimmen mit der vorbereiteten Prüflaufzeit überein.
+  Der gezielte Jenkins-Regressionstest bestand anschliessend.
+  Der für die Nachprüfung gestartete Jenkins-Dienst wurde danach wieder gestoppt.
+- Der abschliessende vollständige Docker-Lauf
+  `./bin/datenportal-agent gradle integrationTest` bestand mit
+  **26 Integrationstests**, ohne Fehler oder Auslassungen.
+- `./bin/datenportal-agent gradle test jar spotlessCheck` bestand ebenfalls:
+  **194 Unit-/Funktionstests**, ohne Fehler oder Auslassungen.
+- Es war keine Programmkorrektur erforderlich. Das Entwicklerhandbuch nennt
+  jetzt die zusätzlich benötigte lokale Jenkins-Instanz und ihren Start im
+  Standardstack. Dev-Stack und Themenrepository haben keine Arbeitskopieänderungen.
+
+Nachweise: `.datenportal-integrator/integration-acceptance/20261013/` enthält
+den Log des ersten vollständigen Laufs, den gezielten Jenkins-Nachweis sowie
+JUnit-XML, Logs und Zusammenfassungen der abschliessenden Integrations- und
+Regressionsprüfung.
+
+### Synthetische Entscheidungen und offene Abnahmen
+
+Freigaben und injizierte Modellfehler stammen ausschliesslich aus isolierten
+Testfixtures; Compiler-, Datenblatt-, ilivalidator- und GRETL-Prüfungen wurden
+tatsächlich ausgeführt. Geschäftsdaten wurden nicht publiziert.
+Die am 12. Oktober fehlende Fachintegrationsprüfung ist damit nachgewiesen.
+Eine vollständige synthetische Delivery-Abnahme mit `acceptance delivery`,
+GUI-Dialoge mit tatsächlichen Fachfreigaben und eine INT-/PROD-Abnahme bleiben
+separate Prüfungen.
+
 ## Drei fachliche Skills vom 12. Oktober 2026
 
 Dieser Nachweis betrifft die Arbeitskopie auf Basis von `f97f66b`, noch ohne
@@ -84,11 +124,13 @@ Frontmatter- und Verknüpfungsprüfungen übernimmt der bestandene Java-Test.
 
 ### Offen
 
-`./bin/datenportal-agent gradle integrationTest` wurde ausgeführt:
-**18 Tests, zwei bestanden, 16 fehlgeschlagen**. Ursache der Fehlprüfungen ist
+Beim damaligen Lauf wurde `./bin/datenportal-agent gradle integrationTest` ausgeführt:
+**18 Tests, zwei bestanden, 16 fehlgeschlagen**. Ursache der Fehlprüfungen war
 die fehlende `config/local.toml`, auf die beide Projekt-Clients verweisen.
-Damit bleiben die Prüfung der tatsächlich konfigurierten Fachwerkzeuge und
-die vollständige Vorbereitung der bestehenden Delivery-Abnahme offen. Es wurde
+Die Prüfung der tatsächlich konfigurierten Fachwerkzeuge wurde am
+[13. Oktober nachgeholt](#fachintegration-vom-13-oktober-2026);
+die vollständige Vorbereitung der bestehenden Delivery-Abnahme blieb in diesem
+Umbau offen. Es wurde
 keine historische Fixture-Konfiguration als aktuellen Betriebsstand ausgegeben
 und keine neue Betriebskonfiguration erfunden.
 
