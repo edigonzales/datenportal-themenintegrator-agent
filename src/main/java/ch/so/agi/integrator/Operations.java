@@ -32,6 +32,15 @@ public final class Operations {
         "run_id!",
         "path!",
         "role!");
+    add(
+        "repository_datasheet",
+        "Datenblatt im Themenordner anhand Modell und Identifier finden und unverändert als Quelle sichern; kein Entwurf. Bei mehreren Kandidaten relative_path wählen.",
+        "run_id!",
+        "relative_path");
+    add(
+        "prepare_model_reference",
+        "Nach erfolgreicher Modellprüfung Modellreferenz über den Datenblatt-MCP als Kandidat vorbereiten.",
+        "run_id!");
     add("baseline", "Angenommenen Metadatenstand laden.", "run_id!");
     add("analyze", "CSV vollständig prüfen und HTML-Vorschau schreiben.", "run_id!");
     add("provenance", "Herkunft fachlicher Angaben festhalten.", "run_id!", "entries:array!");
@@ -151,12 +160,17 @@ public final class Operations {
         "human_statement!");
     add(
         "validate_model",
-        "Modellstand und GRETL-CSV-Prüfung in isolierter Arbeitskopie prüfen.",
-        "run_id!");
+        "Modell und CSV mit Java prüfen. scope=model ist eine Zwischenprüfung ohne Freigabewirkung; integration prüft das vollständige Paket (Standard).",
+        "run_id!",
+        "scope");
   }
 
   private static void add(String name, String description, String... arguments) {
-    ALL.put(name, definition(description, arguments));
+    var op = definition(description, arguments);
+    if (name.equals("metadata"))
+      Json.obj(Json.obj(op.schema().get("properties")).get("operation"))
+          .put("enum", MetadataContracts.NAMES);
+    ALL.put(name, op);
   }
 
   static Operation definition(String description, String... arguments) {
@@ -170,6 +184,7 @@ public final class Operations {
       var prop =
           Json.map(
               "type", parts.length > 1 ? parts[1] : "string", "description", fieldDescription(key));
+      if (key.equals("scope")) prop.put("enum", List.of("model", "integration"));
       if (key.equals("workflow")) prop.put("enum", List.of("topic", "model", "organization"));
       if (key.equals("role"))
         prop.put("enum", List.of("data", "metadata", "metadata_source", "model"));
@@ -228,8 +243,9 @@ public final class Operations {
       case "path" ->
           "Konkreter Dateipfad; Anhänge zuerst mit datenportal_workspace.import_attachment verifiziert übernehmen.";
       case "operation" ->
-          "Öffentlicher Werkzeugname. operation_schema liefert dessen inputSchema; metadata.describe_schema beschreibt Datenblattwerkzeuge.";
-      case "arguments" -> "Argumentobjekt des Datenblattwerkzeugs gemäss metadata.describe_schema.";
+          "Öffentlicher Werkzeugname. operation_schema(metadata.<operation>) liefert den Integrator-Vertrag; metadata.describe_schema beschreibt fachliche Datenblattfelder.";
+      case "arguments" ->
+          "Argumentobjekt gemäss operation_schema(metadata.<operation>); Entwurfs-IDs und Revisionen verwaltet der Integrator.";
       case "gate" ->
           "data, metadata, model, organization oder publish:<Profil>, passend zum tatsächlich gezeigten Prüfstand.";
       case "fingerprint" ->

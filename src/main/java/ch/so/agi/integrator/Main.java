@@ -46,7 +46,11 @@ public final class Main {
       }
       if (command.equals("schema")) {
         if (args.size() != 1) throw new Problem("invalid_arguments", "schema OPERATION");
-        print(Operations.schema(args.getFirst()));
+        if (args.getFirst().startsWith("metadata.")) {
+          try (var w = new Workflow(Settings.load(config))) {
+            print(w.call("operation_schema", Json.map("operation", args.getFirst())));
+          }
+        } else print(Operations.schema(args.getFirst()));
         return 0;
       }
       if (command.equals("init")) Initializer.prepareConfig(config);

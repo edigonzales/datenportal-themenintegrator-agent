@@ -333,6 +333,10 @@ final class DeliveryAcceptance {
                       "short_description",
                       "Isolated delivery acceptance")));
       if (Json.bool(model, "candidate", true)) fail("Modellableitung unvollständig", model);
+      var preliminary = call(codex, "validate_model", Json.map("run_id", id, "scope", "model"));
+      if (!Json.bool(preliminary, "valid", false))
+        fail("Modellvorprüfung fehlgeschlagen", preliminary);
+      call(codex, "prepare_model_reference", Json.map("run_id", id));
       var checked = call(codex, "validate", Json.map("run_id", id));
       if (!Json.bool(checked, "valid", false)) fail("Fachprüfung fehlgeschlagen", checked);
       approve(codex, id, "metadata", checked);

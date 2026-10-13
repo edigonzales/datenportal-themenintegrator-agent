@@ -100,6 +100,11 @@ final class Smoke {
                       "range_proposals",
                       yearRangeProposals())));
       if (Json.bool(derived, "candidate", true)) fail("Modellableitung unvollständig", derived);
+      var preliminary =
+          Json.obj(w.call("validate_model", Json.map("run_id", id, "scope", "model")));
+      if (!Json.bool(preliminary, "valid", false))
+        fail("Modellvorprüfung fehlgeschlagen", preliminary);
+      w.call("prepare_model_reference", Json.map("run_id", id));
       var positive = Json.obj(w.call("validate_model", Json.map("run_id", id)));
       if (!Json.bool(positive, "valid", false)) fail("Positivprüfung fehlgeschlagen", positive);
       Path ili = dir.resolve("runs").resolve(id).resolve("model/SO_Integrator_Smoke_20261009.ili");

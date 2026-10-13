@@ -367,14 +367,6 @@ public final class Models {
         Json.write(task, task(original, Json.required(r, "identifier"), modelName, Json.sha(out)));
         w.stage(r, taskRelative, task);
         model.put("dataset_task_sha256", Json.sha(task));
-        // Set reference through the existing Java MCP before the final export. This avoids
-        // approval/derivation hash cycles.
-        if (!r.containsKey("draft")) w.metadata(r, "import_xtf", Json.map());
-        w.metadata(r, "update_metadata", Json.map("values", Json.map("model", modelName)));
-        w.metadata(r, "export_xtf", Json.map());
-        model.put("review_metadata_sha256", Json.sha(w.sheet(r)));
-        String metadataRelative = metadataRelative(r);
-        w.stage(r, metadataRelative, w.sheet(r));
       }
     }
     return Json.map(
@@ -428,21 +420,67 @@ public final class Models {
 
   String metadataRelative(Map<String, Object> r) {
 
-    Path dir = w.settings.topics.resolve(w.topic(r));
-    if (Files.isDirectory(dir))
-      try (var paths = Files.list(dir)) {
-        var files =
-            paths
-                .filter(p -> p.toString().endsWith(".xtf") || p.toString().endsWith(".xml"))
-                .toList();
-        if (files.size() > 1)
-          throw new Problem(
-              "ambiguous_repository_metadata", "Mehr als ein Datenblatt im Themenordner.");
-        if (!files.isEmpty()) return w.topic(r) + "/" + files.getFirst().getFileName();
-      } catch (java.io.IOException e) {
-        throw new Problem("repository_unavailable", "Themenordner nicht lesbar.");
-      }
+    var selected = Json.obj(r.get("repository_datasheet"));
+    if (!selected.isEmpty()) return Json.required(selected, "relative_path");
+    var resolver = new RepositoryDatasheets(w);
+    if (!Json.list(resolver.discover(r).get("candidates")).isEmpty())
+      return Json.required(resolver.choose(r, null), "relative_path");
     return w.topic(r) + "/datasheet.xtf";
+  }
+
+  public Object prepareReference(Map<String, Object> r) {
+    w.exportRequired(r);
+    var model = Json.obj(r.get("model"));
+    if (model.isEmpty()) throw new Problem("model_missing", "Modell zuerst ableiten.");
+    if (w.store.file(r, "data") != null) w.require(r, "data");
+    String modelName = Json.required(Json.obj(model.get("identity")), "name");
+    if (Objects.equals(model.get("prepared_reference_fingerprint"), referenceFingerprint(r)))
+      return Json.map("changed", false, "next_operation", "validate_model(scope=integration)");
+    var check = Json.obj(Json.obj(r.get("checks")).get("model_preparation"));
+    if (!Json.bool(check, "valid", false)
+        || !Objects.equals(check.get("fingerprint"), w.fingerprint(r, "model")))
+      throw new Problem(
+          "validation_required",
+          "Zuerst validate_model(scope=model) für den aktuellen Stand erfolgreich ausführen.");
+    String relative = metadataRelative(r);
+    var source = Json.obj(r.get("repository_datasheet"));
+    if (!source.isEmpty()) {
+      var selected = new RepositoryDatasheets(w).choose(r, relative);
+      if (!Objects.equals(source.get("sha256"), selected.get("sha256")))
+        throw new Problem(
+            "repository_datasheet_changed",
+            "Repository-Datenblatt seit Auswahl verändert; Quelle und Modellgrundlage erneut prüfen.");
+    }
+    if (!Objects.equals(Json.obj(w.describe(r).get("fields")).get("model"), modelName)) {
+      if (!r.containsKey("draft")) w.metadata(r, "import_xtf", Json.map());
+      w.metadata(r, "update_metadata", Json.map("values", Json.map("model", modelName)));
+      w.metadata(r, "export_xtf", Json.map());
+    }
+    model.put("review_metadata_sha256", Json.sha(w.sheet(r)));
+    w.stage(r, relative, w.sheet(r));
+    model.put("prepared_reference_fingerprint", referenceFingerprint(r));
+    return Json.map(
+        "changed",
+        true,
+        "relative_path",
+        relative,
+        "metadata_sha256",
+        Json.sha(w.sheet(r)),
+        "next_operation",
+        "validate_model(scope=integration)");
+  }
+
+  String referenceFingerprint(Map<String, Object> r) {
+    return Json.digest(
+        Json.map(
+            "model",
+            Json.sha(w.requiredFile(r, "model")),
+            "metadata",
+            Json.sha(w.sheet(r)),
+            "data",
+            w.store.file(r, "data") == null ? null : Json.sha(w.store.file(r, "data")),
+            "changes",
+            r.get("changes")));
   }
 
   static boolean authoringValid(Map<String, Object> result) {
@@ -542,6 +580,13 @@ public final class Models {
   }
 
   public Map<String, Object> validate(Map<String, Object> r) {
+    return validate(r, "integration");
+  }
+
+  public Map<String, Object> validate(Map<String, Object> r, String scope) {
+    if (!Set.of("model", "integration").contains(scope))
+      throw new Problem("invalid_arguments", "scope=model oder integration erforderlich.");
+
     var model = Json.obj(r.get("model"));
     if (model.isEmpty()) throw new Problem("model_missing", "Modell zuerst ableiten.");
     String profile = profile(Json.str(model, "profile", ""));
@@ -622,7 +667,8 @@ public final class Models {
               "message",
               "Compiler-/Regelprüfung oder automatische Constraint-Nachweise sind unvollständig."));
     String modelName = Json.required(Json.obj(model.get("identity")), "name");
-    if (!Objects.equals(Json.obj(sheet.get("fields")).get("model"), modelName))
+    if (scope.equals("integration")
+        && !Objects.equals(Json.obj(sheet.get("fields")).get("model"), modelName))
       errors.add(
           Json.map(
               "code",
@@ -702,17 +748,21 @@ public final class Models {
             "changes",
             r.get("changes"));
     if (Json.bool(report, "valid", false)) ModelRepairs.passed(r);
+    report.put("scope", scope);
+    report.put("approvable", scope.equals("integration"));
     report.put("diagnostic_history", r.get("diagnostic_history"));
     report.put("repair", r.get("model_repair"));
     report.put("fingerprint", w.fingerprint(r, "model"));
 
-    Json.obj(r.get("checks")).put("model", report);
+    Json.obj(r.get("checks")).put(scope.equals("model") ? "model_preparation" : "model", report);
     var result = new LinkedHashMap<>(report);
     result.put(
         "review_path",
         Reports.render(
             w.settings.root,
-            w.directory(r).resolve("model-review.html"),
+            w.directory(r)
+                .resolve(
+                    scope.equals("model") ? "model-preparation-review.html" : "model-review.html"),
             Reports.Kind.MODEL,
             Json.str(r, "identifier", null),
             report));

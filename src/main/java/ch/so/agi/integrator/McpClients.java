@@ -16,6 +16,10 @@ public final class McpClients {
       return null;
     }
 
+    default Map<String, Object> schema(String name) {
+      throw new Problem("mcp_unavailable", "Werkzeugvertrag nicht verfügbar.");
+    }
+
     default Set<String> tools() {
       return Set.of();
     }
@@ -101,6 +105,18 @@ public final class McpClients {
     public synchronized String sessionKey() {
       connect();
       return session;
+    }
+
+    @Override
+    public synchronized Map<String, Object> schema(String name) {
+      connect();
+      var tool =
+          client.listTools().tools().stream()
+              .filter(t -> t.name().equals(name))
+              .findFirst()
+              .orElseThrow(
+                  () -> new Problem("unknown_operation", "Fach-MCP kennt Werkzeug nicht."));
+      return Json.obj(Json.read(Json.text(tool.inputSchema())));
     }
 
     @Override

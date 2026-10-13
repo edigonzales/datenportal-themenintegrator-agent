@@ -16,6 +16,7 @@ class ModelsTest {
   boolean reviewUnavailable;
 
   static class Datasheet implements McpClients.ToolClient {
+    final List<String> calls = new ArrayList<>();
     String xml;
     int revision = 1;
     String draft = "fixture-draft";
@@ -27,6 +28,7 @@ class ModelsTest {
 
     @Override
     public Map<String, Object> call(String op, Map<String, Object> args) {
+      calls.add(op);
       if (op.equals("import_xtf")) {
         xml = Json.required(args, "xml");
         revision = 1;
@@ -57,6 +59,12 @@ class ModelsTest {
       if (op.equals("export_xtf")) return Json.map("xml", xml, "valid", true);
       throw new Problem("fixture", "unexpected op");
     }
+  }
+
+  void prepareReference() {
+    var check = f.call("validate_model", "run_id", id, "scope", "model");
+    assertTrue(Json.bool(check, "valid", false), Json.pretty(check));
+    f.call("prepare_model_reference", "run_id", id);
   }
 
   Map<String, Object> identity() {
@@ -158,10 +166,20 @@ class ModelsTest {
         f.call(
             "derive_model", "run_id", id, "identity", identity(), "range_proposals", proposals());
     assertFalse(Json.bool(r, "candidate", true));
+    f.error("validation_required", () -> f.call("prepare_model_reference", "run_id", id));
     assertEquals("authorIliModel", requests.getFirst().get("name"));
     var args = Json.obj(requests.getFirst().get("arguments"));
     assertEquals("VALIDATION", args.get("modelPurpose"));
     assertEquals("SO-DATA", args.get("ruleProfile"));
+    assertTrue(((Datasheet) f.workflow.datasheets).calls.isEmpty());
+    var preliminary = f.call("validate_model", "run_id", id, "scope", "model");
+    assertTrue(Json.bool(preliminary, "valid", false), Json.pretty(preliminary));
+    assertTrue(((Datasheet) f.workflow.datasheets).calls.isEmpty());
+    f.error("validation_required", () -> f.approve(id, "model", preliminary));
+    f.call("prepare_model_reference", "run_id", id);
+    int calls = ((Datasheet) f.workflow.datasheets).calls.size();
+    f.call("prepare_model_reference", "run_id", id);
+    assertEquals(calls, ((Datasheet) f.workflow.datasheets).calls.size());
     var state = f.call("status", "run_id", id);
     var changes = Json.obj(state.get("changes"));
     assertEquals(3, changes.size());
@@ -170,6 +188,34 @@ class ModelsTest {
     assertTrue(Json.bool(report, "valid", false), Json.pretty(report));
     assertEquals(1, requests.size(), "No redundant compiler/review call");
     f.approve(id, "model", report);
+  }
+
+  @Test
+  void referencePreparationRetainsRepositoryFilenameAndOriginalBytes() {
+    Path source = f.repo.resolve("agi/ch.so.grundwasser.qualitaet/special.XML");
+    String original = f.workflow.store.edit(id, run -> Json.contents(f.workflow.sheet(run)));
+    Json.write(source, original);
+    f.call("repository_datasheet", "run_id", id);
+    f.call("derive_model", "run_id", id, "identity", identity(), "range_proposals", proposals());
+    prepareReference();
+    assertEquals(original, Json.contents(source));
+    assertTrue(
+        Json.obj(f.call("status", "run_id", id).get("changes"))
+            .containsKey("agi/ch.so.grundwasser.qualitaet/special.XML"));
+    assertTrue(Json.bool(f.call("validate_model", "run_id", id), "valid", false));
+  }
+
+  @Test
+  void referencePreparationRejectsConcurrentRepositoryEdit() {
+    Path source = f.repo.resolve("agi/ch.so.grundwasser.qualitaet/special.xtf");
+    String original = f.workflow.store.edit(id, run -> Json.contents(f.workflow.sheet(run)));
+    Json.write(source, original);
+    f.call("repository_datasheet", "run_id", id);
+    f.call("derive_model", "run_id", id, "identity", identity(), "range_proposals", proposals());
+    assertTrue(Json.bool(f.call("validate_model", "run_id", id, "scope", "model"), "valid", false));
+    Json.write(source, original + "\n");
+    f.error("repository_datasheet_changed", () -> f.call("prepare_model_reference", "run_id", id));
+    assertTrue(((Datasheet) f.workflow.datasheets).calls.isEmpty());
   }
 
   @Test
@@ -267,6 +313,7 @@ class ModelsTest {
   @Test
   void modelGateRequiredForJointApply() {
     f.call("derive_model", "run_id", id, "identity", identity(), "range_proposals", proposals());
+    prepareReference();
     var report = f.call("validate", "run_id", id);
     assertTrue(Json.bool(report, "valid", false), Json.pretty(report));
     f.approve(id, "metadata", report);
@@ -286,6 +333,7 @@ class ModelsTest {
     String spec = Json.text(Json.obj(requests.getFirst().get("arguments")).get("spec"));
     assertFalse(spec.contains("iliDoc"));
     assertFalse(spec.contains("metaAttributes"));
+    prepareReference();
     var check = f.call("validate_model", "run_id", id);
     f.approve(id, "model", check);
     f.call("validate_model", "run_id", id);
@@ -435,7 +483,7 @@ class ModelsTest {
         series.get("last_failure"),
         "repair_reason",
         "Synthetisch: ungültige Syntax korrigiert");
-    var result = f.call("validate_model", "run_id", id);
+    var result = f.call("validate_model", "run_id", id, "scope", "model");
     assertEquals(true, result.get("valid"));
     assertEquals(false, Json.obj(result.get("repair")).get("active"));
     assertTrue(Json.contents(Path.of(Json.required(result, "review_path"))).contains("FAILED"));
@@ -454,7 +502,7 @@ class ModelsTest {
             return Json.map("valid", false, "log", log.toString(), "log_sha256", Json.sha(log));
           }
         };
-    var failure = f.call("validate_model", "run_id", id);
+    var failure = f.call("validate_model", "run_id", id, "scope", "model");
     assertEquals(false, failure.get("valid"));
     var series = Json.obj(failure.get("repair"));
     f.workflow.csvValidation = healthy;
@@ -473,7 +521,7 @@ class ModelsTest {
         series.get("last_failure"),
         "repair_reason",
         "Synthetisch: Wertebereich passend zum Vorschlag korrigiert");
-    var success = f.call("validate_model", "run_id", id);
+    var success = f.call("validate_model", "run_id", id, "scope", "model");
     assertEquals(true, success.get("valid"));
     assertEquals(1, Json.number(Json.obj(success.get("repair")), "attempts", -1));
     assertTrue(
@@ -485,6 +533,7 @@ class ModelsTest {
     var oldIdentity = identity();
     oldIdentity.put("rule_profile", "CORE");
     f.call("derive_model", "run_id", id, "identity", oldIdentity, "range_proposals", proposals());
+    prepareReference();
     f.approve(id, "model", f.call("validate_model", "run_id", id));
     var changed = proposals();
     Json.obj(changed.get("Jahr")).put("reason", "Neue fachliche Begründung zur Prüfung");

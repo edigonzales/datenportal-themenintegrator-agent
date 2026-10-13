@@ -103,14 +103,14 @@ final class WorkspaceFiles {
     if (path.startsWith(packagePath("topics"))) return converterPath(path);
     if (path.startsWith(packagePath(".datenportal-integrator/input")))
       return name.matches("(?i).+\\.(csv|xtf)");
-    if (beneath(path, s.runs)) return name.matches("(?i).+\\.(html|log|ili|xtf|csv|gradle)");
+    if (beneath(path, s.runs)) return name.matches("(?i).+\\.(html|log|ili|xtf|xml|csv|gradle)");
     if (beneath(path, s.topics)) {
       Path relative = s.topics.toAbsolutePath().normalize().relativize(path);
       if (relative.getNameCount() < 2) return false;
       for (Path part : relative)
         if (part.toString().startsWith(".")
             || Set.of("src", "build", "config").contains(part.toString())) return false;
-      return name.matches("(?i).+\\.(xtf|ili|gradle|yaml|yml)");
+      return name.matches("(?i).+\\.(xtf|xml|ili|gradle|yaml|yml)");
     }
     return false;
   }

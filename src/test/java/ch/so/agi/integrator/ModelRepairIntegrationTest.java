@@ -83,7 +83,8 @@ class ModelRepairIntegrationTest {
               ModelsTest.proposals());
       if (fault.equals("csv")) {
         assertFalse(Json.bool(first, "candidate", true), Json.pretty(first));
-        assertFalse(Json.bool(f.call("validate_model", "run_id", id), "valid", true));
+        assertFalse(
+            Json.bool(f.call("validate_model", "run_id", id, "scope", "model"), "valid", true));
       } else assertTrue(Json.bool(first, "candidate", false), Json.pretty(first));
       int repairs = fault.equals("limit") ? 3 : 1;
       for (int attempt = 1; attempt <= repairs; attempt++) {
@@ -125,7 +126,7 @@ class ModelRepairIntegrationTest {
             "repair_limit_reached",
             () -> f.call("derive_model", "run_id", id, "identity", identity));
       } else {
-        var success = f.call("validate_model", "run_id", id);
+        var success = f.call("validate_model", "run_id", id, "scope", "model");
         assertTrue(Json.bool(success, "valid", false), Json.pretty(success));
       }
       var state = f.call("status", "run_id", id);

@@ -24,6 +24,21 @@ class DatasheetRestartIntegrationTest {
     return settings;
   }
 
+  @Test
+  void publicMetadataContractsExposeArgumentsWithoutManagedIds() {
+    try (var client = McpClients.datasheet(source())) {
+      var contract = Json.obj(MetadataContracts.schema(client, "upsert_attribute"));
+      var schema = Json.obj(contract.get("inputSchema"));
+      var arguments = Json.obj(Json.obj(schema.get("properties")).get("arguments"));
+      var properties = Json.obj(arguments.get("properties"));
+      assertTrue(properties.containsKey("values"));
+      assertTrue(properties.containsKey("attribute_id"));
+      assertFalse(properties.containsKey("draft_id"));
+      assertFalse(properties.containsKey("expected_revision"));
+      assertTrue(Json.list(schema.get("required")).contains("arguments"));
+    }
+  }
+
   Fixtures fixture(Settings s, McpClients.ToolClient client) throws Exception {
     var f = new Fixtures(temp, new ProcessRunner(), client, (n, a) -> Json.map());
     f.settings.values.put("datasheet", s.mcp("datasheet"));

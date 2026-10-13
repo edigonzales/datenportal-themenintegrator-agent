@@ -42,6 +42,9 @@ public final class Workflow implements AutoCloseable {
 
   public Object call(String operation, Map<String, Object> args) {
     Operations.validate(operation, args);
+    if (operation.equals("operation_schema")
+        && Json.required(args, "operation").startsWith("metadata."))
+      return MetadataContracts.schema(datasheets, Json.required(args, "operation").substring(9));
     if (operation.equals("operation_schema"))
       return Operations.schema(Json.required(args, "operation"));
     if (OperatorWorkspace.installed(settings.root)) {
@@ -75,6 +78,9 @@ public final class Workflow implements AutoCloseable {
                       Json.number(args, "limit", 100));
               case "analyze" -> analyze(r);
               case "baseline" -> baseline(r);
+              case "repository_datasheet" ->
+                  new RepositoryDatasheets(this).select(r, Json.str(args, "relative_path", null));
+              case "prepare_model_reference" -> new Models(this).prepareReference(r);
               case "stage_change" ->
                   stage(
                       r,
@@ -90,7 +96,8 @@ public final class Workflow implements AutoCloseable {
               case "validate_organization" -> new Organizations(this).validate(r);
               case "reset_model_repair" -> ModelRepairs.reset(r, args);
               case "derive_model" -> new Models(this).derive(r, args);
-              case "validate_model" -> new Models(this).validate(r);
+              case "validate_model" ->
+                  new Models(this).validate(r, Json.str(args, "scope", "integration"));
               case "transform" -> new Converters(this).transform(r, args);
               case "apply_local_changes" -> apply(r);
               case "publication_plan" ->
@@ -503,20 +510,11 @@ public final class Workflow implements AutoCloseable {
       Json.write(p, accepted.xml());
       store.attach(r, p, "accepted_metadata");
     } else {
-      Path folder = Json.inside(settings.topics, topic(r));
-      if (Files.isDirectory(folder))
-        try (var paths = Files.list(folder)) {
-          var xs =
-              paths
-                  .filter(p -> p.toString().endsWith(".xtf") || p.toString().endsWith(".xml"))
-                  .toList();
-          if (xs.size() > 1)
-            throw new Problem(
-                "ambiguous_repository_metadata", "Mehr als ein Datenblatt im Themenordner.");
-          if (!xs.isEmpty()) store.attach(r, xs.getFirst(), "accepted_metadata");
-        } catch (java.io.IOException e) {
-          throw new Problem("repository_unavailable", "Themenordner nicht lesbar.");
-        }
+      var discovery = new RepositoryDatasheets(this).discover(r);
+      if (!Json.list(discovery.get("candidates")).isEmpty()) {
+        var candidate = new RepositoryDatasheets(this).choose(r, null);
+        store.attach(r, Path.of(Json.required(candidate, "source_path")), "accepted_metadata");
+      } else r.put("repository_datasheet_diagnostics", discovery.get("diagnostics"));
     }
     return Json.map(
         "baseline", r.get("baseline"), "available", store.file(r, "accepted_metadata") != null);
@@ -554,8 +552,8 @@ public final class Workflow implements AutoCloseable {
             .contains(rel);
     if (r.get("identifier") != null && dest.getParent().equals(settings.topics.resolve(topic(r))))
       allowed |=
-          rel.endsWith(".xtf")
-              || rel.endsWith(".xml")
+          rel.toLowerCase(Locale.ROOT).endsWith(".xtf")
+              || rel.toLowerCase(Locale.ROOT).endsWith(".xml")
               || rel.endsWith(".ili")
               || dest.getFileName().toString().equals("dataset.gradle");
     if (!allowed)
@@ -667,7 +665,8 @@ public final class Workflow implements AutoCloseable {
     }
     for (String rel : Json.obj(r.get("changes")).keySet())
       if (rel.startsWith(topic(r) + "/")
-          && (rel.endsWith(".xtf") || rel.endsWith(".xml"))
+          && (rel.toLowerCase(Locale.ROOT).endsWith(".xtf")
+              || rel.toLowerCase(Locale.ROOT).endsWith(".xml"))
           && !Json.sha(repoFile(r, rel)).equals(Json.sha(sheet(r))))
         errors.add(
             Json.map(

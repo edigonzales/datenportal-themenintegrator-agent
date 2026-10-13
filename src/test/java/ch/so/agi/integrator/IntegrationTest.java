@@ -193,8 +193,11 @@ class IntegrationTest {
         Json.list(Json.obj(Json.obj(derived.get("model")).get("evidence")).get("constraintProofs"))
             .isEmpty());
     assertFalse(Json.bool(derived, "candidate", true), Json.pretty(derived));
-    var report = f.call("validate_model", "run_id", id);
+    var report = f.call("validate_model", "run_id", id, "scope", "model");
     assertTrue(Json.bool(report, "valid", false), Json.pretty(report));
+    f.call("prepare_model_reference", "run_id", id);
+    var integrated = f.call("validate_model", "run_id", id);
+    assertTrue(Json.bool(integrated, "valid", false), Json.pretty(integrated));
     Path task =
         f.workflow.store.edit(
             id, r -> f.workflow.repoFile(r, f.workflow.topic(r) + "/dataset.gradle"));
@@ -443,7 +446,7 @@ class IntegrationTest {
             "range_proposals",
             ModelsTest.proposals());
     assertFalse(Json.bool(derived, "candidate", true), Json.pretty(derived));
-    var report = f.call("validate_model", "run_id", id);
+    var report = f.call("validate_model", "run_id", id, "scope", "model");
     assertFalse(Json.bool(report, "valid", true), Json.pretty(report));
     assertTrue(
         Json.list(report.get("errors")).stream()
@@ -488,6 +491,8 @@ class IntegrationTest {
             "range_proposals",
             ModelsTest.proposals());
     assertFalse(Json.bool(positive, "candidate", true), Json.pretty(positive));
-    assertTrue(Json.bool(f.call("validate_model", "run_id", positiveId), "valid", false));
+    assertTrue(
+        Json.bool(
+            f.call("validate_model", "run_id", positiveId, "scope", "model"), "valid", false));
   }
 }

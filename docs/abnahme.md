@@ -1370,3 +1370,40 @@ Zum Commit-Zeitpunkt noch offen: CI, Veröffentlichung, Download-Prüfung und Up
 des bestehenden Betriebsordners mit Prüfung über das veröffentlichte Paket.
 Diese Betriebsabnahme wird unter `.datenportal-integrator/setup/` im Betriebsordner
 protokolliert. Es wird kein fachlicher Integrations- oder Publikationslauf ausgelöst.
+
+## 2026-10-13: Repository-Datenblatt lesen, Modellreferenz separat vorbereiten
+
+`repository_datasheet` erkennt Datenblattobjekte anhand des INTERLIS-Namespace
+und Themenidentifiers, unabhängig vom Dateinamen. Die gesicherte Repository-Quelle
+bleibt vom publizierten Vergleichsstand getrennt. Mehrdeutige Kandidaten,
+unlesbares XML, externe Symlinks und konkurrierende Änderungen werden sichtbar
+behandelt. Auch `.XML` und `.XTF` bleiben beim späteren Staging unter ihrem Namen.
+
+`derive_model` eröffnet keinen Datenblatt-Entwurf mehr. `validate_model(scope=model)`
+speichert eine Zwischenprüfung ohne Freigabewirkung. Erst
+`prepare_model_reference` bereitet die Modellreferenz über den Fach-MCP vor;
+der Default `validate_model(scope=integration)` prüft weiterhin das gesamte Paket.
+Der technische Init-Smoke und die synthetische Lieferabnahme verwenden diese
+Reihenfolge ebenfalls. `operation_schema(metadata.<operation>)` beschreibt den
+Integrator-Vertrag anhand des öffentlichen Fach-MCP-Katalogs; intern verwaltete
+Entwurfs-IDs und Revisionen werden nicht als Benutzerargumente ausgegeben.
+
+Tatsächlich geprüft: 191 Unit-Tests, `jar`, `spotlessCheck` erfolgreich. 17
+Integrationstests mit veröffentlichten MCP-JARs und ilivalidator erfolgreich,
+einschliesslich getrennter Modellprüfung, Referenzvorbereitung, finaler Prüfung,
+MCP-Neustarts und isoliertem GRETL-Task im vorhandenen Jenkins. Kein fachlicher
+Upload oder Publikationslauf. Die anfänglichen Testkonfigurationsfehler wurden
+behoben (Java-Konfiguration, expliziter Validator und vorhandener Dev-Stack-Pfad).
+
+Separat isoliert geprüft: Kopien des Fahrzeugbestand-Datenblatts und der CSV,
+Datenblatt umbenannt zu `beliebiger_Name.XML`. Inhaltliche Suche und CSV-Prüfung
+waren erfolgreich; kein Datenblatt-Entwurf oder Fach-MCP-Import. Die Ableitung
+lief bis `NEEDS_INPUT` für noch nicht festgelegte Wertebereiche/Textlängen.
+Keine Fachsemantik wurde dafür erfunden; Originale blieben unverändert. Dieser
+Test ist kein Nachweis eines abschliessend fachlich bestätigten MFK-Modells.
+Der lokale Nachweis liegt in `build/datasheet-acceptance/mfk-source-report.json`.
+
+Zum Commit-Zeitpunkt noch offen: CI-Publikation und Abnahme der veröffentlichten
+Version im bestehenden Betriebsordner. Nachweise dafür werden dort unter
+`.datenportal-integrator/setup/` gespeichert. Der bestehende fachliche Vorgang
+wird dabei nur gelesen; seine nächsten Schritte bleiben beim Fachagenten.
