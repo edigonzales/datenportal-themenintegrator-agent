@@ -1438,3 +1438,38 @@ OpenCode-Verbindungstest noch offen.
 Die Ergebnisse der installierten Version werden im Betriebsordner unter
 `.datenportal-integrator/setup/mcp-stability-release-check.json` festgehalten.
 Technische Tests führen keine fachlichen Freigaben, Lieferungen oder Publikation aus.
+
+## Modellierungsargumente und Wiederaufnahme vom 13. Oktober 2026
+
+### Tatsächlich geprüft
+
+- Die OpenCode-Sitzung zum Fahrzeugbestand hatte echte menschliche Bestätigungen
+  für die Zahlenbereiche und Textlängen, aber speicherte `NUMERIC` mit Grenzen
+  und `TEXT.maxLength`. Der Fach-MCP lieferte `INVALID_SPEC`; anschliessend
+  verhinderte der Integrator sogar die gleichwertige technische Korrektur.
+- Der Integrator prüft die verschachtelten Spaltenargumente, normalisiert eindeutig
+  gleichwertige Numerik-/Textdarstellungen und protokolliert Korrekturen alter
+  gespeicherter Mappings. Abweichende bestätigte Werte bleiben gesperrt.
+- Zurückgewiesene Spezifikationen ersetzen keinen Modellkandidaten; Argumentfehler
+  werden getrennt von Compiler-/CSV-Prüfungen diagnostiziert und verbrauchen kein
+  Reparaturbudget. Ein Budget-Reset löscht weiterhin keine Fachregeln.
+- 198 Unit-/Funktionstests und 19 Integrationstests mit den tatsächlichen
+  paketierten MCP-JARs bestanden; `spotlessCheck` ebenfalls.
+- Installation, `init`, `doctor` und Update des erzeugten Pakets bestanden in
+  einem temporären Betriebsordner; lokale Konfiguration blieb bytegleich.
+- Eine isolierte Kopie von Fahrzeugbestand-CSV und Repository-Datenblatt wurde
+  mit den Zahlenbereichen/Textlängen aus dem betroffenen Vorgang modelliert und
+  erfolgreich gegen die CSV geprüft. `FZART_CD` bleibt `MANDATORY TEXT*2`.
+  Es entstand kein Datenblattentwurf; Originaldateien blieben unverändert.
+
+### Synthetische Entscheidungen und Auslieferungsnachweise
+
+Die automatische CSV-Freigabe im Fahrzeugbestand-Test gilt ausschliesslich für
+seinen ausdrücklich markierten temporären Testvorgang. Es erfolgte keine fachliche
+Übernahme oder Publikation. Lokale Nachweise liegen unter
+`build/model-argument-acceptance/` (Ableitung, Validierung, Zusammenfassung und
+Paketprüfung). Veröffentlichungs-, Installations- und Wiederaufnahmenachweise
+werden separat im Betriebsordner unter `.datenportal-integrator/setup/` mit dem
+Präfix `model-arguments-` abgelegt. Der echte Vorgang behält seine tatsächlichen
+menschlichen Freigaben; die separat bestätigte Modellidentität lautet
+`SO_Fahrzeugbestand_20261013`, Version `2026-10-13`.

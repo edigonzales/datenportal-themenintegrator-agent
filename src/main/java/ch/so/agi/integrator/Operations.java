@@ -155,7 +155,7 @@ public final class Operations {
         "allow_breaking:boolean");
     add(
         "reset_model_repair",
-        "Neue Reparaturserie nach ausdrücklichem menschlichem Neuauftrag.",
+        "Nur Reparaturbudget nach ausdrücklichem menschlichem Neuauftrag zurücksetzen. Löscht weder Modell noch bestätigte Regeln; nicht für Argumentfehler verwenden.",
         "run_id!",
         "human_statement!");
     add(
@@ -170,6 +170,11 @@ public final class Operations {
     if (name.equals("metadata"))
       Json.obj(Json.obj(op.schema().get("properties")).get("operation"))
           .put("enum", MetadataContracts.NAMES);
+    if (name.equals("derive_model")) {
+      var properties = Json.obj(op.schema().get("properties"));
+      properties.put("confirmations", ModelArguments.schema(false));
+      properties.put("range_proposals", ModelArguments.schema(true));
+    }
     ALL.put(name, op);
   }
 

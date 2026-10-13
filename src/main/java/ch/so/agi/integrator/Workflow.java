@@ -116,6 +116,11 @@ public final class Workflow implements AutoCloseable {
               default -> throw new Problem("unknown_operation", "Operation ist nicht bekannt.");
             };
           } catch (Problem error) {
+            if (operation.equals("derive_model") && error.code.equals("model_arguments_invalid"))
+              error.details.put(
+                  "diagnostics",
+                  Diagnostics.record(
+                      this, r, "model_arguments", "INVALID_SPEC", error.result(), false));
             if (r.containsKey("diagnostic_history"))
               error.details.put("diagnostic_history", r.get("diagnostic_history"));
             if (r.containsKey("model_repair")) error.details.put("repair", r.get("model_repair"));

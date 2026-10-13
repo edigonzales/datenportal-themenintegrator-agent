@@ -573,4 +573,120 @@ class ModelsTest {
                 "derive_model", "run_id", id, "identity", identity(), "range_proposals", changed));
     assertEquals(1, requests.size());
   }
+
+  @Test
+  void invalidArgumentsAndRejectedMcpSpecDoNotPoisonConfirmedState() {
+    var bad = Json.map("Jahr", Json.map("confirmed", true, "min", 1900, "max", 2100));
+    f.error(
+        "model_arguments_invalid",
+        () -> f.call("derive_model", "run_id", id, "identity", identity(), "confirmations", bad));
+    assertTrue(requests.isEmpty());
+    assertFalse(f.workflow.store.<Boolean>edit(id, r -> r.containsKey("model")));
+    var success = reply;
+    reply =
+        Json.map(
+            "status",
+            "INVALID_SPEC",
+            "reasonCode",
+            "INVALID_SPEC",
+            "reason",
+            "Invalid technical specification");
+    f.call("derive_model", "run_id", id, "identity", identity(), "range_proposals", proposals());
+    assertFalse(f.workflow.store.<Boolean>edit(id, r -> r.containsKey("model")));
+    reply = success;
+    f.call("derive_model", "run_id", id, "identity", identity(), "range_proposals", proposals());
+    String oldModel = f.workflow.store.edit(id, r -> Json.digest(r.get("model")));
+    reply = Json.map("status", "INVALID_SPEC", "reasonCode", "INVALID_SPEC");
+    f.call(
+        "derive_model",
+        "run_id",
+        id,
+        "identity",
+        identity(),
+        "range_proposals",
+        proposals(),
+        "changes",
+        List.of(Json.map("operation", "UPDATE_ATTRIBUTE")));
+    assertEquals(oldModel, f.workflow.store.edit(id, r -> Json.digest(r.get("model"))));
+  }
+
+  @Test
+  void persistedInvalidNumericConfirmationCanBeCorrectedButNotChanged() {
+    var legacy =
+        Json.map("baseType", Json.map("kind", "NUMERIC", "min", 1900, "max", 2100, "precision", 0));
+    f.workflow.store.edit(
+        id,
+        r -> {
+          r.put(
+              "model",
+              Json.map(
+                  "authoring_valid",
+                  false,
+                  "mapping",
+                  List.of(
+                      Json.map(
+                          "column",
+                          "Jahr",
+                          "type_spec",
+                          legacy,
+                          "confirmed",
+                          Json.map("confirmed", true, "type_spec", legacy)))));
+          return null;
+        });
+    var confirmation =
+        Json.map(
+            "Jahr",
+            Json.map(
+                "confirmed",
+                true,
+                "type_spec",
+                Json.obj(proposals().get("Jahr")).get("type_spec")));
+    f.call("derive_model", "run_id", id, "identity", identity(), "confirmations", confirmation);
+    assertEquals(1, requests.size());
+    assertTrue(
+        f.workflow.store.<Boolean>edit(
+            id, r -> !Json.list(r.get("model_argument_corrections")).isEmpty()));
+    var current = f.call("status", "run_id", id);
+    assertEquals(true, Json.obj(current.get("current_approvals")).get("data"));
+    Json.obj(Json.obj(Json.obj(confirmation.get("Jahr")).get("type_spec")).get("baseType"))
+        .put("max", 2200);
+    f.error(
+        "confirmed_semantics_conflict",
+        () ->
+            f.call(
+                "derive_model",
+                "run_id",
+                id,
+                "identity",
+                identity(),
+                "confirmations",
+                confirmation));
+    assertEquals(1, requests.size());
+  }
+
+  @Test
+  void rejectedSpecDoesNotConsumeRepairBudget() {
+    f.workflow.store.edit(
+        id,
+        r -> {
+          ModelRepairs.failed(r, "previous-check");
+          return null;
+        });
+    String before = f.workflow.store.edit(id, r -> Json.digest(r.get("model_repair")));
+    reply = Json.map("status", "INVALID_SPEC", "reason", "Malformed spec");
+    f.call(
+        "derive_model",
+        "run_id",
+        id,
+        "identity",
+        identity(),
+        "range_proposals",
+        proposals(),
+        "repair_of",
+        "previous-check",
+        "repair_reason",
+        "Technical correction");
+    assertEquals(before, f.workflow.store.edit(id, r -> Json.digest(r.get("model_repair"))));
+    assertFalse(f.workflow.store.<Boolean>edit(id, r -> r.containsKey("pending_model")));
+  }
 }

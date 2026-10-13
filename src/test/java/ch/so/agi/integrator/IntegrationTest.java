@@ -479,6 +479,21 @@ class IntegrationTest {
             "id");
     f.approve(positiveId, "data", f.call("analyze", "run_id", positiveId));
     identity.put("name", "SO_Types_Positive_20261006");
+    f.error(
+        "model_arguments_invalid",
+        () ->
+            f.call(
+                "derive_model",
+                "run_id",
+                positiveId,
+                "identity",
+                identity,
+                "confirmations",
+                confirmations,
+                "range_proposals",
+                ModelsTest.proposals()));
+    confirmations.remove(
+        "Zeitpunkt"); // Removed CSV column must not retain a silently ignored rule.
     var positive =
         f.call(
             "derive_model",

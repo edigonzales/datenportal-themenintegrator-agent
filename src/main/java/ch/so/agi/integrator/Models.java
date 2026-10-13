@@ -34,14 +34,43 @@ public final class Models {
   public Object derive(Map<String, Object> r, Map<String, Object> args) {
     if (Json.str(r, "workflow", "topic").equals("organization"))
       throw new Problem("wrong_workflow", "Organisationsvorgang modelliert keine CSV.");
+    Map<String, Object> confirmations, proposals;
+    {
+      confirmations = ModelArguments.confirmations(args.get("confirmations"));
+      proposals = ModelArguments.proposals(args.get("range_proposals"));
+      ModelArguments.keys(
+          Json.obj(args.get("identity")),
+          "identity",
+          "name",
+          "uri",
+          "version",
+          "rule_profile",
+          "model_purpose",
+          "ili_version",
+          "topic",
+          "class",
+          "language",
+          "title",
+          "short_description",
+          "technical_contact",
+          "further_information",
+          "class_description",
+          "domains",
+          "units",
+          "imports",
+          "constraints",
+          "semantics_confirmed");
+      if (!Json.bool(Json.obj(r.get("model")), "authoring_valid", false))
+        ModelArguments.normalizeStored(r);
+    }
     ModelRepairs.requireReference(r, args);
+
     Path csv = w.requiredFile(r, "data");
     w.require(r, "data");
     w.exportRequired(r);
     var sheet = w.describe(r);
     var identity = new LinkedHashMap<>(Json.obj(args.get("identity")));
-    var confirmations = Json.obj(args.get("confirmations"));
-    var proposals = Json.obj(args.get("range_proposals"));
+
     String profile =
         Json.str(
             identity, "rule_profile", Json.str(Json.obj(r.get("model")), "profile", "SO-DATA"));
@@ -77,7 +106,8 @@ public final class Models {
 
     } catch (Exception e) {
       throw new Problem(
-          "model_identity", "Absolute Modell-URI und ISO-Versionsdatum erforderlich.");
+          "model_identity",
+          "Absolute Modell-URI und ISO-Versionsdatum erforderlich; bei SO-DATA muss der Datumssuffix des Namens dem Versionsdatum entsprechen. Widersprüche menschlich klären, kein Datum still ändern.");
     }
     if (!Json.str(identity, "ili_version", "2.4").equals("2.4"))
       throw new Problem("unsupported_model_version", "Erste Umsetzung unterstützt INTERLIS 2.4.");
@@ -113,6 +143,9 @@ public final class Models {
     for (String column : proposals.keySet())
       if (!columnNames.contains(column))
         throw new Problem("range_proposal_invalid", "Unbekannte CSV-Spalte.", "column", column);
+    for (String column : confirmations.keySet())
+      if (!columnNames.contains(column))
+        throw ModelArguments.invalid("confirmations." + column, "Unbekannte CSV-Spalte.");
     var typed = new ArrayList<Object>();
 
     var mappings = new ArrayList<Object>();
@@ -123,9 +156,12 @@ public final class Models {
       var confirmation = Json.obj(confirmations.get(column));
       for (Object prior : Json.list(Json.obj(r.get("model")).get("mapping"))) {
         var previous = Json.obj(prior);
-        var saved = Json.obj(previous.get("confirmed"));
+        var saved =
+            ModelArguments.confirmation(Json.obj(previous.get("confirmed")), "stored." + column);
         if (column.equals(previous.get("column")) && Json.bool(saved, "confirmed", false)) {
-          if (!confirmation.isEmpty() && !Json.digest(saved).equals(Json.digest(confirmation)))
+          if (!confirmation.isEmpty()
+              && !Json.digest(ModelArguments.semantics(saved))
+                  .equals(Json.digest(ModelArguments.semantics(confirmation))))
             throw new Problem(
                 "confirmed_semantics_conflict",
                 "Bestätigte Typsemantik darf nicht still ersetzt werden.",
@@ -203,7 +239,7 @@ public final class Models {
               "iliDoc",
               doc,
               "typeSpec",
-              typeSpec));
+              ModelArguments.mcpSpec(typeSpec)));
       mappings.add(
           Json.map(
               "column",
@@ -312,6 +348,7 @@ public final class Models {
       operation = "authorIliModel";
       callArgs.put("spec", spec);
     }
+    var priorRepair = Json.read(Json.text(Json.obj(r.get("model_repair"))));
     ModelRepairs.reserve(w, r, args);
     r.put(
         "pending_model", Json.map("operation", operation, "arguments", callArgs, "at", Json.now()));
@@ -319,9 +356,38 @@ public final class Models {
     try {
       result = w.interlis.call(operation, callArgs);
     } catch (Problem error) {
+      if (Json.str(Json.obj(error.details.get("response")), "message", "")
+          .contains("input validation failed")) {
+        r.remove("pending_model");
+        if (priorRepair.isEmpty()) r.remove("model_repair");
+        else r.put("model_repair", priorRepair);
+        throw new Problem(
+            "model_arguments_invalid",
+            "Fach-MCP hat die Argumentdarstellung abgewiesen; keine Modellprüfung ausgeführt. Argumente korrigieren, kein Reset.",
+            "response",
+            error.details.get("response"));
+      }
       var check = Diagnostics.record(w, r, "ili2c", "ERROR", error.result(), false);
       error.details.put("diagnostics", check);
       throw error;
+    }
+    if ("INVALID_SPEC".equals(result.get("status"))
+        || "INVALID_SPEC".equals(result.get("reasonCode"))) {
+      r.remove("pending_model");
+      if (priorRepair.isEmpty()) r.remove("model_repair");
+      else r.put("model_repair", priorRepair);
+      Diagnostics.record(w, r, "model_arguments", "INVALID_SPEC", result, false);
+      return Json.map(
+          "status",
+          "INVALID_SPEC",
+          "candidate",
+          false,
+          "evidence",
+          result,
+          "diagnostic_history",
+          r.get("diagnostic_history"),
+          "next",
+          "Argumente gemäss operation_schema(derive_model) korrigieren; bestätigte Fachwerte erhalten. Kein reset_model_repair.");
     }
     Diagnostics.record(
         w, r, "ili2c", compilerStatus(Json.obj(result.get("afterReview")), result), result, true);
