@@ -27,6 +27,10 @@ public final class Converters {
           "converter_scope", "Konverter und Tests müssen zum aktuellen Thema gehören.");
     if (!recipe.toString().endsWith(".json"))
       throw new Problem("converter_invalid", "Ein JSON-Rezept mit Java-Quellen ist erforderlich.");
+    if (OperatorWorkspace.installed(w.settings.root)) {
+      var files = new WorkspaceFiles(w.settings);
+      if (!files.converterPath(files.canonical(recipe.toString()))) throw WorkspaceFiles.denied();
+    }
     var spec = Json.read(recipe);
     String className = Json.required(spec, "class_name");
     if (!className.matches("[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)*"))
@@ -35,12 +39,27 @@ public final class Converters {
     for (String source : Json.strings(spec.get("sources"))) sources.add(Json.inside(topic, source));
     if (sources.isEmpty())
       throw new Problem("converter_invalid", "Java-Quellen im Konverterrezept fehlen.");
+    if (OperatorWorkspace.installed(w.settings.root)) {
+      var files = new WorkspaceFiles(w.settings);
+      if (!files.converterPath(files.canonical(recipe.toString()))
+          || !files
+              .canonical(tests.toString())
+              .startsWith(files.packagePath("topics").resolve(w.topic(r))))
+        throw WorkspaceFiles.denied();
+      for (Path source : sources)
+        if (!files.converterPath(files.canonical(source.toString()))) throw WorkspaceFiles.denied();
+    }
     if (!Files.isDirectory(tests))
       throw new Problem("converter_tests_missing", "JUnit-Testverzeichnis fehlt.");
     try (var paths = Files.walk(tests)) {
       paths.filter(p -> p.toString().endsWith(".java")).forEach(sources::add);
     } catch (java.io.IOException e) {
       throw new Problem("converter_tests_missing", "JUnit-Tests nicht lesbar.");
+    }
+    if (OperatorWorkspace.installed(w.settings.root)) {
+      var files = new WorkspaceFiles(w.settings);
+      for (Path source : sources)
+        if (!files.converterPath(files.canonical(source.toString()))) throw WorkspaceFiles.denied();
     }
     Path
         build =
@@ -90,7 +109,8 @@ public final class Converters {
         classpath = classes + System.getProperty("path.separator") + cp;
     Path log = build.resolve("tests.log");
     var result =
-        w.process.run(
+        runJava(
+            build,
             List.of(
                 java,
                 "-cp",
@@ -100,8 +120,6 @@ public final class Converters {
                 "--scan-classpath=" + classes,
                 "--fail-if-no-tests",
                 "--disable-banner"),
-            w.settings.root,
-            w.settings.timeout,
             log);
     if (result.exitCode() != 0)
       throw new Problem(
@@ -121,7 +139,8 @@ public final class Converters {
     }
     Path converted = build.resolve("converted.csv");
     result =
-        w.process.run(
+        runJava(
+            build,
             List.of(
                 java,
                 "-cp",
@@ -130,8 +149,6 @@ public final class Converters {
                 className,
                 workingInput.toString(),
                 converted.toString()),
-            w.settings.root,
-            w.settings.timeout,
             build.resolve("converter.log"));
     if (!Json.sha(input).equals(before) || !Json.sha(workingInput).equals(before))
       throw new Problem(
@@ -208,5 +225,58 @@ public final class Converters {
                 technical,
                 "transform",
                 transform)));
+  }
+
+  ProcessRunner.Result runJava(Path directory, List<String> command, Path log) {
+    if (!OperatorWorkspace.installed(w.settings.root))
+      return w.process.run(command, w.settings.root, w.settings.timeout, log);
+    return w.process.run(
+        isolatedCommand(directory, command), w.settings.root, w.settings.timeout, log);
+  }
+
+  static List<String> isolatedCommand(Path directory, List<String> javaCommand) {
+    String image = System.getenv("DATENPORTAL_RUNTIME_IMAGE");
+    if (!AgentResources.installed() || image == null || !image.matches("sha256:[a-f0-9]{64}"))
+      throw new Problem(
+          "operator_converter_runtime",
+          "Fachliche Konverter benötigen das installierte Docker-Image; keine Host-Ausführung als Umgehung.");
+    try {
+      var command =
+          new ArrayList<>(
+              List.of(
+                  "docker",
+                  "run",
+                  "--rm",
+                  "--network",
+                  "none",
+                  "--read-only",
+                  "--cap-drop",
+                  "ALL",
+                  "--security-opt",
+                  "no-new-privileges",
+                  "--pids-limit",
+                  "128",
+                  "--memory",
+                  "512m",
+                  "--tmpfs",
+                  "/tmp:rw,nosuid,nodev",
+                  "--user",
+                  Files.getAttribute(directory, "unix:uid")
+                      + ":"
+                      + Files.getAttribute(directory, "unix:gid"),
+                  "--mount",
+                  "type=bind,source=" + directory + ",target=" + directory,
+                  "-w",
+                  directory.toString(),
+                  "--entrypoint",
+                  javaCommand.getFirst(),
+                  image));
+      command.addAll(javaCommand.subList(1, javaCommand.size()));
+      return command;
+    } catch (java.io.IOException e) {
+      throw new Problem(
+          "operator_converter_runtime",
+          "Isolierte Konverter-Arbeitsdateien sind nicht zugänglich.");
+    }
   }
 }

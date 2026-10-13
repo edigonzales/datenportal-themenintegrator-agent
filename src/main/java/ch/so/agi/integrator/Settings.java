@@ -39,6 +39,7 @@ public final class Settings {
             "datasheet",
             "validator_command",
             "model_dirs",
+            "input_roots",
             "compose_files",
             "stack_start_args",
             "environments",
@@ -54,7 +55,11 @@ public final class Settings {
       Class<?> type =
           switch (key) {
             case "datasheet", "interlis", "gretl", "runtime", "environments" -> Map.class;
-            case "validator_command", "model_dirs", "compose_files", "stack_start_args" ->
+            case "validator_command",
+                "model_dirs",
+                "input_roots",
+                "compose_files",
+                "stack_start_args" ->
                 List.class;
             case "timeout_seconds", "stack_timeout_seconds" -> Long.class;
             default -> String.class;

@@ -1,5 +1,11 @@
 # datenportal-themenintegrator-agent
 
+This checkout is the development repository. Normal business use belongs in the
+source-free operator workspace installed with `workspace install`. Business
+agents use public MCP schemas and the three skills, never implementation-source
+inspection. The implementation/build instructions below apply to explicit
+development requests. Operator instructions are packaged from `templates/operator`.
+
 Use this repository's Java CLI/MCP and select the skill by the requested task:
 
 - Topic integration, CSV checks, data/metadata deliveries or their resumption:

@@ -19,6 +19,62 @@ final class Harness {
 
   List<String> codexArguments() {
     var args = new ArrayList<>(List.of("-C", s.root.toString()));
+    if (OperatorWorkspace.installed(s.root)) {
+      OperatorPolicy.check(s);
+      args.add("--strict-config");
+      args.addAll(
+          List.of(
+              "-c",
+              "features.shell_tool=false",
+              "-c",
+              "features.unified_exec=false",
+              "-c",
+              "features.js_repl=false",
+              "-c",
+              "features.apps=false",
+              "-c",
+              "features.remote_plugin=false",
+              "-c",
+              "default_permissions=\"datenportal\"",
+              "-c",
+              "permissions.datenportal.filesystem.\":root\"=\"deny\"",
+              "-c",
+              "permissions.datenportal.filesystem.\":minimal\"=\"read\"",
+              "-c",
+              "permissions.datenportal.filesystem.\":workspace_roots\"=\"deny\"",
+              "-c",
+              "permissions.datenportal.network.enabled=false",
+              "-c",
+              "agents.enabled=false"));
+      OperatorPolicy.filesystem(s)
+          .forEach(
+              (key, value) ->
+                  args.addAll(
+                      List.of(
+                          "-c",
+                          "permissions.datenportal.filesystem."
+                              + Json.text(key)
+                              + "="
+                              + Json.text(value))));
+      args.addAll(
+          List.of(
+              "-c",
+              "mcp_servers.datenportal_workspace.command=" + Json.text(launcher()),
+              "-c",
+              "mcp_servers.datenportal_workspace.args=" + Json.text(workspaceArguments()),
+              "-c",
+              "mcp_servers.datenportal_workspace.startup_timeout_sec=180",
+              "-c",
+              "mcp_servers.datenportal_workspace.tool_timeout_sec=1800",
+              "-c",
+              "mcp_servers.datenportal_workspace.required=true",
+              "-c",
+              "mcp_servers.datenportal_workspace.env.DATENPORTAL_FORWARD_ENV=\"\""));
+      for (String name :
+          OperatorPolicy.foreignServers(
+              s.root, Json.contents(s.root.resolve(".codex/config.toml"))))
+        args.addAll(List.of("-c", "mcp_servers." + Json.text(name) + ".enabled=false"));
+    }
     entry()
         .forEach(
             (key, value) -> {
@@ -41,6 +97,18 @@ final class Harness {
                         "mcp_servers.datenportal_integrator." + key + "=" + Json.text(value)));
             });
     return args;
+  }
+
+  List<String> workspaceArguments() {
+    var result = new ArrayList<>(arguments());
+    result.set(result.size() - 1, "serve-workspace");
+    return result;
+  }
+
+  List<String> projectWorkspaceArguments() {
+    var result = new ArrayList<>(projectArguments());
+    result.set(result.size() - 1, "serve-workspace");
+    return result;
   }
 
   List<String> arguments() {
@@ -75,43 +143,122 @@ final class Harness {
   }
 
   Map<String, Object> entry() {
-    return Json.map(
-        "command",
-        launcher(),
-        "args",
-        arguments(),
-        "startup_timeout_sec",
-        180,
-        "tool_timeout_sec",
-        1800,
-        "env_vars",
-        credentials(),
-        "env",
-        Json.map("DATENPORTAL_FORWARD_ENV", String.join(" ", credentials())));
+    var result =
+        Json.map(
+            "command",
+            launcher(),
+            "args",
+            arguments(),
+            "startup_timeout_sec",
+            180,
+            "tool_timeout_sec",
+            1800,
+            "env_vars",
+            credentials(),
+            "env",
+            Json.map("DATENPORTAL_FORWARD_ENV", String.join(" ", credentials())));
+    if (OperatorWorkspace.installed(s.root)) result.put("required", true);
+    return result;
   }
 
   Map<String, Object> proposal() {
-    return Json.map(
-        "codex",
-        Json.map("mcp_servers", Json.map("datenportal_integrator", entry())),
-        "opencode",
+    var result =
         Json.map(
-            "mcp",
+            "codex",
+            Json.map("mcp_servers", Json.map("datenportal_integrator", entry())),
+            "opencode",
             Json.map(
-                "servers",
+                "mcp",
                 Json.map(
-                    "datenportal_integrator",
+                    "servers",
                     Json.map(
-                        "type",
-                        "local",
-                        "command",
-                        Setup.concat(List.of(launcher()), arguments()),
-                        "disabled",
-                        false,
-                        "timeout",
-                        openCodeTimeouts(),
-                        "environment",
-                        Json.map("DATENPORTAL_FORWARD_ENV", String.join(" ", credentials())))))));
+                        "datenportal_integrator",
+                        Json.map(
+                            "type",
+                            "local",
+                            "command",
+                            Setup.concat(List.of(launcher()), arguments()),
+                            "disabled",
+                            false,
+                            "timeout",
+                            openCodeTimeouts(),
+                            "environment",
+                            Json.map(
+                                "DATENPORTAL_FORWARD_ENV", String.join(" ", credentials())))))));
+    if (OperatorWorkspace.installed(s.root)) {
+      var codex = Json.obj(result.get("codex"));
+      codex.put("default_permissions", "datenportal");
+      codex.put(
+          "features",
+          Json.map(
+              "shell_tool",
+              false,
+              "unified_exec",
+              false,
+              "js_repl",
+              false,
+              "apps",
+              false,
+              "remote_plugin",
+              false));
+      codex.put("agents", Json.map("enabled", false));
+      codex.put(
+          "permissions",
+          Json.map(
+              "datenportal",
+              Json.map(
+                  "filesystem",
+                  OperatorPolicy.filesystem(s),
+                  "network",
+                  Json.map("enabled", false))));
+      Json.obj(Json.obj(result.get("codex")).get("mcp_servers"))
+          .put(
+              "datenportal_workspace",
+              Json.map(
+                  "command",
+                  launcher(),
+                  "args",
+                  workspaceArguments(),
+                  "startup_timeout_sec",
+                  180,
+                  "tool_timeout_sec",
+                  1800,
+                  "required",
+                  true,
+                  "env",
+                  Json.map("DATENPORTAL_FORWARD_ENV", "")));
+      for (String name :
+          OperatorPolicy.foreignServers(
+              s.root,
+              Files.isRegularFile(s.root.resolve(".codex/config.toml"))
+                  ? Json.contents(s.root.resolve(".codex/config.toml"))
+                  : ""))
+        Json.obj(codex.get("mcp_servers"))
+            .put(
+                name, Json.map("enabled", false, "command", launcher(), "args", List.of("--help")));
+      var open = Json.obj(result.get("opencode"));
+      Json.obj(Json.obj(open.get("mcp")).get("servers"))
+          .values()
+          .forEach(v -> Json.obj(v).put("codemode", false));
+      Json.obj(Json.obj(open.get("mcp")).get("servers"))
+          .put(
+              "datenportal_workspace",
+              Json.map(
+                  "type",
+                  "local",
+                  "command",
+                  Setup.concat(List.of(launcher()), workspaceArguments()),
+                  "codemode",
+                  false,
+                  "disabled",
+                  false,
+                  "timeout",
+                  openCodeTimeouts(),
+                  "environment",
+                  Json.map("DATENPORTAL_FORWARD_ENV", "")));
+      OperatorPolicy.openCode(open);
+    }
+    return result;
   }
 
   static Map<String, Object> openCodeTimeouts() {
@@ -200,9 +347,27 @@ final class Harness {
     mergeForward(env, credentials());
     merged.put("environment", env);
     servers.put("datenportal_integrator", merged);
+    if (OperatorWorkspace.installed(s.root)) {
+      merged.put("codemode", false);
+      var helper =
+          servers.containsKey("datenportal_workspace")
+              ? validateOpenCode(
+                  objectField(
+                      servers, "datenportal_workspace", "mcp.servers.datenportal_workspace"),
+                  "mcp.servers.datenportal_workspace")
+              : Json.map();
+      helper.put("type", "local");
+      helper.put(
+          "command", Setup.concat(List.of("bin/datenportal-agent"), projectWorkspaceArguments()));
+      helper.put("codemode", false);
+      helper.putIfAbsent("disabled", false);
+      helper.putIfAbsent("timeout", openCodeTimeouts());
+      helper.put("environment", Json.map("DATENPORTAL_FORWARD_ENV", ""));
+      servers.put("datenportal_workspace", helper);
+    }
     mcp.put("servers", servers);
     json.put("mcp", mcp);
-    return json;
+    return OperatorWorkspace.installed(s.root) ? OperatorPolicy.openCode(json) : json;
   }
 
   static boolean known(String command, String launcher) {
@@ -290,7 +455,13 @@ final class Harness {
     values.remove("env");
     for (var value : values.entrySet()) {
       // Only single-line existing values are replaced. Multiline TOML is preserved by stopping.
-      Pattern field = Pattern.compile("(?m)^" + value.getKey() + "\\s*=.*$");
+      Pattern field =
+          Pattern.compile(
+              "(?m)^(?:"
+                  + Pattern.quote(value.getKey())
+                  + "|"
+                  + Pattern.quote(Json.text(value.getKey()))
+                  + ")\\s*=.*$");
       var match = field.matcher(block);
       String line = value.getKey() + " = " + Json.text(value.getValue());
       if (match.find()) {
@@ -330,7 +501,7 @@ final class Harness {
     }
     if (Toml.parse(result).hasErrors())
       throw new Problem("harness_conflict", "Generierte Konfiguration ist nicht gültig.");
-    return result;
+    return OperatorWorkspace.installed(s.root) ? OperatorPolicy.codex(result, this) : result;
   }
 
   void backup(Path path) {

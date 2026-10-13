@@ -5,6 +5,10 @@ import java.nio.file.*;
 /** Real installed-image network probe with synthetic paths; no external services or approvals. */
 public final class ImageRuntimeAcceptance {
   public static void main(String[] args) throws Exception {
+    // Do not supply JAVA_TOOL_OPTIONS in the test launcher: the installed image
+    // itself must support IPv4 host loopback on Docker Desktop.
+    if (!Boolean.getBoolean("java.net.preferIPv4Stack"))
+      throw new AssertionError("Installed runtime must enable IPv4 host networking");
     Path root = Path.of(args[0]);
     Files.createDirectories(root.resolve("config"));
     Files.createDirectories(root.resolve("topics/shared/gradle"));

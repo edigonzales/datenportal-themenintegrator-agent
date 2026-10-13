@@ -3,7 +3,7 @@ name: datenportal-organisation
 description: Lege eine eigenständig beauftragte Datenportal-Organisation mit Jobdateien, Teams, bestätigten Benutzerzuordnungen und Office-Zuordnung an. Bereite geprüfte Kandidaten und die Organisationsfreigabe vor; einzelne fehlende Dienststellen in einem Themenvorgang bleiben beim Themenintegrator.
 ---
 
-Verwende den `datenportal_integrator`-MCP dieses Repositorys. CLI-Fallback: `bin/datenportal-agent call <operation> --args-file <datei.json>`; verbindliche Argumente mit `schema <operation>` lesen. Bei Einrichtung, Runtime- oder Zugangsproblemen [Betrieb und Zugänge](../../docs/agent/betrieb-und-zugaenge.md) lesen.
+Verwende den `datenportal_integrator`-MCP. Verbindliche Argumente mit `operation_schema` lesen; Implementierungsquellen nicht lesen oder durchsuchen. Referenzen und Fachdateien mit `datenportal_workspace.read_file` lesen, Anhänge mit `import_attachment` verifiziert übernehmen. Der CLI-Fallback `schema`/`call` bleibt im Betriebspaket eine Betreiberhandlung. Bei Einrichtung, Runtime- oder Zugangsproblemen [Betrieb und Zugänge](../../docs/agent/betrieb-und-zugaenge.md) lesen.
 
 ## Grenzen
 

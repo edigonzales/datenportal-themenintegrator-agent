@@ -40,6 +40,19 @@ public final class Workflow implements AutoCloseable {
 
   public Object call(String operation, Map<String, Object> args) {
     Operations.validate(operation, args);
+    if (operation.equals("operation_schema"))
+      return Operations.schema(Json.required(args, "operation"));
+    if (OperatorWorkspace.installed(settings.root)) {
+      var files = new WorkspaceFiles(settings);
+      if (operation.equals("start")) {
+        if (args.containsKey("data_path")) files.handoff(Json.required(args, "data_path"), "data");
+        if (args.containsKey("metadata_path"))
+          files.handoff(Json.required(args, "metadata_path"), "metadata");
+      } else if (operation.equals("attach"))
+        files.handoff(Json.required(args, "path"), Json.required(args, "role"));
+      else if (operation.equals("stage_change"))
+        files.handoff(Json.required(args, "source_path"), "change");
+    }
     if (operation.equals("start")) return start(args);
     if (operation.equals("metadata") && Json.str(args, "operation", "").equals("describe_schema"))
       return datasheets.call("describe_schema", Json.obj(args.get("arguments")));

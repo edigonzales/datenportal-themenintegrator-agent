@@ -9,6 +9,7 @@ dependencies {
     implementation 'org.tomlj:tomlj:1.1.1'
     implementation 'org.apache.commons:commons-csv:1.14.1'
     implementation 'org.apache.poi:poi-ooxml:5.4.1'
+    implementation 'org.apache.commons:commons-compress:1.27.1'
     implementation 'org.yaml:snakeyaml:2.4'
     implementation 'ch.interlis:ili2c-tool:5.6.8'
     implementation 'ch.interlis:ili2c-core:5.6.8'
@@ -31,6 +32,51 @@ test {
     useJUnitPlatform { excludeTags 'integration' }
     inputs.files(fileTree('bin'), fileTree('runtime') { include '*.sh' }, 'README.md', 'AGENTS.md', fileTree('.agents/skills'), fileTree('docs'), fileTree('templates'), fileTree('config') { exclude 'local.toml' }, fileTree('skills'))
 }
+tasks.register('operatorWorkspaceFiles', Sync) {
+    into layout.buildDirectory.dir('operator-workspace')
+    doFirst {
+        def links = destinationDir.toPath().resolve('.agents')
+        if (java.nio.file.Files.exists(links)) {
+            try (def paths = java.nio.file.Files.walk(links)) {
+                paths.sorted(java.util.Comparator.reverseOrder()).forEach { java.nio.file.Files.delete(it) }
+            }
+        }
+    }
+    from('skills') { into 'skills' }
+    from('docs/agent') { into 'docs/agent' }
+    from('templates/operator') {
+        exclude 'anwenderhandbuch.md'
+    }
+    from('templates/operator/anwenderhandbuch.md') { into 'docs' }
+    from('bin/datenportal-agent') { into 'bin'; filePermissions { unix('rwxr-xr-x') } }
+    from('config') { include 'local.example.toml', 'settings.schema.json'; into 'config' }
+    doLast {
+        def root = destinationDir.toPath()
+        def links = root.resolve('.agents/skills')
+        java.nio.file.Files.createDirectories(links)
+        file('skills').listFiles().findAll { it.isDirectory() }.each {
+            def link = links.resolve(it.name)
+            java.nio.file.Files.deleteIfExists(link)
+            java.nio.file.Files.createSymbolicLink(link, java.nio.file.Path.of('../../skills/' + it.name))
+        }
+        java.nio.file.Files.writeString(root.resolve('workspace-package.json'), groovy.json.JsonOutput.toJson([version: project.version.toString()]))
+        java.nio.file.Files.writeString(root.resolve('workspace-version'), project.version.toString() + '\n')
+    }
+}
+tasks.register('operatorWorkspace', JavaExec) {
+    dependsOn 'operatorWorkspaceFiles', 'classes'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'ch.so.agi.integrator.WorkspaceArchive'
+    args 'manifest', layout.buildDirectory.dir('operator-workspace').get().asFile.absolutePath
+}
+tasks.register('operatorWorkspaceArchive', JavaExec) {
+    dependsOn 'operatorWorkspace'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'ch.so.agi.integrator.WorkspaceArchive'
+    args 'archive', layout.buildDirectory.dir('operator-workspace').get().asFile.absolutePath,
+        layout.buildDirectory.file("distributions/datenportal-workspace-${project.version}.tar.gz").get().asFile.absolutePath
+}
+tasks.named('test') { dependsOn 'operatorWorkspace' }
 // Only real integration tests need host-visible paths for sibling Docker bind mounts.
 tasks.named('integrationTest', Test) {
     if (providers.gradleProperty('integrationConfig').isPresent()) {

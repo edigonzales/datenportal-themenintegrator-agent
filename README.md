@@ -54,7 +54,19 @@ erklärt die Ausgaben und trennt eigene Vorbereitung von automatischen Schritten
 
 ## Ersten Auftrag starten
 
-Den Integrator-Ordner als Projekt in Codex oder OpenCode öffnen und die von
+Für fachliche Aufträge das **quellcodefreie Betriebspaket** verwenden. Es enthält
+dieselben drei Skills für Codex Desktop/CLI und OpenCode Desktop/CLI, eigene
+Betriebsanweisungen und zwei MCP-Einträge: `datenportal_integrator` und den
+begrenzten Dateihelfer `datenportal_workspace`. Allgemeine Shell und
+Implementierungsquellen stehen dort nicht zur Verfügung.
+
+Das Paket wird mit jeder neuen Image-Version als CI-Artefakt samt SHA-256
+bereitgestellt und liegt im Image unter `/opt/datenportal-agent/workspace`.
+Betreiber installieren mit `workspace install <absoluter Zielordner>` aus dem
+Image oder entpacken das zugehörige Archiv. Danach im Betriebsordner `init` und
+`doctor` ausführen. [Installation und Updates](docs/anwenderhandbuch.md#quellcodefreies-betriebspaket).
+
+Den Betriebsordner als Projekt in Codex oder OpenCode öffnen und die von
 `init` eingerichtete MCP-Verbindung prüfen. In Codex muss das Projekt als
 vertrauenswürdig gelten. Für Codex CLI: `./bin/datenportal-agent codex`.
 

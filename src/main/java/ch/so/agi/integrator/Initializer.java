@@ -30,6 +30,12 @@ final class Initializer {
   Map<String, Object> run(List<String> args) {
     if (args.stream().anyMatch(a -> !Set.of("--update-tools", "--skip-smoke").contains(a)))
       throw new Problem("invalid_arguments", "init [--update-tools] [--skip-smoke]");
+    if (OperatorWorkspace.installed(s.root)) {
+      var harness = new Harness(s);
+      Path codex = s.root.resolve(".codex/config.toml"), open = s.root.resolve("opencode.json");
+      harness.updateToml(Files.exists(codex) ? Json.contents(codex) : "");
+      harness.updateOpenCode(Files.exists(open) ? Json.read(open) : Json.map());
+    }
     try (var guard = RuntimeGuard.acquire(report.resolveSibling("init.lock"), s.stackTimeout)) {
       var state = Files.isRegularFile(report) ? Json.read(report) : Json.map("steps", Json.map());
       state.put("ready", false);

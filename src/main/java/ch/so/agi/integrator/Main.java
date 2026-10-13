@@ -35,21 +35,17 @@ public final class Main {
       }
       if (args.isEmpty() || args.getFirst().equals("--help")) {
         System.out.println(
-            "Java 25 Themenintegrator\nbin/datenportal-agent [--runtime docker|docker-build|local] [--update-agent] [--mount-ro PATH|--mount-rw PATH] [--config PATH] init|doctor|serve|schema OP|call OP [--json JSON|--args-file PATH|-]\ninit [--update-tools] [--skip-smoke]\ncredentials set PROFIL --username USER --token-stdin | --from-env\ncredentials status|remove PROFIL\nacceptance delivery\nbin/datenportal-agent gradle TASK...\nDirekt: java -jar build/libs/datenportal-integrator.jar [--config PATH] COMMAND\nWeitere Helfer: setup-java, setup-tools, setup-mcps [--update], setup-gretl [--update], runtime-up, harness-config, codex");
+            "Java 25 Themenintegrator\nbin/datenportal-agent [--runtime docker|docker-build|local] [--update-agent] [--mount-ro PATH|--mount-rw PATH] [--config PATH] init|doctor|serve|serve-workspace|schema OP|call OP [--json JSON|--args-file PATH|-]\nworkspace install|update ZIELORDNER\ninit [--update-tools] [--skip-smoke]\ncredentials set PROFIL --username USER --token-stdin | --from-env\ncredentials status|remove PROFIL\nacceptance delivery\nbin/datenportal-agent gradle TASK... (nur Entwicklung)\nDirekt: java -jar build/libs/datenportal-integrator.jar [--config PATH] COMMAND\nWeitere Helfer: setup-java, setup-tools, setup-mcps [--update], setup-gretl [--update], runtime-up, harness-config, codex");
         return 0;
       }
       String command = args.removeFirst();
+      if (command.equals("workspace")) {
+        print(OperatorWorkspace.command(args));
+        return 0;
+      }
       if (command.equals("schema")) {
-        var op = Operations.ALL.get(args.getFirst());
-        if (op == null) throw new Problem("unknown_operation", "Operation ist nicht bekannt.");
-        print(
-            Json.map(
-                "operation",
-                args.getFirst(),
-                "description",
-                op.description(),
-                "inputSchema",
-                op.schema()));
+        if (args.size() != 1) throw new Problem("invalid_arguments", "schema OPERATION");
+        print(Operations.schema(args.getFirst()));
         return 0;
       }
       if (command.equals("init")) Initializer.prepareConfig(config);
@@ -84,6 +80,10 @@ public final class Main {
       }
       if (command.equals("serve")) {
         serve(s);
+        return 0;
+      }
+      if (command.equals("serve-workspace")) {
+        serve(s, true);
         return 0;
       }
       if (Set.of(
@@ -155,6 +155,13 @@ public final class Main {
             "stack_repo",
             Files.isDirectory(s.stack));
     try {
+      checks.put("operator_workspace", OperatorPolicy.check(s));
+    } catch (Problem p) {
+      checks.put("operator_workspace", p.result());
+      checks.put("initialization", Json.map("ready", false, "reason", p.code));
+      return checks;
+    }
+    try {
       checks.put("agent_runtime", AgentRuntime.check(s));
     } catch (Problem p) {
       checks.put("agent_runtime", p.result());
@@ -224,6 +231,11 @@ public final class Main {
   }
 
   public static void serve(Settings s) throws InterruptedException {
+    serve(s, false);
+  }
+
+  static void serve(Settings s, boolean files) throws InterruptedException {
+    if (OperatorWorkspace.installed(s.root)) OperatorPolicy.check(s);
     System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", "warn");
     var ended = new java.util.concurrent.CountDownLatch(1);
     var input =
@@ -244,56 +256,61 @@ public final class Main {
         };
     var mapper = new JacksonMcpJsonMapper(new tools.jackson.databind.json.JsonMapper());
     var transport = new StdioServerTransportProvider(mapper, input, System.out);
-    var workflow = new Workflow(s);
+    var workflow = files ? null : new Workflow(s);
+    var workspace = files ? new WorkspaceFiles(s) : null;
     var tools = new ArrayList<McpServerFeatures.SyncToolSpecification>();
-    Operations.ALL.forEach(
-        (name, op) ->
-            tools.add(
-                McpServerFeatures.SyncToolSpecification.builder()
-                    .tool(
-                        McpSchema.Tool.builder()
-                            .name(name)
-                            .description(op.description())
-                            .inputSchema(op.schema())
-                            .build())
-                    .callHandler(
-                        (exchange, request) -> {
-                          try {
-                            Object result = workflow.call(name, request.arguments());
-                            return McpSchema.CallToolResult.builder()
-                                .structuredContent(result)
-                                .addTextContent(Json.text(result))
-                                .isError(false)
-                                .build();
-                          } catch (Problem e) {
-                            return McpSchema.CallToolResult.builder()
-                                .structuredContent(e.result())
-                                .addTextContent(Json.text(e.result()))
-                                .isError(true)
-                                .build();
-                          } catch (Exception e) {
-                            var error =
-                                Json.map(
-                                    "error",
-                                    "operation_failed",
-                                    "message",
-                                    "Operation konnte nicht abgeschlossen werden.",
-                                    "exception",
-                                    e.getClass().getSimpleName());
-                            return McpSchema.CallToolResult.builder()
-                                .structuredContent(error)
-                                .addTextContent(Json.text(error))
-                                .isError(true)
-                                .build();
-                          }
-                        })
-                    .build()));
+    (files ? WorkspaceFiles.TOOLS : Operations.ALL)
+        .forEach(
+            (name, op) ->
+                tools.add(
+                    McpServerFeatures.SyncToolSpecification.builder()
+                        .tool(
+                            McpSchema.Tool.builder()
+                                .name(name)
+                                .description(op.description())
+                                .inputSchema(op.schema())
+                                .build())
+                        .callHandler(
+                            (exchange, request) -> {
+                              try {
+                                Object result =
+                                    files
+                                        ? workspace.call(name, request.arguments())
+                                        : workflow.call(name, request.arguments());
+                                return McpSchema.CallToolResult.builder()
+                                    .structuredContent(result)
+                                    .addTextContent(Json.text(result))
+                                    .isError(false)
+                                    .build();
+                              } catch (Problem e) {
+                                return McpSchema.CallToolResult.builder()
+                                    .structuredContent(e.result())
+                                    .addTextContent(Json.text(e.result()))
+                                    .isError(true)
+                                    .build();
+                              } catch (Exception e) {
+                                var error =
+                                    Json.map(
+                                        "error",
+                                        "operation_failed",
+                                        "message",
+                                        "Operation konnte nicht abgeschlossen werden.",
+                                        "exception",
+                                        e.getClass().getSimpleName());
+                                return McpSchema.CallToolResult.builder()
+                                    .structuredContent(error)
+                                    .addTextContent(Json.text(error))
+                                    .isError(true)
+                                    .build();
+                              }
+                            })
+                        .build()));
     var server =
         McpServer.sync(transport)
-            .serverInfo("datenportal-themenintegrator", version())
+            .serverInfo(files ? "datenportal-workspace" : "datenportal-themenintegrator", version())
             .capabilities(McpSchema.ServerCapabilities.builder().tools(false).build())
             .instructions(
-                "Menschliche Freigaben nur nach tatsächlicher Antwort protokollieren. Modellableitung ausdrücklich anfordern. Fehlende Benutzer/Office-Fakten erfragen. Bei unklarem Upload vorhandene Laufkennung aufklären.")
+                "Öffentliche Werkzeugschemas und Skills verwenden; keine Implementierungsquellen lesen oder durchsuchen. operation_schema erklärt Integrator-Aufrufe. Dateioperationen über datenportal_workspace. Menschliche Freigaben nur nach tatsächlicher Antwort protokollieren. Bei unklarem Upload vorhandene Laufkennung aufklären.")
             .tools(tools)
             .build();
     Runnable close =
@@ -301,7 +318,7 @@ public final class Main {
           try {
             server.close();
           } finally {
-            workflow.close();
+            if (workflow != null) workflow.close();
           }
         };
     Runtime.getRuntime().addShutdownHook(new Thread(close));

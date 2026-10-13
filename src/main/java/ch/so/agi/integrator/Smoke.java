@@ -31,6 +31,11 @@ final class Smoke {
             .replace(
                 "<ns2:name>Jahr</ns2:name>",
                 "<ns2:name>Jahr</ns2:name><ns2:description>Beobachtungsjahr der synthetischen Testfixture</ns2:description>"));
+    // Exercise the same verified input handoff as an operator. Installed
+    // workspaces deliberately reject direct paths to the synthetic originals.
+    var files = new WorkspaceFiles(isolated);
+    String dataPath = Json.required(files.importAttachment("agi", csv.toString()), "path");
+    String metadataPath = Json.required(files.importAttachment("agi", meta.toString()), "path");
     try (var w =
         new Workflow(
             isolated,
@@ -51,9 +56,9 @@ final class Smoke {
                           "identifier",
                           "ch.so.grundwasser.qualitaet",
                           "data_path",
-                          csv.toString(),
+                          dataPath,
                           "metadata_path",
-                          meta.toString()))),
+                          metadataPath))),
               "id");
       var analysis = Json.obj(w.call("analyze", Json.map("run_id", id)));
       w.call(

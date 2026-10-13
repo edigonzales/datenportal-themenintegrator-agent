@@ -1069,3 +1069,103 @@ korrigierten Abläufe; abweichende ARM-Metadaten werden auch auf einem anderen
 Host erkannt. Der zusätzliche Modus `verify` führt keine Publikation aus.
 Die erfolgreiche CI-Ausführung der Korrektur und die anschliessende
 `latest`-Promotion bleiben bis zum neuen Workflow-Ergebnis offen.
+
+## Gemeinsames Betriebspaket vom 13. Oktober 2026
+
+Tatsächlich geprüft:
+
+- `test jar spotlessCheck operatorWorkspaceArchive`: 210 Unit-Tests bestanden.
+  Das reproduzierbare Archiv enthält drei vollständige Skills mit internen
+  Verknüpfungen und Referenzen, Betriebsanweisungen, Anwenderhandbuch,
+  Konfigurationsvorlagen und Launcher. Keine Java-Implementierungsquellen,
+  Entwicklertests, Entwicklerhandbücher oder Gradle-Launcher.
+  Die bestehenden Skill-Validatoren bestätigen alle drei Skills. Images für
+  `linux/arm64` und `linux/amd64` wurden lokal gebaut; der quellcodefreie
+  CLI-/MCP-/Paket-Smoke besteht auf beiden Architekturen. Ein AMD64-Vorlauf
+  unter parallelen Image-Builds lief in die MCP-Startwartezeit; die abschliessende
+  Einzelprüfung besteht. Es fand keine Registry-Publikation statt.
+- Frische Installation, konfliktfreie Aktualisierung und Abbruch vor jeder
+  Änderung bei individuellen Paketänderungen; Konfiguration, bestehende
+  Eingänge, unbekannte lokale Dateien und Vorgangszustände bleiben erhalten.
+- Beide echten Java-MCP-Prozesse aus einem installierten Arbeitsbereich:
+  Anhangimport mit drei gleichen SHA-256, öffentliche `operation_schema`-Abfrage
+  ohne neuen Vorgang, verweigerte Konfigurations-/Quellen-/Zustandszugriffe und
+  Verzeichnis-/Symlink-Ausbrüche. Ein selbst geschriebener Java-Konverter und
+  seine JUnit-Tests liefen im begrenzten Docker-Container erfolgreich; weder
+  Docker-Socket noch Konfiguration oder Quellcode-Testdatei waren erreichbar.
+  Öffentliche Integrator-Dateiargumente können den Datei-MCP ebenfalls nicht
+  umgehen: direkter Originalpfad und Quellen als `start`/`attach`/`stage_change`
+  sind gesperrt, verifizierte Eingangskopien erlaubt, nachträglich geänderte
+  Kopien werden abgewiesen. Der abschliessende MCP-Integrationstest besteht.
+- Ein vollständiger Lauf von `integrationTest` mit den tatsächlich
+  konfigurierten Fachwerkzeugen bestand mit 27 Tests. Im späteren Vorlauf
+  bestanden 26 von 27; der parallele GRETL-Test lief unter gleichzeitigen
+  Image-Builds in die Runtime-Sperrwartezeit. Seine gezielte Wiederholung ohne
+  Image-Builds bestand. Das ist kein Nachweis für unbegrenzte Parallelbelastung.
+- Technische lokale Testlieferung aus dem installierten Betriebspaket mit
+  tatsächlichen Datenblatt-/INTERLIS-/GRETL-Werkzeugen und privatem lokalen
+  Stack bestanden: Modell erzeugt und geprüft, CSV im Lieferjob validiert,
+  Portal/Manifest/Downloads bestätigt. Fehlerhafte CSV wird im Job abgewiesen;
+  die bestehende Veröffentlichung bleibt unverändert. Automatisierte
+  Freigaben betreffen ausschliesslich diese markierte synthetische Fixture.
+  Der erste Vorlauf scheiterte vor jeder Lieferung an fehlenden Validator-
+  Neben-JARs im isolierten Mount. Der Launcher mountet nun das konfigurierte
+  ilivalidator-Bundle read-only; eine neue Fixture bestand vollständig.
+
+Die vier Client-Nachweise sind getrennt zu beurteilen:
+
+| Client | Tatsächlicher Nachweis | Grenze |
+| --- | --- | --- |
+| Codex CLI 0.160.0 | Effektive App-Server-Konfiguration: Shell, Unified Exec, JS-REPL, Apps und Remote-Plugins aus; fremde konfigurierte MCPs aus. Alle drei Projekt-Skills werden als aktiviert erkannt. Native Sandbox lässt die Betriebsanleitung zu und verweigert die Quellcode-Testdatei. | Kein vollständiger menschlicher Fachdialog. |
+| Codex Desktop, Engine 0.162.0-alpha.17.2 | Mitgelieferte Engine separat geprüft: dieselben effektiven Einstellungen, alle drei aktivierten Projekt-Skills und bestandener positiver/negativer Sandbox-Test. | Desktop-GUI-Test offen: Computer Use verweigert den Zugriff auf `com.openai.codex`. Engine-Prüfung ersetzt diesen Nachweis nicht. |
+| OpenCode Desktop 2.0.27 | Im isolierten Testprojekt zeigte die Oberfläche beide MCPs und alle drei Skills. Der zugehörige Server verweigerte Shell, Quellenlesen, Glob, Grep und Code Mode auch nach Wechsel von `datenportal` auf `build`; Anleitungen, Skills und Fach-MCPs blieben erlaubt. | Kein vollständiger menschlicher Fachdialog. |
+| Gebündelte OpenCode-CLI 2.0.27 | Projektbezogene MCP-Abfrage und echte Permission-API prüfen dieselben Erlaubnisse/Sperren mit expliziter Projekt-Location. | `mcp list` allein verwendete in dieser Version die Server-Default-Location statt des CLI-Arbeitsordners. |
+
+Alle Client- und Konverterproben verwenden ausdrücklich gekennzeichnete,
+isolierte Testfixtures. Sie erteilen keine fachlichen Freigaben. Das temporäre
+OpenCode-Testprojekt wurde geschlossen und die vorherige CSV-Sitzung wieder
+angezeigt, ohne ihren Freigabestand zu verändern.
+
+Eine zusätzliche Codex-MCP-Inventarabfrage ohne `threadId` zeigt Bootstrap-
+Dienste, darunter `cua_repl`, und ist kein Nachweis der tatsächlich angebotenen
+Werkzeuge einer Fachsitzung. Die vollständige Werkzeugliste einer neuen
+Codex-Fachsitzung bleibt zusammen mit dem GUI-Nachweis zu prüfen; insbesondere
+dürfen Desktop-injizierte Werkzeuge keine Datei- oder Shell-Umgehung bieten.
+
+Die Codex-Konfiguration lehnt alte `sandbox_mode`-/`sandbox_workspace_write`-
+Einstellungen in Projekt-, Benutzer- oder Elternkonfigurationen ab. MCPs erben
+die Codex-Dateisandbox nicht; deshalb prüft der Datei-MCP seine Pfade selbst und
+Konverter laufen zusätzlich in einem eigenen begrenzten Container. Grundlage:
+[Codex-Berechtigungen](https://learn.chatgpt.com/docs/permissions),
+[Konfigurationsreferenz](https://learn.chatgpt.com/docs/config-file/config-reference),
+[OpenCode-Permissions](https://dev.opencode.ai/v2/docs/permissions/).
+
+Der zunächst fehlgeschlagene Host-Loopback-Selbsttest wurde eingegrenzt:
+derselbe installierte ARM64-Prozess besteht mit
+`-Djava.net.preferIPv4Stack=true` und scheitert ohne diese Einstellung unter
+Docker Desktop. Der reguläre Launcher setzte IPv4 bereits; der synthetische
+Betriebslauncher und direkte Image-Starts taten dies nicht. Das Agent-Image
+setzt die JVM-Einstellung nun selbst, der Fixture-Launcher ebenfalls. Der
+Netzwerktest verlässt sich auf die Image-Vorgabe und mountet nur seine
+synthetische Fixture und kompilierte Prüfklassen, keinen Entwicklungscheckout.
+Er besteht mit den neu gebauten ARM64- und AMD64-Images. Die Gegenprobe mit
+Bridge-Netzwerk wird weiterhin abgewiesen; die Prüfung wurde nicht gelockert.
+
+Ein neues quellcodefreies Betriebspaket wurde installiert und `init` ohne
+`--skip-smoke` ausgeführt: `ready=true`, `host-loopback-verified` und gültiger
+Smoke-Bericht. Die Prüfung verwendet die tatsächlichen Fachwerkzeuge und
+umfasst Modellableitung, Modell-/CSV-Positivprüfung sowie CSV-Negativprüfung.
+Auch die synthetischen Eingänge des Init-Selbsttests durchlaufen jetzt den
+verifizierten Anhangimport; die Pfadsperren bleiben wirksam. Die Fixture
+enthält weder `src`, `build` noch `gradlew`. `doctor` bestätigt anschliessend
+`ready=true` und `smoke_current=true`. Alle 210 Unit-Tests und die Formatprüfung
+bestanden erneut. Es gibt keinen Host-JDK-Fallback. Der oben beschriebene
+Codex-GUI-/Fachsitzungsnachweis bleibt separat offen.
+
+Die Nachweise dieser Korrektur liegen als `loopback-*.log`, `loopback-init.json`
+und `loopback-fixture.path` unter dem unten genannten lokalen Nachweisordner.
+
+Lokale Nachweise liegen unter `.datenportal-integrator/operator-verification/`.
+Das Paket und die Pipeline sind vorbereitet; diese Arbeit veröffentlicht kein
+neues Image und kein CI-Artefakt. Das lokale Paket trägt `0.1.0-dev`; regulärer
+Betrieb mit dem Paket-Launcher verlangt eine veröffentlichte Versionskennung.

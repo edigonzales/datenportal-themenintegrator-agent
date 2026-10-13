@@ -3,7 +3,7 @@ name: datenportal-validierungsmodell
 description: Leite auf ausdrücklichen Auftrag ein INTERLIS-Validierungsmodell für Datenportal-CSV aus Datenblatt, Datenbeobachtungen und bestätigten Fachregeln ab; prüfe und repariere Modell, Modellreferenz und Validierungstask. Eigenständig oder innerhalb einer Themenintegration; nicht für allgemeine GIS-Modellierung.
 ---
 
-Verwende denselben `datenportal_integrator`-MCP und seine vorhandenen Modelloperationen. CLI-Fallback: `bin/datenportal-agent call <operation> --args-file <datei.json>`; Argumente mit `schema <operation>` lesen. Bei Einrichtungs-, Runtime- oder Zugangsproblemen [Betrieb und Zugänge](../../docs/agent/betrieb-und-zugaenge.md) lesen. Fehlende Publikationszugänge verhindern keine Modellierung.
+Verwende denselben `datenportal_integrator`-MCP und seine vorhandenen Modelloperationen. Argumentverträge mit `operation_schema` klären; Implementierungsquellen nicht lesen oder durchsuchen. Referenzen und Fachdateien mit `datenportal_workspace.read_file` lesen, Anhänge mit `import_attachment` verifiziert übernehmen. Der CLI-Fallback `schema`/`call` bleibt im Betriebspaket eine Betreiberhandlung. Bei Einrichtungs-, Runtime- oder Zugangsproblemen [Betrieb und Zugänge](../../docs/agent/betrieb-und-zugaenge.md) lesen. Fehlende Publikationszugänge verhindern keine Modellierung.
 
 ## Grenzen und Vorgang
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Isolated real Docker network probe; requires compiled test classes and host networking.
+# Isolated real Docker network probe; no development checkout in the container.
 set -euo pipefail
 image=${1:?image required}
 root=$(cd -- "$(dirname -- "$0")/.." && pwd -P)
@@ -16,9 +16,9 @@ mkdir -p "$root/.datenportal-integrator"
 fixture=$(mktemp -d "$root/.datenportal-integrator/image-runtime.XXXXXX")
 docker run --rm --network host --user "$(id -u):$(id -g)" --group-add "$socket_gid" \
   --mount "type=bind,source=$socket,target=/var/run/docker.sock" \
-  --mount "type=bind,source=$root,target=$root" -w "$root" \
-  -e JAVA_TOOL_OPTIONS=-Djava.net.preferIPv4Stack=true \
+  --mount "type=bind,source=$fixture,target=$fixture" -w "$fixture" \
+  --mount "type=bind,source=$root/build/classes/java/test,target=/probe-classes,readonly" \
   -e DATENPORTAL_CONTAINER_MODE=true -e "DATENPORTAL_RUNTIME_IMAGE=$image_id" \
   --entrypoint java "$image_id" \
-  -cp "$root/build/classes/java/test:/opt/datenportal-agent/build/libs/datenportal-integrator.jar" \
+  -cp "/probe-classes:/opt/datenportal-agent/build/libs/datenportal-integrator.jar" \
   ch.so.agi.integrator.ImageRuntimeAcceptance "$fixture"

@@ -36,6 +36,11 @@
         "type": "string"
       }
     },
+    "input_roots": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Zusätzliche freigegebene Eingangsverzeichnisse; in Docker mit --mount-ro einbinden."
+    },
     "compose_files": {
       "type": "array",
       "items": {

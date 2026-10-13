@@ -4,9 +4,15 @@ Der Integrator unterstützt drei Vorgänge: ein Thema integrieren (`topic`), ein
 
 ## Installation und Konfiguration
 
+Für den Fachbetrieb die [Installation des quellcodefreien Betriebspakets](#quellcodefreies-betriebspaket)
+verwenden und anschliessend den Betriebsordner im Client öffnen. Dafür sind
+Themenrepo und Dev-Stack erforderlich, aber kein Integrator-Quellcheckout.
+Die nachfolgende Checkout-Anleitung beschreibt die Entwicklung und bestehende
+Installationen im bisherigen Repository.
+
 Der normale Start verwendet das veröffentlichte Docker-Image. Du brauchst
 keinen Java-, Gradle- oder Fachwerkzeug-Build auf dem Rechner. Der lokale
-Integrator-Ordner enthält den Launcher, den Skill, deine Konfiguration und die
+Integrator-Ordner enthält den Launcher, die drei Skills, deine Konfiguration und die
 Arbeitsdaten. Alle folgenden Befehle werden dort ausgeführt.
 
 ### Repositories bereitstellen
@@ -158,6 +164,60 @@ Die folgenden Startprompts und
 Anwendungsszenarien zeigen konkrete fachliche Aufträge.
 
 ## Mit dem Agenten arbeiten
+
+### Quellcodefreies Betriebspaket
+
+Fachliche Aufträge verwenden den installierten Betriebsordner. Der
+Entwicklungscheckout bleibt für ausdrückliche Implementierungsaufträge.
+Das versionierte Paket enthält Skills, Referenzen, Anwenderdokumentation und
+Docker-Launcher, aber keine Java-Quellen, Tests oder lokalen Build-Werkzeuge.
+
+Nach Veröffentlichung der betreffenden Image-Version kann der Betreiber einen
+leeren Arbeitsplatz ohne Quellcheckout aus dem Image installieren:
+
+```sh
+arbeitsplatz="$PWD/datenportal-arbeitsplatz"
+agent_image='sogis/datenportal-themenintegrator-agent:<Version>'
+mkdir -p "$arbeitsplatz"
+docker run --rm --network none --user "$(id -u):$(id -g)" \
+  --mount "type=bind,source=$arbeitsplatz,target=/workspace" \
+  "$agent_image" workspace install /workspace
+```
+
+Alternativ das gleich versionierte CI-Archiv nach Prüfsummenvergleich entpacken.
+Im Arbeitsplatz die Themenrepo- und Stackpfade einrichten und `init` ausführen.
+Eigene Konfiguration und Zugangsdaten bleiben erhalten. Bestehende Vorgänge
+nicht kopieren oder durch neue ersetzen: gegebenenfalls `state_dir` bewusst auf
+den bisherigen absoluten Speicherort setzen und mit derselben `run_id` fortsetzen.
+Erforderliche erneute Prüfungen und Freigaben entscheidet der Kern.
+
+`init` erzeugt `.codex/config.toml` und `opencode.json`. Beide Clients verwenden
+`datenportal_integrator` und `datenportal_workspace`; Datenblatt- und
+INTERLIS-MCP bleiben intern. Der Dateihelfer importiert Anhänge mit drei gleichen
+SHA-256-Prüfsummen und liest ausschliesslich zulässige Anleitungen, Fachdateien
+und Berichte. Er schreibt nur Konverterrezepte und Java-/JUnit-Dateien unter
+`topics/<org>/<id>/`. Entwicklungsquellen, Secrets und interne Vorgangszustände
+werden abgewiesen. Fachliche Java-Konverter laufen im installierten Betrieb in
+eigenen Containern ohne Netzwerk, Zugangsdaten oder Entwicklungscheckout.
+
+Codex deaktiviert Shell-Werkzeuge und verwendet ein Dateiberechtigungsprofil.
+Alte `sandbox_mode`-/`sandbox_workspace_write`-Einstellungen werden als Konflikt
+gemeldet. OpenCode verwendet den primären Fachagenten `datenportal`, direkte
+MCP-Werkzeuge und projektweite Zugriffssperren. Konfigurationsbereitschaft ist
+von tatsächlichen Desktop-/CLI-Nachweisen zu unterscheiden; siehe
+[Abnahme](abnahme.md).
+
+Ein Paketupdate ersetzt nur unveränderte Paketdateien; Konflikte werden vor
+dem Schreiben gemeldet. Betreiber führen im Betriebsordner aus:
+
+```sh
+./bin/datenportal-agent --update-agent workspace update "$PWD"
+./bin/datenportal-agent init
+```
+
+Danach die Client-Verbindungen neu starten. Ohne ausdrückliches Update bleibt
+der aufgezeichnete Image-Stand erhalten. Der CLI-Fallback `schema`/`call` ist im
+Fachbetrieb eine Betreiberhandlung; der Agent verwendet `operation_schema`.
 
 ### Arbeitsbereich öffnen und Skill auswählen
 

@@ -54,6 +54,36 @@ public class ImageSmoke implements CsvConverter {
     Initializer.prepareConfig(null);
     if (!Arrays.equals(existing, Files.readAllBytes(config))) throw new AssertionError("Existing configuration changed");
     Files.writeString(Path.of("/tmp/input.csv"), "Jahr\n2025\n");
+    Path operator = Path.of("/tmp/operator");
+    OperatorWorkspace.install(AgentResources.resolve(workspace, "workspace"), operator, false);
+    if (Files.exists(operator.resolve("src")) || Files.exists(operator.resolve("gradlew"))) throw new AssertionError("Operator contains implementation");
+    Files.createDirectories(operator.resolve("config"));
+    Files.writeString(operator.resolve("config/local.toml"), "root=\"..\"\ntopics_repo=\"/tmp/topics\"\nstack_repo=\"/tmp/stack\"\n[datasheet]\ntransport=\"http\"\nurl=\"http://127.0.0.1:8000/mcp\"\n");
+    var operatorSettings = new Settings(operator.resolve("config/local.toml"));
+    new Harness(operatorSettings).install();
+    OperatorPolicy.check(operatorSettings);
+    for (String mode : List.of("serve", "serve-workspace")) {
+      var operatorParams = io.modelcontextprotocol.client.transport.ServerParameters.builder(
+          Path.of(System.getProperty("java.home"), "bin/java").toString())
+          .args("-jar", AgentResources.jar(workspace).toString(), "--config", operatorSettings.file.toString(), mode).build();
+      var operatorTransport = new io.modelcontextprotocol.client.transport.StdioClientTransport(operatorParams,
+          new io.modelcontextprotocol.json.jackson3.JacksonMcpJsonMapper(new tools.jackson.databind.json.JsonMapper()));
+      try (var client = io.modelcontextprotocol.client.McpClient.sync(operatorTransport)
+          .initializationTimeout(java.time.Duration.ofSeconds(30)).build()) {
+        client.initialize();
+        var response = client.callTool(new io.modelcontextprotocol.spec.McpSchema.CallToolRequest(
+            mode.equals("serve") ? "operation_schema" : "import_attachment",
+            mode.equals("serve") ? Json.map("operation", "attach") : Json.map("organization", "agi", "path", "/tmp/input.csv")));
+        if (Boolean.TRUE.equals(response.isError())) throw new AssertionError("Operator MCP call failed");
+        if (mode.equals("serve-workspace")) {
+          var denied = client.callTool(new io.modelcontextprotocol.spec.McpSchema.CallToolRequest("read_file", Json.map("path", operatorSettings.file.toString())));
+          if (!Boolean.TRUE.equals(denied.isError())) throw new AssertionError("File MCP exposes configuration");
+        } else {
+          var denied = client.callTool(new io.modelcontextprotocol.spec.McpSchema.CallToolRequest("start", Json.map("organization", "agi", "identifier", "ch.so.smoke", "data_path", "/tmp/input.csv")));
+          if (!Boolean.TRUE.equals(denied.isError())) throw new AssertionError("Integrator bypasses verified import");
+        }
+      }
+    }
     var params = io.modelcontextprotocol.client.transport.ServerParameters.builder(
         Path.of(System.getProperty("java.home"), "bin/java").toString())
         .args("-jar", AgentResources.jar(workspace).toString(), "--config", "/tmp/agent/config/local.toml", "serve").build();

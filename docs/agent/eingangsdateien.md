@@ -10,6 +10,16 @@ Erlaubt sind ausschliesslich ASCII-Buchstaben, Ziffern und Unterstriche sowie di
 
 ## Chat-Anhänge übernehmen
 
+Im Betriebspaket übernimmt `datenportal_workspace.import_attachment` diese
+Host-Dateioperation ohne allgemeine Shell. Übergib `organization` und den
+zugänglichen absoluten Originalpfad als `path`. Der Helfer prüft den CSV-Namen,
+erstellt eine neue bytegleiche Kopie und liefert `path`, `source_sha256_before`,
+`source_sha256_after`, `copy_sha256` und `verified`. Nur bei `verified=true` und
+drei gleichen Prüfsummen den Kopiepfad an den Integrator weitergeben. Der
+Datei-MCP ist vom fachlichen Integrator getrennt; der Import ist keine Freigabe.
+Bei `input_mount_required` muss der Betreiber das Originalverzeichnis mit
+`--mount-ro` einbinden. Keine Quellcodesuche als Umgehung ausführen.
+
 Übernimm angefügte CSV-, XTF- und XLSX-Dateien automatisch vor dem ersten Integrator-MCP-Aufruf dieses Vorgangs. Der Benutzer muss Kopieren und Prüfsummenvergleich nicht zusätzlich beauftragen.
 
 1. Verwende die vollständigen Originaldateien über ihre tatsächlichen lokalen Anhangpfade. Fehlt der Originalpfad oder ist die Datei nicht lesbar, frage gezielt nach einem zugänglichen Pfad. Rekonstruiere keine Datei aus Chattext, Vorschauen oder vom Modell dekodierten Inhalten. Fehlt die Organisation, kläre sie vor der Ablage.

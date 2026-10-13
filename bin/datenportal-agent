@@ -6,6 +6,7 @@ cd "$root"
 mode=docker
 update_agent=false
 mounts=()
+input_mounts=()
 launch_options=()
 args=()
 config_file=
@@ -23,6 +24,7 @@ while (($#)); do
       [[ $1 == --mount-ro ]] && mount_spec+=',readonly'
       mounts+=(--mount "$mount_spec")
       launch_options+=("$1" "$mount_path")
+      if [[ $1 == --mount-ro ]]; then input_mounts+=("$mount_path"); fi
       shift 2 ;;
     --config)
       [[ $# -ge 2 ]] || { echo '--config PATH required' >&2; exit 2; }
@@ -36,6 +38,15 @@ mkdir -p .datenportal-integrator/launcher .datenportal-integrator/tmp
 export DATENPORTAL_TEST_TMP="$root/.datenportal-integrator/tmp"
 command_index=0
 if [[ ${args[0]:-} == --config ]]; then command_index=2; fi
+if [[ -f $root/.datenportal-workspace.json && ( $mode != docker || ${args[$command_index]:-} == gradle ) ]]; then
+  echo 'Operator workspaces require the installed Docker runtime; local builds are unavailable.' >&2
+  exit 2
+fi
+if [[ ${args[$command_index]:-} == workspace && ${args[$((command_index+1))]:-} == install && ${args[$((command_index+2))]:-} == /* ]]; then
+  package_target=${args[$((command_index+2))]}
+  mkdir -p "$package_target"
+  mounts+=(--mount "type=bind,source=$package_target,target=$package_target")
+fi
 if [[ ${args[$command_index]:-} == gradle && $mode == docker ]]; then mode=docker-build; fi
 launch_options=(--runtime "$mode" "${launch_options[@]}")
 if ((${#launch_options[@]})); then export DATENPORTAL_LAUNCH_OPTIONS; DATENPORTAL_LAUNCH_OPTIONS=$(printf '%s\n' "${launch_options[@]}"); fi
@@ -138,6 +149,11 @@ if [[ $mode == docker-build ]]; then
 else
   record=.datenportal-integrator/launcher
   reference=sogis/datenportal-themenintegrator-agent:latest
+  if ! $update_agent && [[ -f $root/.datenportal-workspace.json && -f $root/workspace-version ]]; then
+    package_version=$(cat "$root/workspace-version")
+    [[ $package_version =~ ^0\.1\.[0-9]+$ ]] || { echo 'Operator package requires a published version.' >&2; exit 2; }
+    reference="sogis/datenportal-themenintegrator-agent:$package_version"
+  fi
   selection="$record/release-image"
   if [[ -f $selection ]] && ! $update_agent; then
     { IFS= read -r reference; IFS= read -r digest; IFS= read -r image_id; } < "$selection"
@@ -174,12 +190,26 @@ common=(--rm --init --entrypoint "" --label "datenportal.integrator.agent.root=$
   -w "$root" -e HOME=/cache/home -e JAVA_TOOL_OPTIONS=-Djava.net.preferIPv4Stack=true -e DATENPORTAL_FORWARD_ENV -e DATENPORTAL_CONTAINER_MODE=true
   -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=credential.https://github.com.helper -e 'GIT_CONFIG_VALUE_0=!gh auth git-credential'
   -e "DATENPORTAL_RUNTIME_IMAGE=$image_id" -e "DATENPORTAL_TEST_TMP=$DATENPORTAL_TEST_TMP")
+common+=(-e "DATENPORTAL_CLIENT_HOME=$HOME" -e "DATENPORTAL_CLIENT_CONFIG=${CODEX_HOME:-$HOME/.codex}/config.toml" -e "DATENPORTAL_HOST_DOCKER_SOCKET=$socket")
+client_config=${CODEX_HOME:-$HOME/.codex}/config.toml
+if [[ -f $client_config ]]; then common+=(--mount "type=bind,source=$client_config,target=$client_config,readonly"); fi
+if [[ -f $root/.datenportal-workspace.json ]]; then
+  policy_parent=$(dirname "$root")
+  while [[ $policy_parent != / ]]; do
+    parent_config=$policy_parent/.codex/config.toml
+    if [[ -f $parent_config && $parent_config != "$client_config" ]]; then
+      common+=(--mount "type=bind,source=$parent_config,target=$parent_config,readonly")
+    fi
+    policy_parent=$(dirname "$policy_parent")
+  done
+fi
+if ((${#input_mounts[@]})); then common+=(-e "DATENPORTAL_INPUT_ROOTS=$(printf '%s\n' "${input_mounts[@]}")"); fi
 common+=("${mounts[@]}")
 if ((${#launch_options[@]})); then common+=(-e "DATENPORTAL_LAUNCH_OPTIONS=$(printf '%s\n' "${launch_options[@]}")"); fi
 forward=()
 for name in ${DATENPORTAL_FORWARD_ENV:-}; do
   [[ $name =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || { echo 'Invalid forwarded environment variable name' >&2; exit 2; }
-  case "$name" in HOME|PATH|JAVA_HOME|JAVA_TOOL_OPTIONS|DOCKER_HOST|DOCKER_CONTEXT|DATENPORTAL_CONTAINER_MODE|DATENPORTAL_RUNTIME_IMAGE|DATENPORTAL_LAUNCH_OPTIONS|DATENPORTAL_TEST_TMP|GRADLE_USER_HOME|DATENPORTAL_AGENT_HOME|GIT_CONFIG_COUNT|GIT_CONFIG_KEY_*|GIT_CONFIG_VALUE_*) echo 'Reserved runtime variable cannot be forwarded' >&2; exit 2;; esac
+  case "$name" in HOME|PATH|JAVA_HOME|JAVA_TOOL_OPTIONS|DOCKER_HOST|DOCKER_CONTEXT|DATENPORTAL_CONTAINER_MODE|DATENPORTAL_RUNTIME_IMAGE|DATENPORTAL_LAUNCH_OPTIONS|DATENPORTAL_TEST_TMP|DATENPORTAL_CLIENT_HOME|DATENPORTAL_CLIENT_CONFIG|DATENPORTAL_INPUT_ROOTS|DATENPORTAL_HOST_DOCKER_SOCKET|GRADLE_USER_HOME|DATENPORTAL_AGENT_HOME|GIT_CONFIG_COUNT|GIT_CONFIG_KEY_*|GIT_CONFIG_VALUE_*) echo 'Reserved runtime variable cannot be forwarded' >&2; exit 2;; esac
   forward+=(-e "$name")
 done
 if [[ -n ${DATENPORTAL_INTEGRATOR_CONFIG:-} ]]; then forward+=(-e DATENPORTAL_INTEGRATOR_CONFIG); fi

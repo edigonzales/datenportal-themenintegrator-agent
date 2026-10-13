@@ -3,7 +3,7 @@ name: datenportal-themenintegrator
 description: Prüfe und integriere Datenportal-Themen und ihre Daten- oder Metadatenlieferungen aus CSV/XTF/XLSX mit menschlichen Freigaben. Auch für reine CSV-Prüfung, Metadatenkorrektur und Wiederaufnahme; eigenständige Modellierung und Organisationsanlage verwenden ihre eigenen Skills. Nicht für allgemeine CSV-Analysen.
 ---
 
-Verwende den `datenportal_integrator`-MCP dieses Repositorys. CLI-Fallback: `bin/datenportal-agent call <operation> --args-file <datei.json>`; `schema <operation>` zeigt die verbindlichen Argumente. Bei Einrichtung, Runtime- oder Zugangsfehlern [Betrieb und Zugänge](../../docs/agent/betrieb-und-zugaenge.md) lesen.
+Verwende den `datenportal_integrator`-MCP. Unbekannte Aufrufe mit `operation_schema(operation=<Werkzeugname>)` klären; keine Implementierungsquellen lesen oder durchsuchen. Anleitungen und Fachdateien mit `datenportal_workspace.read_file` lesen. Im Betriebspaket sind Shell und Quellcodesuche gesperrt. Der CLI-Fallback `bin/datenportal-agent schema <operation>` beziehungsweise `call` bleibt eine Betreiberhandlung. Bei Einrichtung, Runtime- oder Zugangsfehlern [Betrieb und Zugänge](../../docs/agent/betrieb-und-zugaenge.md) lesen.
 
 ## Grenzen und Entscheidungen
 
@@ -21,7 +21,7 @@ Vor der Weitergabe jeder CSV den ursprünglichen Basisnamen nach [Eingangsdateie
 
 ## Chat-Anhänge übernehmen
 
-Vor dem ersten Integrator-Aufruf mit angehängten CSV/XTF/XLSX die [verbindliche Anhangübernahme](../../docs/agent/eingangsdateien.md#chat-anhänge-übernehmen) lesen und automatisch ausführen: unveränderte Kopien, getrennte Eingangsordner und drei identische SHA-256-Prüfsummen. Nur verifizierte absolute Kopiepfade weitergeben. Fehlende Organisation oder unzugänglichen Originalpfad klären.
+Vor dem ersten Integrator-Aufruf mit angehängten CSV/XTF/XLSX die [verbindliche Anhangübernahme](../../docs/agent/eingangsdateien.md#chat-anhänge-übernehmen) lesen und mit `datenportal_workspace.import_attachment` automatisch ausführen: unveränderte Kopien, getrennte Eingangsordner und drei identische SHA-256-Prüfsummen. Nur verifizierte absolute Kopiepfade weitergeben. Fehlende Organisation oder unzugänglichen Originalpfad klären.
 
 ## Thema integrieren
 

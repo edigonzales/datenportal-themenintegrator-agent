@@ -17,7 +17,11 @@ jobs:
       - uses: docker/setup-qemu-action@v4
       - uses: docker/setup-buildx-action@v4
       - name: Unit tests and formatting
-        run: ./bin/datenportal-agent gradle test jar spotlessCheck
+        run: ./bin/datenportal-agent gradle -PagentVersion=$AGENT_VERSION test jar spotlessCheck operatorWorkspaceArchive
+      - uses: actions/upload-artifact@v4
+        with:
+          name: datenportal-workspace-${{ env.AGENT_VERSION }}
+          path: build/distributions/datenportal-workspace-*
       - name: Build and smoke-test both platforms without workspace mounts
         run: |
           for arch in amd64 arm64; do

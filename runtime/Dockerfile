@@ -14,8 +14,13 @@ COPY gradle/ gradle/
 COPY src/main/ src/main/
 COPY compose.yaml ./
 COPY runtime/gretl-*.sh runtime/
+COPY skills/ skills/
+COPY docs/agent/ docs/agent/
+COPY templates/operator/ templates/operator/
+COPY bin/datenportal-agent bin/
+COPY config/ config/
 ARG AGENT_VERSION=0.1.0-dev
-RUN --mount=type=cache,target=/cache/gradle ./gradlew --no-daemon --console=plain -PagentVersion=${AGENT_VERSION} jar
+RUN --mount=type=cache,target=/cache/gradle ./gradlew --no-daemon --console=plain -PagentVersion=${AGENT_VERSION} jar operatorWorkspace
 
 FROM tools AS agent
 ARG AGENT_VERSION=0.1.0-dev
@@ -25,7 +30,11 @@ LABEL org.opencontainers.image.title="datenportal-themenintegrator-agent" \
       org.opencontainers.image.version="${AGENT_VERSION}" \
       org.opencontainers.image.revision="${VCS_REF}"
 ENV DATENPORTAL_AGENT_HOME=/opt/datenportal-agent
+# Docker Desktop host networking needs IPv4 sockets, including direct image
+# starts and private loopback probes which do not pass through our launcher.
+ENV JAVA_TOOL_OPTIONS=-Djava.net.preferIPv4Stack=true
 COPY --from=build /build/build/libs/datenportal-integrator.jar /opt/datenportal-agent/build/libs/datenportal-integrator.jar
+COPY --from=build /build/build/operator-workspace/ /opt/datenportal-agent/workspace/
 COPY templates/ /opt/datenportal-agent/templates/
 COPY validation/ /opt/datenportal-agent/validation/
 COPY config/local.example.toml config/rules.json config/settings.schema.json /opt/datenportal-agent/config/

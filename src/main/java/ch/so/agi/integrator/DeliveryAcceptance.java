@@ -35,21 +35,10 @@ final class DeliveryAcceptance {
     Path root = directory.resolve("agent"),
         repo = directory.resolve("datenportal-themenrepo"),
         stack = directory.resolve("datenportal-dev-stack");
-    Files.createDirectories(root.resolve("config"));
-    Files.copy(
-        AgentResources.resolve(source.root, "config/rules.json"),
-        root.resolve("config/rules.json"));
-    for (String part : List.of("validation", "templates", "tests/fixtures"))
-      Workspace.copy(AgentResources.resolve(source.root, part), root.resolve(part));
-    for (String part :
-        List.of("runtime/Dockerfile", "config/settings.schema.json", "config/local.example.toml")) {
-      Files.createDirectories(root.resolve(part).getParent());
-      Files.copy(AgentResources.resolve(source.root, part), root.resolve(part));
-    }
-    Files.createDirectories(root.resolve("build/libs"));
-    Files.copy(
-        AgentResources.resolve(source.root, "build/libs/datenportal-integrator.jar"),
-        root.resolve("build/libs/datenportal-integrator.jar"));
+    boolean operator =
+        AgentResources.installed() && Files.isDirectory(OperatorWorkspace.bundle(source.root));
+    if (operator) OperatorWorkspace.install(OperatorWorkspace.bundle(source.root), root, false);
+    if (!operator) copyDevelopmentResources(root);
     for (Path proof :
         List.of(new DockerMcps(source, process).lockFile(), GretlRuntime.file(source))) {
       Path copy = root.resolve(source.root.relativize(proof));
@@ -168,13 +157,15 @@ final class DeliveryAcceptance {
     Files.createDirectories(root.resolve("bin"));
     Json.write(
         root.resolve("bin/datenportal-agent"),
-        "#!/usr/bin/env bash\nset -e\nexec "
-            + quote(source.root.resolve("bin/datenportal-agent").toString())
-            + " \"$@\" --config "
-            + quote(root.resolve("config/local.toml").toString())
-            + "\n");
+        operator
+            ? operatorLauncher(directory, root)
+            : "#!/usr/bin/env bash\nset -e\nexec "
+                + quote(source.root.resolve("bin/datenportal-agent").toString())
+                + " \"$@\" --config "
+                + quote(root.resolve("config/local.toml").toString())
+                + "\n");
     root.resolve("bin/datenportal-agent").toFile().setExecutable(true);
-    copyAgentGuidance(source.root, root);
+    if (!operator) copyAgentGuidance(source.root, root);
     var privateSettings = new Settings(root.resolve("config/local.toml"));
     new Harness(privateSettings).install();
     // An independent Git root prevents GUI project discovery from selecting the business repo.
@@ -211,6 +202,66 @@ final class DeliveryAcceptance {
             "project",
             project));
     return directory;
+  }
+
+  void copyDevelopmentResources(Path root) throws Exception {
+    Files.createDirectories(root.resolve("config"));
+    Files.copy(
+        AgentResources.resolve(source.root, "config/rules.json"),
+        root.resolve("config/rules.json"));
+    for (String part : List.of("validation", "templates", "tests/fixtures"))
+      Workspace.copy(AgentResources.resolve(source.root, part), root.resolve(part));
+    for (String part :
+        List.of("runtime/Dockerfile", "config/settings.schema.json", "config/local.example.toml")) {
+      Files.createDirectories(root.resolve(part).getParent());
+      Files.copy(
+          AgentResources.resolve(source.root, part),
+          root.resolve(part),
+          StandardCopyOption.REPLACE_EXISTING);
+    }
+    Files.createDirectories(root.resolve("build/libs"));
+    Files.copy(
+        AgentResources.resolve(source.root, "build/libs/datenportal-integrator.jar"),
+        root.resolve("build/libs/datenportal-integrator.jar"));
+  }
+
+  String operatorLauncher(Path directory, Path root) {
+    String image = System.getenv("DATENPORTAL_RUNTIME_IMAGE"),
+        socket = System.getenv("DATENPORTAL_HOST_DOCKER_SOCKET");
+    if (image == null
+        || !image.matches("sha256:[a-f0-9]{64}")
+        || socket == null
+        || !socket.startsWith("/"))
+      throw new Problem(
+          "acceptance_runtime_missing",
+          "Installierte Abnahme über den Docker-Launcher mit festgehaltener Image- und Socket-Identität starten.");
+    String command =
+        "#!/usr/bin/env bash\nset -e\nif [[ ${1:-} == --runtime ]]; then [[ ${2:-} == docker ]] || exit 2; shift 2; fi\nexec docker run --rm -i --init --network host --entrypoint java"
+            + " --mount "
+            + quote("type=bind,source=" + directory + ",target=" + directory)
+            + " --mount "
+            + quote("type=bind,source=" + socket + ",target=/var/run/docker.sock")
+            + " -e JAVA_TOOL_OPTIONS=-Djava.net.preferIPv4Stack=true"
+            + " -e DATENPORTAL_CONTAINER_MODE=true -e "
+            + quote("DATENPORTAL_RUNTIME_IMAGE=" + image)
+            + " -e "
+            + quote("DATENPORTAL_HOST_DOCKER_SOCKET=" + socket)
+            + " -e "
+            + quote("DATENPORTAL_LAUNCH_OPTIONS=--runtime\ndocker")
+            + " -w "
+            + quote(root.toString());
+    for (String value : source.strings("validator_command", List.of()))
+      if (value.endsWith(".jar")) {
+        // The configured validator distribution includes manifest Class-Path
+        // dependencies beside the entry JAR; mount the bundle read-only.
+        Path bundle = source.path(value).getParent();
+        command +=
+            " --mount " + quote("type=bind,source=" + bundle + ",target=" + bundle + ",readonly");
+      }
+    return command
+        + " "
+        + quote(image)
+        + " -jar /opt/datenportal-agent/build/libs/datenportal-integrator.jar \"$@\"\n";
   }
 
   static void copyAgentGuidance(Path sourceRoot, Path root) throws Exception {
@@ -269,12 +320,26 @@ final class DeliveryAcceptance {
       throw new Problem(
           "unsafe_path", "Jenkins-Testadresse gehört nicht zum eigenen Fixture-Container.");
     var report =
-        Json.map("synthetic_fixture", true, "valid", false, "directory", directory.toString());
+        Json.map(
+            "synthetic_fixture",
+            true,
+            "valid",
+            false,
+            "directory",
+            directory.toString(),
+            "operator_workspace",
+            OperatorWorkspace.installed(s.root));
     try (var codex = client(s, true);
         var opencode = client(s, false)) {
       // Both real MCP processes are already alive before credentials are stored.
       credentials.save(
           "local", "admin", "admin"); // Explicit JCasC account of this disposable test stack only.
+      Path data = directory.resolve("valid.csv");
+      if (OperatorWorkspace.installed(s.root)) {
+        var imported = new WorkspaceFiles(s).importAttachment(ORGANIZATION, data.toString());
+        data = Path.of(Json.required(imported, "path"));
+        report.put("input_import", imported);
+      }
       String id =
           Json.required(
               call(
@@ -286,7 +351,7 @@ final class DeliveryAcceptance {
                       "identifier",
                       DATASET,
                       "data_path",
-                      directory.resolve("valid.csv").toString(),
+                      data.toString(),
                       "metadata_path",
                       s.topics.resolve("agi/" + DATASET + "/meta-" + DATASET + ".xtf").toString())),
               "id");
