@@ -10,6 +10,30 @@ class DeliveryAcceptanceTest {
   @TempDir Path temp;
 
   @Test
+  void operatorLauncherAcceptsClientConfigArgumentsFromAnotherDirectory() throws Exception {
+    var f = new Fixtures(temp);
+    Path root = temp.resolve("work space");
+    Files.createDirectories(root);
+    Path launcher = root.resolve("launch");
+    Json.write(launcher, new DeliveryAcceptance(f.settings).operatorLauncher(temp, root));
+    var result =
+        new ProcessRunner()
+            .run(
+                java.util.List.of(
+                    "bash",
+                    launcher.toString(),
+                    "--config",
+                    "config/local.toml",
+                    "schema",
+                    "start"),
+                Fixtures.ROOT,
+                15,
+                null);
+    assertEquals(0, result.exitCode(), result.output());
+    assertEquals("start", Json.read(result.output()).get("operation"), result.output());
+  }
+
+  @Test
   void replayRejectsAnUnmarkedWorkspace() {
     assertThrows(
         IllegalArgumentException.class, () -> SkillReplay.main(new String[] {temp.toString()}));
@@ -50,7 +74,7 @@ class DeliveryAcceptanceTest {
   void CleanupCannotSelectAnotherRootOrComposeProject() throws Exception {
     Json.write(
         temp.resolve("config.toml"),
-        "root=\".\"\ntopics_repo=\"topics\"\nstack_repo=\"stack\"\n[datasheet]\ntransport=\"http\"\nurl=\"http://127.0.0.1:8000/mcp\"\n");
+        "root=\".\"\ntopics_repo=\"topics\"\nstack_repo=\"stack\"\n[datasheet]\ntransport=\"stdio\"\n");
     var acceptance = new DeliveryAcceptance(new Settings(temp.resolve("config.toml")));
     Path fixture = temp.resolve(".datenportal-integrator/delivery-acceptance/fixture");
     Files.createDirectories(fixture);
@@ -82,7 +106,7 @@ class DeliveryAcceptanceTest {
         fixture.resolve("agent/config/local.toml"),
         "root="
             + Json.text(temp.toString())
-            + "\ntopics_repo=\"topics\"\nstack_repo=\"stack\"\n[datasheet]\ntransport=\"http\"\nurl=\"http://127.0.0.1:8000/mcp\"\n");
+            + "\ntopics_repo=\"topics\"\nstack_repo=\"stack\"\n[datasheet]\ntransport=\"stdio\"\n");
     assertEquals(
         "unsafe_path", assertThrows(Problem.class, () -> acceptance.cleanup(fixture)).code);
     Files.createSymbolicLink(fixture.resolve("datenportal-themenrepo"), temp);

@@ -25,8 +25,7 @@ class CredentialsTest {
         topics_repo="topics"
         stack_repo="stack"
         [datasheet]
-        transport="http"
-        url="http://127.0.0.1:8000/mcp"
+        transport="stdio"
         [environments.local]
         kind="local"
         enabled=true

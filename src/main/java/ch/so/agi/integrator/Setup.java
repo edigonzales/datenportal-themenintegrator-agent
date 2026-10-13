@@ -1,11 +1,6 @@
 package ch.so.agi.integrator;
 
-import java.io.*;
-import java.net.URI;
-import java.net.http.*;
-import java.nio.file.*;
 import java.util.*;
-import java.util.zip.*;
 
 public final class Setup {
   final Settings s;
@@ -16,109 +11,13 @@ public final class Setup {
 
   public Object run(String command, List<String> args) {
     return switch (command) {
-      case "setup-tools" -> tools();
-      case "setup-java" -> javaLauncher();
-      case "setup-gretl" -> {
-        if (!args.isEmpty() && !args.equals(List.of("--update")))
-          throw new Problem("invalid_arguments", "setup-gretl [--update]");
-        var result = new GretlRuntime(s, new ProcessRunner()).setup(!args.isEmpty());
-        ComposeRuntime.afterSetup(s, new ProcessRunner());
-        yield result;
-      }
-      case "setup-mcps" -> {
-        if (!args.isEmpty() && !args.equals(List.of("--update")))
-          throw new Problem("invalid_arguments", "setup-mcps [--update]");
-        var result = new DockerMcps(s, new ProcessRunner()).setup(!args.isEmpty());
-        ComposeRuntime.afterSetup(s, new ProcessRunner());
-        yield result;
-      }
-      case "runtime-up" -> {
-        if (!args.isEmpty())
-          throw new Problem("invalid_arguments", "runtime-up akzeptiert keine Argumente.");
-        yield new ComposeRuntime(s, new ProcessRunner()).up();
-      }
-      case "harness-config" -> harness();
+      case "harness-config" -> new Harness(s).proposal();
       case "codex" -> codex(args);
-      default -> throw new Problem("unknown_operation", "Unbekannter Helfer.");
-    };
-  }
-
-  Object tools() {
-    javaLauncher();
-    Path record = s.root.resolve(".datenportal-integrator/tools/ilivalidator/installed.json");
-    Path installed = record.resolveSibling("ilivalidator-1.15.0.jar");
-    if (Files.isRegularFile(record)
-        && Files.isRegularFile(installed)
-        && Objects.equals(Json.read(record).get("sha256"), Json.sha(installed)))
-      return Json.map("validator_jar", installed.toString(), "reused", true);
-    try {
-      var r =
-          HttpClient.newBuilder()
-              .followRedirects(HttpClient.Redirect.NORMAL)
-              .build()
-              .send(
-                  HttpRequest.newBuilder(
-                          URI.create(
-                              "https://downloads.interlis.ch/ilivalidator/ilivalidator-1.15.0.zip"))
-                      .GET()
-                      .build(),
-                  HttpResponse.BodyHandlers.ofByteArray());
-      if (r.statusCode() != 200
-          || !Json.hash(r.body())
-              .equals("df7ee8961743e3dfc586f646af4f63d49dabf920e98a4836a32edf676d0b20c7"))
-        throw new Problem(
-            "tool_checksum",
-            "ilivalidator-Download stimmt nicht mit der festgelegten Prüfsumme überein.");
-      Path dest = s.root.resolve(".datenportal-integrator/tools/ilivalidator");
-      Files.createDirectories(dest);
-      try (var zip = new ZipInputStream(new ByteArrayInputStream(r.body()))) {
-        ZipEntry entry;
-        while ((entry = zip.getNextEntry()) != null) {
-          Path p = Json.inside(dest, entry.getName());
-          if (entry.isDirectory()) Files.createDirectories(p);
-          else {
-            Files.createDirectories(p.getParent());
-            Files.copy(zip, p, StandardCopyOption.REPLACE_EXISTING);
-          }
-        }
-      }
-      Json.atomic(record, Json.map("sha256", Json.sha(installed)));
-      return Json.map("validator_jar", installed.toString());
-    } catch (Problem e) {
-      throw e;
-    } catch (Exception e) {
-      throw new Problem("tool_setup_failed", "ilivalidator konnte nicht installiert werden.");
-    }
-  }
-
-  String java() {
-    return Path.of(System.getProperty("java.home"), "bin/java").toString();
-  }
-
-  Object javaLauncher() {
-    if (AgentRuntime.container()) return Json.map("skipped", true, "reason", "container_java");
-    Path link = s.root.resolve(".datenportal-integrator/tools/java");
-    try {
-      Files.createDirectories(link.getParent());
-      if (Files.exists(link, LinkOption.NOFOLLOW_LINKS)) {
-        if (!Files.isSymbolicLink(link))
+      default ->
           throw new Problem(
-              "launcher_conflict", "Lokaler Java-Launcher ist kein verwalteter Symlink.");
-        Files.delete(link);
-      }
-      Files.createSymbolicLink(link, Path.of(java()));
-      return Json.map("java_launcher", link.toString(), "java", java());
-    } catch (Problem e) {
-      throw e;
-    } catch (Exception e) {
-      throw new Problem(
-          "launcher_unavailable",
-          "Java-Launcher konnte nicht angelegt werden; für den lokalen Betrieb JAVA_HOME auf JDK 25 setzen.");
-    }
-  }
-
-  Object harness() {
-    return new Harness(s).proposal();
+              "command_retired",
+              "Java-Betriebspaket installieren und init verwenden; separate Runtime-Installation entfällt.");
+    };
   }
 
   Object codex(List<String> extra) {
@@ -126,11 +25,9 @@ public final class Setup {
     command.addAll(new Harness(s).codexArguments());
     command.addAll(extra);
     try {
-      var process = new ProcessBuilder(command).inheritIO().start();
-      return Json.map("exit_code", process.waitFor());
+      return Json.map("exit_code", new ProcessBuilder(command).inheritIO().start().waitFor());
     } catch (Exception e) {
-      throw new Problem(
-          "codex_start_failed", "Codex ist nicht im PATH oder konnte nicht gestartet werden.");
+      throw new Problem("codex_start_failed", "Codex konnte nicht gestartet werden.");
     }
   }
 

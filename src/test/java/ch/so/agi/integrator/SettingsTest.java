@@ -6,9 +6,6 @@ import java.nio.file.*;
 import java.util.*;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.yaml.snakeyaml.LoaderOptions;
-import org.yaml.snakeyaml.Yaml;
-import org.yaml.snakeyaml.constructor.SafeConstructor;
 
 class SettingsTest {
   @TempDir Path temp;
@@ -24,23 +21,12 @@ class SettingsTest {
   }
 
   @Test
-  void shippedToolImagesMatchComposeAndGretlFallback() {
-    var settings = parse(example());
-    var compose =
-        Json.obj(
-            new Yaml(new SafeConstructor(new LoaderOptions()))
-                .load(Json.contents(Fixtures.ROOT.resolve("compose.yaml"))));
-    var services = Json.obj(compose.get("services"));
-    for (String tool : List.of("datasheet", "interlis", "gretl")) {
-      String image = Json.required(Json.obj(settings.values.get(tool)), "image");
-      assertTrue(image.matches("[^@]+@sha256:[a-f0-9]{64}"), tool);
-      assertEquals(image, Json.obj(services.get(tool)).get("image"), tool);
-    }
-    assertEquals(GretlRuntime.reference(settings), GretlRuntime.DEFAULT_IMAGE);
+  void rejectsLegacyRuntimeAndDoesNotRequireStack() {
+    assertFalse(parse(example()).values.containsKey("stack_repo"));
+    assertEquals("stdio", parse(example()).mcp("datasheet").get("transport"));
     assertEquals(
-        GretlRuntime.reference(
-            parse(example().replaceAll("(?s)\\[gretl\\].*?\\[datasheet\\]", "[datasheet]"))),
-        GretlRuntime.DEFAULT_IMAGE);
+        "configuration_upgrade_required",
+        assertThrows(Problem.class, () -> parse(example() + "\n[gretl]\nmode=\"compose\"\n")).code);
   }
 
   @Test
@@ -53,12 +39,8 @@ class SettingsTest {
     assertEquals(
         Json.obj(properties.get("stack_timeout_seconds")).get("default"), settings.stackTimeout);
     var minimal =
-        parse(
-            "topics_repo=\"topics\"\nstack_repo=\"stack\"\n[datasheet]\ntransport=\"http\"\nurl=\"http://127.0.0.1:8000/mcp\"\n");
+        parse("topics_repo=\"topics\"\nstack_repo=\"stack\"\n[datasheet]\ntransport=\"stdio\"\n");
     assertTrue(minimal.mcp("interlis").isEmpty());
-    assertEquals(
-        Json.obj(Json.obj(properties.get("gretl")).get("properties")).get("mode"),
-        Json.map("enum", List.of("compose", "ephemeral"), "default", GretlRuntime.mode(minimal)));
   }
 
   // Cross-check the documented field contract, not a general JSON Schema evaluator.
@@ -101,12 +83,8 @@ class SettingsTest {
   void rejectsWrongTypesAndUnsupportedValuesBeforeUsingConfiguration() {
     for (var change :
         List.of(
-            Map.entry("managed = true", "managed = \"true\""),
             Map.entry("timeout_seconds = 300", "timeout_seconds = 1.5"),
             Map.entry("stack_timeout_seconds = 1800", "stack_timeout_seconds = 4294967297"),
-            Map.entry("mode = \"compose\"", "mode = \"other\""),
-            Map.entry("project = \"datenportal-integrator\"", "project = 1"),
-            Map.entry("enabled = true", "enabled = \"true\""),
             Map.entry("model_dirs = []", "model_dirs = [1]"))) {
       assertEquals(
           "invalid_configuration",

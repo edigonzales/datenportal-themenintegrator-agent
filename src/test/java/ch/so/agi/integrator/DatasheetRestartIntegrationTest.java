@@ -6,7 +6,6 @@ import io.modelcontextprotocol.client.*;
 import io.modelcontextprotocol.client.transport.*;
 import io.modelcontextprotocol.json.jackson3.JacksonMcpJsonMapper;
 import io.modelcontextprotocol.spec.McpSchema;
-import java.net.URI;
 import java.net.http.*;
 import java.nio.file.*;
 import java.time.Duration;
@@ -21,9 +20,7 @@ class DatasheetRestartIntegrationTest {
   Settings source() {
     var settings = Fixtures.integrationSettings();
     // Each connection must own a fresh process for these restart assertions.
-    settings.values.put(
-        "datasheet",
-        Json.map("transport", "stdio", "image", Json.required(settings.mcp("datasheet"), "image")));
+    settings.values.put("datasheet", Json.map("transport", "stdio"));
     return settings;
   }
 
@@ -179,7 +176,7 @@ class DatasheetRestartIntegrationTest {
   }
 
   @Test
-  void separateCliProcessesAndIntegratorStdioUseOnlyPublishedImages() throws Exception {
+  void separateCliProcessesAndIntegratorStdioUseOnlyPackagedJars() throws Exception {
     var s = source();
     var f = fixture(s, (n, a) -> Json.map());
     String id = f.metadataOnly();
@@ -189,12 +186,7 @@ class DatasheetRestartIntegrationTest {
             .replaceAll("(?ms)^\\[datasheet\\]\\n.*?(?=^\\[|\\z)", "");
     Json.write(
         temp.resolve("local.toml"),
-        config
-            + "\n[datasheet]\ntransport=\"stdio\"\nimage="
-            + Json.text(Json.required(s.mcp("datasheet"), "image"))
-            + "\n[interlis]\ntransport=\"stdio\"\nimage="
-            + Json.text(Json.required(s.mcp("interlis"), "image"))
-            + "\n");
+        config + "\n[datasheet]\ntransport=\"stdio\"\n[interlis]\ntransport=\"stdio\"\n");
     cli("metadata", Json.map("run_id", id, "operation", "import_xtf"));
     cli(
         "metadata",
@@ -233,101 +225,15 @@ class DatasheetRestartIntegrationTest {
   }
 
   @Test
-  void httpStreamableSessionAndExportRegression() throws Exception {
+  void packagedJarClosesOnEofAndHandlesLargeParallelResponses() throws Exception {
     var s = source();
-    var docker = new DockerMcps(s, new ProcessRunner());
-    String name = docker.name("http-test");
-    String image = Json.required(docker.selected("datasheet", true), "image_id");
-    var process = new ProcessRunner();
-    int port;
-    try (var socket = new java.net.ServerSocket(0)) {
-      port = socket.getLocalPort();
-    }
-    try {
-      process.checked(
-          List.of(
-              "docker",
-              "run",
-              "--rm",
-              "-d",
-              "--name",
-              name,
-              "--label",
-              "datenportal.integrator.owner=" + docker.owner(),
-              "-p",
-              "127.0.0.1:" + port + ":8000",
-              "-e",
-              "SPRING_PROFILES_ACTIVE=http",
-              "-e",
-              "DATASHEET_HOST=0.0.0.0",
-              "-e",
-              "DATASHEET_PORT=8000",
-              image),
-          s.root,
-          30);
-      // Explicit publication is reachable from Docker Desktop host-network test containers too.
-      // Docker-assigned dynamic host ports can be reachable only from the macOS host.
-      String url = "http://127.0.0.1:" + port;
-      var http = HttpClient.newHttpClient();
-      long deadline = System.nanoTime() + Duration.ofSeconds(30).toNanos();
-      boolean ready = false;
-      while (System.nanoTime() < deadline) {
-        try {
-          ready =
-              http.send(
-                          HttpRequest.newBuilder(URI.create(url + "/actuator/health"))
-                              .timeout(Duration.ofSeconds(1))
-                              .GET()
-                              .build(),
-                          HttpResponse.BodyHandlers.discarding())
-                      .statusCode()
-                  == 200;
-        } catch (Exception ignored) {
-        }
-        if (ready) break;
-        Thread.sleep(200);
-      }
-      assertTrue(ready);
-      s.values.put(
-          "datasheet",
-          Json.map(
-              "transport",
-              "http",
-              "url",
-              url + "/mcp",
-              "image",
-              Json.required(s.mcp("datasheet"), "image")));
-      try (var client = McpClients.datasheet(s)) {
-        var draft =
-            client.call(
-                "import_xtf",
-                Json.map("xml", Json.contents(Fixtures.FIXTURES.resolve("series.xtf"))));
-        var exported =
-            client.call(
-                "export_xtf",
-                Json.map(
-                    "draft_id",
-                    draft.get("draft_id"),
-                    "expected_revision",
-                    draft.get("revision"),
-                    "include_xml",
-                    true));
-        assertTrue(exported.containsKey("download_url"));
-        assertTrue(exported.containsKey("xml"));
-      }
-    } finally {
-      docker.remove(name);
-    }
-  }
-
-  @Test
-  void publishedImageClosesOnEofAndHandlesLargeParallelResponses() throws Exception {
-    var s = source();
-    var docker = new DockerMcps(s, new ProcessRunner());
-    String name = docker.name("eof-test");
     var transport =
         new EofStdioTransport(
-            docker.launch(name, Json.required(docker.selected("datasheet", true), "image_id")),
+            List.of(
+                JavaRuntime.java(),
+                "-Dspring.profiles.active=stdio",
+                "-jar",
+                JavaRuntime.mcp(s, "datasheet").toString()),
             s.root,
             new JacksonMcpJsonMapper(new tools.jackson.databind.json.JsonMapper()),
             line -> {});
@@ -364,8 +270,6 @@ class DatasheetRestartIntegrationTest {
         for (var response : pool.invokeAll(requests))
           assertFalse(Boolean.TRUE.equals(response.get().isError()));
       }
-    } finally {
-      docker.remove(name);
     }
     assertFalse(transport.process().isAlive());
     assertEquals(

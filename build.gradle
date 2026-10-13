@@ -1,7 +1,7 @@
-plugins { id 'java'; id 'application'; id 'com.diffplug.spotless' version '8.7.0' }
+plugins { id 'java'; id 'application'; id 'maven-publish'; id 'com.diffplug.spotless' version '8.7.0' }
 group = 'ch.so.agi'
 version = providers.gradleProperty('agentVersion').getOrElse('0.1.0-dev')
-java { toolchain { languageVersion = JavaLanguageVersion.of(25) } }
+java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
 repositories { mavenCentral(); maven { url = uri('https://jars.interlis.ch') } }
 dependencies {
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.21.5'
@@ -11,6 +11,8 @@ dependencies {
     implementation 'org.apache.poi:poi-ooxml:5.4.1'
     implementation 'org.apache.commons:commons-compress:1.27.1'
     implementation 'org.yaml:snakeyaml:2.4'
+    implementation 'ch.interlis:ilivalidator:1.15.0'
+    implementation 'ch.interlis:iox-ili:1.24.4'
     implementation 'ch.interlis:ili2c-tool:5.6.8'
     implementation 'ch.interlis:ili2c-core:5.6.8'
     implementation 'org.junit.platform:junit-platform-console-standalone:1.13.4'
@@ -19,8 +21,7 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 application { mainClass = 'ch.so.agi.integrator.Main' }
-sourceSets.main.resources { srcDir '.'; include 'compose.yaml', 'runtime/gretl-*.sh' }
-test { useJUnitPlatform(); systemProperty 'integrator.root', projectDir.absolutePath }
+test { dependsOn jar; environment "GH_TOKEN", "SYNTHETIC_ISOLATED_TEST_TOKEN"; useJUnitPlatform(); systemProperty 'integrator.root', projectDir.absolutePath }
 tasks.register('integrationTest', Test) {
     dependsOn jar, testClasses
     useJUnitPlatform { includeTags 'integration' }
@@ -95,3 +96,111 @@ jar {
 }
 dependencyLocking { lockAllConfigurations() }
 spotless { java { googleJavaFormat('1.28.0'); target 'src/main/java/**/*.java', 'src/test/java/**/*.java' } }
+
+// All released runtime artifacts target the same Java baseline.
+tasks.withType(JavaCompile).configureEach { options.release = 21 }
+configurations { datasheetExecutable; interlisExecutable }
+repositories { maven { url = uri('https://jars.interlis.guru/snapshots/') } }
+def localMcpArtifacts = providers.gradleProperty('mcpArtifactDirectory')
+def datasheetVersion = providers.gradleProperty('datasheetVersion')
+def interlisVersion = providers.gradleProperty('interlisVersion')
+if (!localMcpArtifacts.isPresent()) {
+    if (datasheetVersion.isPresent()) dependencies.add('datasheetExecutable', "ch.so.agi:datasheet-mcp:${datasheetVersion.get()}:boot@jar")
+    if (interlisVersion.isPresent()) dependencies.add('interlisExecutable', "ch.so.agi:interlis-mcp:${interlisVersion.get()}:boot@jar")
+}
+// Executable server JARs have no transitive classpath; each is a self-contained process.
+configurations.datasheetExecutable { transitive = false; resolutionStrategy.deactivateDependencyLocking() }
+configurations.interlisExecutable { transitive = false; resolutionStrategy.deactivateDependencyLocking() }
+tasks.register('validatorJar', Jar) {
+    archiveFileName = 'ilivalidator.jar'
+    destinationDirectory = layout.buildDirectory.dir('validator')
+    manifest { attributes 'Main-Class': 'org.interlis2.validator.Main' }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from { configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) } }
+    exclude 'META-INF/*.SF', 'META-INF/*.RSA', 'META-INF/*.DSA', 'module-info.class', 'META-INF/versions/**/module-info.class'
+}
+tasks.register('runtimeArtifacts', Sync) {
+    dependsOn jar, 'validatorJar'
+    into layout.buildDirectory.dir('runtime-artifacts')
+    from(tasks.named('jar'))
+    from(tasks.named('validatorJar'))
+    if (localMcpArtifacts.isPresent()) {
+        from(localMcpArtifacts) { include 'datasheet-mcp.jar', 'interlis-mcp.jar' }
+    } else {
+        from(configurations.datasheetExecutable) { rename { 'datasheet-mcp.jar' } }
+        from(configurations.interlisExecutable) { rename { 'interlis-mcp.jar' } }
+    }
+    doFirst {
+        if (!localMcpArtifacts.isPresent() && (!datasheetVersion.isPresent() || !interlisVersion.isPresent()))
+            throw new GradleException('Set -PdatasheetVersion and -PinterlisVersion to published executable versions. Developer fixtures may use -PmcpArtifactDirectory.')
+    }
+    doLast {
+        ['datasheet-mcp.jar', 'interlis-mcp.jar'].each {
+            if (!new File(destinationDir, it).isFile()) throw new GradleException("Missing executable: $it")
+        }
+    }
+}
+tasks.register('distributionFiles', Sync) {
+    dependsOn 'runtimeArtifacts', 'operatorWorkspace'
+    into layout.buildDirectory.dir('java-distribution')
+    from(tasks.named('runtimeArtifacts')) { into 'lib' }
+    from(layout.buildDirectory.dir('operator-workspace')) { into 'workspace' }
+    from('bin/datenportal-agent') { into 'bin'; filePermissions { unix('rwxr-xr-x') } }
+    from('config') { include 'rules.json', 'local.example.toml', 'settings.schema.json'; into 'config' }
+    from('validation') { into 'validation' }
+    from('templates') { exclude 'operator/**'; into 'templates' }
+    from('tests/fixtures') { into 'tests/fixtures' }
+    from('LICENSE')
+    doLast {
+        def models = new File(destinationDir, 'models'); models.mkdirs()
+        def server = new File(destinationDir, 'lib/datasheet-mcp.jar')
+        copy {
+            from(zipTree(server)) { include 'BOOT-INF/classes/models/*.ili'; eachFile { path = name }; includeEmptyDirs = false }
+            into models
+        }
+        if (!new File(models, 'SO_AGI_DataCatalog_Datasheet_20260523.ili').isFile())
+            throw new GradleException('Published Datenblatt JAR does not contain the original models')
+        def inventory = new TreeMap<String, String>()
+        fileTree(destinationDir).files.findAll { it.isFile() && it.name != 'distribution.json' }.sort().each {
+            inventory[destinationDir.toPath().relativize(it.toPath()).toString()] = java.security.MessageDigest.getInstance('SHA-256').digest(it.bytes).encodeHex().toString()
+        }
+        new File(destinationDir, 'distribution.json').text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson([
+            version: project.version.toString(), java: 21, developmentArtifacts: localMcpArtifacts.isPresent(),
+            datasheetVersion: datasheetVersion.orNull, interlisVersion: interlisVersion.orNull, files: inventory
+        ])) + '\n'
+    }
+}
+tasks.register('javaDistribution', Tar) {
+    dependsOn 'distributionFiles'
+    archiveBaseName = 'datenportal-themenintegrator-agent'
+    archiveClassifier = 'bin'
+    compression = Compression.GZIP
+    archiveExtension = 'tar.gz'
+    destinationDirectory = layout.buildDirectory.dir('distributions')
+    from(layout.buildDirectory.dir('java-distribution'))
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+}
+publishing {
+    publications {
+        operator(MavenPublication) {
+            artifactId = 'datenportal-themenintegrator-agent'
+            artifact(tasks.named('javaDistribution')) { classifier = 'bin'; extension = 'tar.gz' }
+        }
+    }
+    repositories {
+        maven {
+            name = 'operatorSnapshots'; url = uri('https://jars.interlis.guru/snapshots/')
+            authentication { basic(org.gradle.authentication.http.BasicAuthentication) }
+            credentials {
+                username = providers.environmentVariable('MAVEN_USERNAME').orNull
+                password = providers.environmentVariable('MAVEN_PASSWORD').orNull
+            }
+        }
+    }
+}
+tasks.withType(org.gradle.api.publish.maven.tasks.PublishToMavenRepository).configureEach {
+    doFirst {
+        if (localMcpArtifacts.isPresent()) throw new GradleException('Development MCP artifacts cannot be published in the operator distribution')
+    }
+}

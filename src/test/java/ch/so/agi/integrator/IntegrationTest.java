@@ -75,7 +75,7 @@ class IntegrationTest {
       assertEquals("approval_required", Json.obj(blocked.structuredContent()).get("error"));
       var schema =
           client.callTool(new McpSchema.CallToolRequest("organization_schema", Json.map()));
-      assertFalse(Boolean.TRUE.equals(schema.isError()));
+      assertFalse(Boolean.TRUE.equals(schema.isError()), Json.text(schema));
       assertEquals(
           6,
           Json.obj(Json.obj(Json.obj(schema.structuredContent()).get("office_rules")).get("fields"))
@@ -116,7 +116,7 @@ class IntegrationTest {
     assertFalse(schema.isEmpty());
     var model = own(McpClients.interlis(s));
     var f = new Fixtures(temp, new ProcessRunner(), data, model);
-    f.workflow.gretl = new GretlRuntime(s, f.workflow.process);
+    f.workflow.csvValidation = new CsvValidation(s, f.workflow.process);
     Workspace.copy(s.topics, f.repo);
     f.settings.values.put("validator_command", s.strings("validator_command", List.of()));
     // Test repository and test approvals are isolated; no upload or source-repository writes.
@@ -199,24 +199,23 @@ class IntegrationTest {
         f.workflow.store.edit(
             id, r -> f.workflow.repoFile(r, f.workflow.topic(r) + "/dataset.gradle"));
     assertTrue(Json.contents(task).contains("preparePublicationWorkspace"));
-    Path snapshot = Path.of(Json.required(Json.obj(report.get("gretl")), "workspace"));
+    Path snapshot =
+        f.workflow.store.edit(
+            id, state -> new Workspace(f.workflow).snapshot(state, "jenkins-test"));
     Path invalid = temp.resolve("invalid.csv");
     Json.write(invalid, "Jahr\nnot-a-number\n");
-    var r =
+    Path modelFile =
         f.workflow.store.edit(
             id,
             state ->
-                new Workspace(f.workflow)
-                    .gradle(
-                        state,
-                        snapshot,
-                        "preparePublicationWorkspace",
-                        List.of("-Pdataset=ch.so.grundwasser.qualitaet", "-PdataFile=" + invalid),
-                        "invalid-before-publication"));
+                Path.of(
+                    Json.required(Json.obj(Json.obj(state.get("files")).get("model")), "path")));
+    var r =
+        f.workflow.csvValidation.validate(
+            invalid, modelFile, Json.required(identity, "name"), temp.resolve("negative"));
     assertFalse(Json.bool(r, "valid", true));
     String log = Json.contents(Path.of(Json.required(r, "log")));
-    assertTrue(log.contains("validateThemenCsv FAILED"), log);
-    assertFalse(log.contains("> Task :preparePublicationWorkspace"), log);
+    assertTrue(log.contains("INTEGRATOR_CSV_VALIDATED=false"), log);
 
     // Execute the identical staged task inside the existing Jenkins runtime, without
     // seed/upload/publication.
@@ -234,10 +233,6 @@ class IntegrationTest {
             s.stack,
             30);
     assertEquals(1, container.lines().count());
-    assertTrue(Json.bool(new GretlRuntime(s, process).matchJenkins(), "valid", false));
-    assertEquals(
-        GretlRuntime.recorded(s).get("sha256"),
-        Json.obj(Json.obj(report.get("gretl")).get("runtime")).get("sha256"));
     String work = "/var/jenkins_home/datenportal-integrator-tests/" + id;
     process.checked(List.of("docker", "exec", container, "mkdir", "-p", work), s.stack, 30);
     process.checked(
@@ -310,7 +305,7 @@ class IntegrationTest {
   void realEmptyOrganizationGradleAndOfficeValidation() throws Exception {
     Settings s = Fixtures.integrationSettings();
     var f = new Fixtures(temp, new ProcessRunner(), (n, a) -> Json.map(), (n, a) -> Json.map());
-    f.workflow.gretl = new GretlRuntime(s, f.workflow.process);
+    f.workflow.csvValidation = new CsvValidation(s, f.workflow.process);
     Workspace.copy(s.topics, f.repo);
     f.settings.values.put("validator_command", s.strings("validator_command", List.of()));
     String id =
@@ -346,7 +341,7 @@ class IntegrationTest {
     var f =
         new Fixtures(
             temp, new ProcessRunner(), own(McpClients.datasheet(s)), own(McpClients.interlis(s)));
-    f.workflow.gretl = new GretlRuntime(s, f.workflow.process);
+    f.workflow.csvValidation = new CsvValidation(s, f.workflow.process);
     Workspace.copy(s.topics, f.repo);
     f.settings.values.put("validator_command", s.strings("validator_command", List.of()));
     var doc = Xml.parse(Fixtures.FIXTURES.resolve("dataset.xtf"));

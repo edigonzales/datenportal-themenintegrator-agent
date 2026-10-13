@@ -5,7 +5,6 @@
   "additionalProperties": false,
   "required": [
     "topics_repo",
-    "stack_repo",
     "datasheet"
   ],
   "properties": {
@@ -38,7 +37,9 @@
     },
     "input_roots": {
       "type": "array",
-      "items": { "type": "string" },
+      "items": {
+        "type": "string"
+      },
       "description": "Zusätzliche freigegebene Eingangsverzeichnisse; in Docker mit --mount-ro einbinden."
     },
     "compose_files": {
@@ -60,7 +61,16 @@
       "default": 300
     },
     "interlis": {
-      "$ref": "#/$defs/mcp"
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "transport": {
+          "enum": [
+            "stdio"
+          ],
+          "default": "stdio"
+        }
+      }
     },
     "environments": {
       "type": "object",
@@ -69,23 +79,14 @@
       }
     },
     "datasheet": {
-      "$ref": "#/$defs/mcp"
-    },
-    "gretl": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "image": {
-          "type": "string",
-          "default": "sogis/datenportal-jenkins:0.1.0-3",
-          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/:@-]*$"
-        },
-        "mode": {
+        "transport": {
           "enum": [
-            "compose",
-            "ephemeral"
+            "stdio"
           ],
-          "default": "ephemeral"
+          "default": "stdio"
         }
       }
     },
@@ -94,17 +95,6 @@
       "minimum": 1,
       "maximum": 7200,
       "default": 1800
-    },
-    "runtime": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "project": {
-          "type": "string",
-          "default": "datenportal-integrator",
-          "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
-        }
-      }
     }
   },
   "$defs": {

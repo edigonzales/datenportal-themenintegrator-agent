@@ -1,53 +1,22 @@
-# Relative paths resolve against root, itself relative to this configuration file.
+# New Java-21 workspace. Paths are relative to root, itself relative to this file.
 root = ".."
 topics_repo = "../datenportal-themenrepo"
-stack_repo = "../datenportal-dev-stack"
 state_dir = ".datenportal-integrator/runs"
-# Use an installed, pinned distribution. The Java CLI setup-tools provisions it.
-validator_command = ["java", "-jar", ".datenportal-integrator/tools/ilivalidator/ilivalidator-1.15.0.jar"]
-# Originalmodelle kommen aus dem festgelegten Datenblatt-Image; zusätzliche Modelle optional.
 model_dirs = []
-compose_files = ["compose.yaml"]
-stack_start_args = []
 timeout_seconds = 300
 stack_timeout_seconds = 1800
 
-[gretl]
-image = "sogis/datenportal-jenkins@sha256:c3eb068ed8636e546ca5b5cd2e57428ab31d1d00480446e52ad570bace46d833"
-mode = "compose"
-# setup-gretl sichert Digest und Bundle; Java 17 läuft ausschliesslich im Image.
-
+# MCP programs and original INTERLIS models come from the installed package.
 [datasheet]
-transport = "http"
-managed = true
-url = "http://127.0.0.1:8000/mcp"
-image = "sogis/datenportal-datenblatt-mcp@sha256:b391421578f8c4652fb7a64465187746a3057ab4413d17cfc20a56025b470da1"
-# Für einen vorhandenen HTTP-Dienst managed=false setzen.
-# image bleibt als Quelle für Originalmodelle auch bei HTTP möglich.
-
+transport = "stdio"
 [interlis]
-transport = "http"
-managed = true
-url = "http://127.0.0.1:8080/mcp"
-image = "sogis/interlis-mcp@sha256:72e834f04e74aed92658676ea3a693e0300f09ef91bb8f91c1334f8d943c94de"
-# Für bestehende externe HTTP-Dienste managed=false setzen.
-# Für stdio managed/url entfernen und transport="stdio" setzen.
+transport = "stdio"
 
-[runtime]
-project = "datenportal-integrator"
-
-[environments.local]
-kind = "local"
-enabled = true
-jenkins_url = "http://localhost:8081/jenkins"
-portal_url = "http://localhost:8081"
-manifest_url = "http://localhost:8081/ch.so.daten/current.json"
-repository_mode = "working-tree"
-username_env = "DATENPORTAL_LOCAL_USER"
-token_env = "DATENPORTAL_LOCAL_TOKEN"
-git_write_back = false
-reload_portal = true
-
-# INT/PROD are deliberately not preconfigured. Copy a profile, set the real
-# URLs/branch and credential variable names, confirm managed-git/writeBack=false,
-# then enable it. Credentials must never appear in this file or in Git.
+# Configure publication profiles only when needed. No local stack is required
+# for CSV/XTF validation or working against existing INT/PROD services.
+# For optional local acceptance: set stack_repo at the top level and add
+# an environments.local profile using loopback URLs and kind="local".
+# INT/PROD: kind="int" or "prod", enabled=true, repository_mode="managed-git",
+# jenkins_url, portal_url, manifest_url, username_env, token_env,
+# git_remote="origin", git_branch="main", git_write_back=false, reload_portal=true.
+# Secrets remain in environment variables or the credential store.

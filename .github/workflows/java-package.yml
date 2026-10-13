@@ -1,0 +1,61 @@
+name: Java operator package
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      datasheet_version:
+        description: Published datasheet-mcp executable version
+        required: true
+      interlis_version:
+        description: Published interlis-mcp executable version
+        required: true
+permissions:
+  contents: read
+jobs:
+  verify:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+      - run: ./gradlew --no-daemon test jar spotlessCheck
+  package:
+    if: github.event_name == 'workflow_dispatch'
+    needs: verify
+    runs-on: ubuntu-latest
+    env:
+      DATASHEET_VERSION: ${{ inputs.datasheet_version }}
+      INTERLIS_VERSION: ${{ inputs.interlis_version }}
+      AGENT_VERSION: 0.2.${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+      - name: Build complete source-free distribution
+        run: ./gradlew --no-daemon javaDistribution -PagentVersion="$AGENT_VERSION" -PdatasheetVersion="$DATASHEET_VERSION" -PinterlisVersion="$INTERLIS_VERSION"
+      - name: Check the installed distribution
+        run: bash bin/package-smoke build/java-distribution
+      - name: Publish the tested package
+        env:
+          MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
+          MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
+        run: ./gradlew --no-daemon publishOperatorPublicationToOperatorSnapshotsRepository -PagentVersion="$AGENT_VERSION" -PdatasheetVersion="$DATASHEET_VERSION" -PinterlisVersion="$INTERLIS_VERSION"
+      - name: Download and verify the published package
+        run: |
+          artifact="datenportal-themenintegrator-agent-${AGENT_VERSION}-bin.tar.gz"
+          curl --fail --silent --show-error --location "https://jars.interlis.guru/snapshots/ch/so/agi/datenportal-themenintegrator-agent/${AGENT_VERSION}/${artifact}" --output build/published.tar.gz
+          cmp "build/distributions/${artifact}" build/published.tar.gz
+          mkdir build/published
+          tar -xzf build/published.tar.gz -C build/published
+          bash bin/package-smoke build/published

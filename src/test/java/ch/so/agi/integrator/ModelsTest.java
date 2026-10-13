@@ -444,18 +444,12 @@ class ModelsTest {
   @Test
   void csvFailureUsesSameRepairBudgetAndRetainsItsLog() {
     f.call("derive_model", "run_id", id, "identity", identity(), "range_proposals", proposals());
-    var healthy = f.workflow.gretl;
-    f.workflow.gretl =
-        new GretlRuntime(f.settings, new Fixtures.FakeProcess()) {
+    var healthy = f.workflow.csvValidation;
+    f.workflow.csvValidation =
+        new CsvValidation(f.settings, new Fixtures.FakeProcess()) {
           @Override
-          public Map<String, Object> gradle(
-              Workflow w,
-              Map<String, Object> run,
-              Path snapshot,
-              String task,
-              List<String> properties,
-              String logName) {
-            Path log = w.directory(run).resolve("validation/fixture-csv.log");
+          public Map<String, Object> validate(Path data, Path model, String name, Path output) {
+            Path log = output.resolve("fixture-csv.log");
             Json.write(log, "Error: Jahr outside range\n");
             return Json.map("valid", false, "log", log.toString(), "log_sha256", Json.sha(log));
           }
@@ -463,7 +457,7 @@ class ModelsTest {
     var failure = f.call("validate_model", "run_id", id);
     assertEquals(false, failure.get("valid"));
     var series = Json.obj(failure.get("repair"));
-    f.workflow.gretl = healthy;
+    f.workflow.csvValidation = healthy;
     reply.put("status", "APPLIED");
     f.call(
         "derive_model",

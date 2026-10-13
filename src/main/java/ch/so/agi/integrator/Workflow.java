@@ -9,7 +9,8 @@ public final class Workflow implements AutoCloseable {
   final ProcessRunner process;
   final McpClients.ToolClient datasheets, interlis;
   final Validator validator;
-  GretlRuntime gretl;
+  CsvValidation csvValidation;
+  java.util.function.Supplier<GitHub> github;
   java.util.function.BiFunction<String, Map<String, Object>, Jenkins> jenkins;
   java.util.function.BiFunction<String, Map<String, Object>, Credentials.Value> credentials;
 
@@ -24,7 +25,8 @@ public final class Workflow implements AutoCloseable {
     datasheets = d;
     interlis = i;
     validator = new Validator(s, p);
-    gretl = new GretlRuntime(s, p);
+    csvValidation = new CsvValidation(s, p);
+    github = () -> new GitHub(s.timeout);
     credentials = (name, env) -> new Credentials(s).resolve(name, env);
     jenkins = (name, env) -> new Jenkins(env, credentials.apply(name, env));
   }

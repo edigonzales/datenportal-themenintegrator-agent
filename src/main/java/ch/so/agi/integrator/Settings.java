@@ -30,6 +30,10 @@ public final class Settings {
     } catch (java.io.IOException e) {
       throw new Problem("invalid_configuration", "TOML-Konfiguration nicht lesbar.");
     }
+    if (values.containsKey("gretl") || values.containsKey("runtime"))
+      throw new Problem(
+          "configuration_upgrade_required",
+          "Neue Java-Konfigurationsvorlage in neuem Arbeitsbereich verwenden; alte Vorgänge bleiben unverändert.");
     Set<String> allowed =
         Set.of(
             "root",
@@ -75,26 +79,11 @@ public final class Settings {
         throw invalid(key);
     root = config.toAbsolutePath().getParent().resolve(Json.str(values, "root", "..")).normalize();
     topics = path(Json.required(values, "topics_repo"));
-    stack = path(Json.required(values, "stack_repo"));
+    stack = path(Json.str(values, "stack_repo", ".datenportal-integrator/no-local-stack"));
     runs = path(Json.str(values, "state_dir", ".datenportal-integrator/runs"));
     timeout = Json.number(values, "timeout_seconds", 300);
     stackTimeout = Json.number(values, "stack_timeout_seconds", 1800);
     for (String service : List.of("datasheet", "interlis")) validateMcp(service);
-    var gretl = Json.obj(values.get("gretl"));
-    for (String key : List.of("image", "mode")) type(gretl, key, String.class, "gretl." + key);
-    if (gretl.keySet().stream().anyMatch(k -> !Set.of("image", "mode").contains(k))
-        || !Set.of("compose", "ephemeral").contains(GretlRuntime.mode(this))
-        || !GretlRuntime.reference(this).matches("[A-Za-z0-9][A-Za-z0-9._/:@-]*"))
-      throw new Problem(
-          "invalid_configuration",
-          "[gretl] benötigt eine gültige Image-Referenz und mode=compose|ephemeral.");
-    var runtime = Json.obj(values.get("runtime"));
-    type(runtime, "project", String.class, "runtime.project");
-    if (runtime.keySet().stream().anyMatch(k -> !k.equals("project"))
-        || !Json.str(runtime, "project", "datenportal-integrator")
-            .matches("[a-z0-9][a-z0-9_-]{0,63}"))
-      throw new Problem(
-          "invalid_configuration", "[runtime].project muss ein gültiger Compose-Projektname sein.");
     for (Object profile : Json.obj(values.get("environments")).values()) {
       if (!(profile instanceof Map)) throw invalid("environments");
       var environment = Json.obj(profile);
@@ -157,41 +146,12 @@ public final class Settings {
   private void validateMcp(String service) {
     var c = mcp(service);
     if (!values.containsKey(service) && service.equals("interlis")) return;
-    for (String field : c.keySet())
-      type(c, field, field.equals("managed") ? Boolean.class : String.class, service + "." + field);
-    for (String field : c.keySet())
-      if (!Set.of("transport", "image", "url", "managed").contains(field))
-        throw new Problem(
-            "invalid_configuration", "Unbekannte MCP-Einstellung.", "field", service + "." + field);
-    String transport = Json.str(c, "transport", "stdio");
-    if (!Set.of("stdio", "http").contains(transport))
-      throw new Problem("invalid_configuration", "MCP-Transport muss stdio oder http sein.");
-    if (transport.equals("http")) {
-      url(Json.required(c, "url"));
-    } else if (!c.containsKey("image") || c.containsKey("url")) {
+    if (!c.isEmpty() && !(c.size() == 1 && "stdio".equals(c.get("transport"))))
       throw new Problem(
-          "invalid_configuration",
-          "stdio benötigt ein Docker-Image ohne HTTP-Adresse.",
-          "field",
+          "configuration_upgrade_required",
+          "MCPs verwenden die mitgelieferten Java-JARs über stdio; alte image/url/managed-Konfiguration entfernen.",
+          "service",
           service);
-    }
-    if (c.containsKey("image")
-        && !Json.required(c, "image").matches("[A-Za-z0-9][A-Za-z0-9._/:@-]*"))
-      throw new Problem("invalid_configuration", "Ungültige Docker-Image-Referenz.");
-    if (Json.bool(c, "managed", false)) {
-      var endpoint = url(Json.required(c, "url"));
-      if (!transport.equals("http")
-          || !c.containsKey("image")
-          || !endpoint.getScheme().equals("http")
-          || !Set.of("127.0.0.1", "localhost").contains(endpoint.getHost())
-          || !endpoint.getPath().equals("/mcp")
-          || endpoint.getQuery() != null
-          || endpoint.getPort() < 1
-          || endpoint.getPort() > 65535)
-        throw new Problem(
-            "invalid_configuration",
-            "managed=true benötigt ein Image und lokales HTTP /mcp mit explizitem Port.");
-    }
   }
 
   private static Problem invalid(String field) {
@@ -208,18 +168,8 @@ public final class Settings {
 
   public List<String> modelDirectories() {
     var dirs = new ArrayList<String>();
-    if (mcp("datasheet").containsKey("image")) {
-      var selected = new DockerMcps(this, new ProcessRunner()).selected("datasheet", false);
-      dirs.add(Json.required(selected, "model_directory"));
-      for (String dir : strings("model_dirs", List.of()))
-        if (!dir.startsWith("https://")
-            && DockerMcps.MODELS.stream().anyMatch(n -> Files.exists(path(dir).resolve(n))))
-          throw new Problem(
-              "invalid_configuration",
-              "Originalmodelle sind bereits im Image-Cache vorhanden; doppeltes model_dirs-Verzeichnis entfernen.",
-              "directory",
-              dir);
-    }
+    Path models = AgentResources.resolve(root, "models");
+    if (Files.isDirectory(models)) dirs.add(models.toString());
     dirs.addAll(strings("model_dirs", List.of()));
     return dirs;
   }
@@ -303,15 +253,7 @@ public final class Settings {
 
   public String fingerprint() {
     var files = Json.map();
-    if (AgentRuntime.container())
-      files.put("agent_runtime_image", System.getenv("DATENPORTAL_RUNTIME_IMAGE"));
-    try {
-      files.put("gretl_runtime", GretlRuntime.recorded(this));
-    } catch (Problem p) {
-      if (values.containsKey("gretl")) throw p;
-      files.put(
-          "gretl_runtime", Json.map("reference", GretlRuntime.reference(this), "prepared", false));
-    }
+    files.put("runtime", "java21");
     for (var directory :
         List.of(AgentResources.resolve(root, "config"), AgentResources.resolve(root, "validation")))
       try (var paths = Files.list(directory)) {
@@ -323,10 +265,10 @@ public final class Settings {
       } catch (java.io.IOException e) {
         throw new Problem("configuration_missing", "Regeln oder Validierungsdateien fehlen.");
       }
-    for (String service : List.of("datasheet", "interlis"))
-      if (mcp(service).containsKey("image"))
-        files.put(
-            service + "_image", new DockerMcps(this, new ProcessRunner()).selected(service, false));
+    for (String service : List.of("datasheet", "interlis")) {
+      Path jar = JavaRuntime.mcp(this, service);
+      if (Files.isRegularFile(jar)) files.put(service + "_jar", Json.sha(jar));
+    }
     for (String directory : modelDirectories())
       if (!directory.startsWith("https://"))
         try (var paths = Files.list(path(directory))) {

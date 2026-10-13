@@ -6,7 +6,7 @@ import java.util.*;
 import java.util.function.Function;
 
 public final class Store {
-  public static final int VERSION = 2;
+  public static final int VERSION = 3;
   final Path root;
 
   public Store(Path root) {
@@ -94,7 +94,7 @@ public final class Store {
             || data.containsKey("converter_migration_required"))
           throw new Problem(
               "unsupported_state_version",
-              "Nur aktuelle Schema-2-Vorgänge ohne ausstehende Konverterumstellung werden unterstützt. Der gespeicherte Stand bleibt unverändert.",
+              "Java-Betrieb unterstützt nur neue Schema-3-Vorgänge. Alte Vorgänge mit ihrer bisherigen Version abschliessen; keine erneute Lieferung starten. Der gespeicherte Stand bleibt unverändert.",
               "path",
               p.resolve("state.json").toString());
         try {

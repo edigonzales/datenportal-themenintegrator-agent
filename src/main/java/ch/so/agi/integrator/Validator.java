@@ -30,7 +30,12 @@ public final class Validator {
   private Map<String, Object> check(String name, Path file, Path reference, Path out) {
     var args =
         new ArrayList<>(
-            settings.strings("validator_command", List.of("java", "-jar", "ilivalidator.jar")));
+            settings.strings(
+                "validator_command",
+                List.of(
+                    JavaRuntime.java(),
+                    "-jar",
+                    AgentResources.resolve(settings.root, "lib/ilivalidator.jar").toString())));
     var dirs = new ArrayList<String>();
     for (String p : settings.modelDirectories())
       dirs.add(p.startsWith("https://") ? p : settings.path(p).toString());

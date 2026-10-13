@@ -25,9 +25,7 @@ final class DeliveryAcceptance {
   }
 
   Path prepare() throws Exception {
-    new GretlRuntime(source, process).selected(true);
-    for (String service : List.of("datasheet", "interlis"))
-      new DockerMcps(source, process).selected(service, true);
+    JavaRuntime.checkTools(source);
     Path directory =
         source.root.resolve(".datenportal-integrator/delivery-acceptance/" + UUID.randomUUID());
     Files.createDirectories(directory);
@@ -39,22 +37,8 @@ final class DeliveryAcceptance {
         AgentResources.installed() && Files.isDirectory(OperatorWorkspace.bundle(source.root));
     if (operator) OperatorWorkspace.install(OperatorWorkspace.bundle(source.root), root, false);
     if (!operator) copyDevelopmentResources(root);
-    for (Path proof :
-        List.of(new DockerMcps(source, process).lockFile(), GretlRuntime.file(source))) {
-      Path copy = root.resolve(source.root.relativize(proof));
-      Files.createDirectories(copy.getParent());
-      Files.copy(proof, copy);
-    }
-    // Preserve the cache boundary as well as its original pinned content hashes.
-    Path privateLock =
-        root.resolve(source.root.relativize(new DockerMcps(source, process).lockFile()));
-    var pinned = Json.read(privateLock);
-    var datasheet = Json.obj(Json.obj(pinned.get("services")).get("datasheet"));
-    Path originalModels = Path.of(Json.required(datasheet, "model_directory"));
-    Path privateModels = root.resolve(source.root.relativize(originalModels));
-    Workspace.copy(originalModels, privateModels);
-    datasheet.put("model_directory", privateModels.toString());
-    Json.atomic(privateLock, pinned);
+    for (String part : List.of("lib", "models"))
+      Workspace.copy(AgentResources.resolve(source.root, part), root.resolve(part));
     Workspace.copy(source.topics.resolve("shared"), repo.resolve("shared"));
     Workspace.copy(source.topics.resolve("gradle"), repo.resolve("gradle"));
     Files.copy(source.topics.resolve("gradlew"), repo.resolve("gradlew"));
@@ -102,11 +86,7 @@ final class DeliveryAcceptance {
     int publicPort = port(), s3Port = port();
     String example =
         Json.contents(stack.resolve(".env.example"))
-            .replaceFirst("(?m)^GARAGE_PUBLIC_PORT=.*$", "GARAGE_PUBLIC_PORT=" + publicPort)
-            .replaceFirst(
-                "(?m)^DATENPORTAL_JENKINS_IMAGE=.*$",
-                "DATENPORTAL_JENKINS_IMAGE="
-                    + Json.required(new GretlRuntime(source, process).selected(false), "image_id"));
+            .replaceFirst("(?m)^GARAGE_PUBLIC_PORT=.*$", "GARAGE_PUBLIC_PORT=" + publicPort);
     example += "\nGARAGE_S3_PORT=" + s3Port + "\nTHEMEN_REPO_BRANCH=main\n";
     Json.write(stack.resolve(".env.example"), example);
     // Existing external initializer only; no new Python implementation.
@@ -118,15 +98,7 @@ final class DeliveryAcceptance {
     values.put("state_dir", ".datenportal-integrator/runs");
     values.put("compose_files", List.of("compose.yaml"));
     values.put("stack_start_args", List.of());
-    values.put(
-        "validator_command",
-        source.strings("validator_command", List.of()).stream()
-            .map(v -> v.endsWith(".jar") ? source.path(v).toString() : v)
-            .toList());
-    for (String service : List.of("datasheet", "interlis")) {
-      if (values.get(service) instanceof Map) Json.obj(values.get(service)).put("managed", false);
-    }
-    Json.obj(values.get("gretl")).put("mode", "ephemeral");
+    values.remove("validator_command");
     String base = "http://localhost:" + publicPort;
     values.put(
         "environments",
@@ -159,7 +131,9 @@ final class DeliveryAcceptance {
         root.resolve("bin/datenportal-agent"),
         operator
             ? operatorLauncher(directory, root)
-            : "#!/usr/bin/env bash\nset -e\nexec "
+            : "#!/usr/bin/env bash\nset -e\nif [[ ${1:-} == --config ]]; then shift 2; fi\ncd "
+                + quote(root.toString())
+                + "\nexec "
                 + quote(source.root.resolve("bin/datenportal-agent").toString())
                 + " \"$@\" --config "
                 + quote(root.resolve("config/local.toml").toString())
@@ -211,8 +185,7 @@ final class DeliveryAcceptance {
         root.resolve("config/rules.json"));
     for (String part : List.of("validation", "templates", "tests/fixtures"))
       Workspace.copy(AgentResources.resolve(source.root, part), root.resolve(part));
-    for (String part :
-        List.of("runtime/Dockerfile", "config/settings.schema.json", "config/local.example.toml")) {
+    for (String part : List.of("config/settings.schema.json", "config/local.example.toml")) {
       Files.createDirectories(root.resolve(part).getParent());
       Files.copy(
           AgentResources.resolve(source.root, part),
@@ -226,42 +199,17 @@ final class DeliveryAcceptance {
   }
 
   String operatorLauncher(Path directory, Path root) {
-    String image = System.getenv("DATENPORTAL_RUNTIME_IMAGE"),
-        socket = System.getenv("DATENPORTAL_HOST_DOCKER_SOCKET");
-    if (image == null
-        || !image.matches("sha256:[a-f0-9]{64}")
-        || socket == null
-        || !socket.startsWith("/"))
-      throw new Problem(
-          "acceptance_runtime_missing",
-          "Installierte Abnahme über den Docker-Launcher mit festgehaltener Image- und Socket-Identität starten.");
-    String command =
-        "#!/usr/bin/env bash\nset -e\nif [[ ${1:-} == --runtime ]]; then [[ ${2:-} == docker ]] || exit 2; shift 2; fi\nexec docker run --rm -i --init --network host --entrypoint java"
-            + " --mount "
-            + quote("type=bind,source=" + directory + ",target=" + directory)
-            + " --mount "
-            + quote("type=bind,source=" + socket + ",target=/var/run/docker.sock")
-            + " -e JAVA_TOOL_OPTIONS=-Djava.net.preferIPv4Stack=true"
-            + " -e DATENPORTAL_CONTAINER_MODE=true -e "
-            + quote("DATENPORTAL_RUNTIME_IMAGE=" + image)
-            + " -e "
-            + quote("DATENPORTAL_HOST_DOCKER_SOCKET=" + socket)
-            + " -e "
-            + quote("DATENPORTAL_LAUNCH_OPTIONS=--runtime\ndocker")
-            + " -w "
-            + quote(root.toString());
-    for (String value : source.strings("validator_command", List.of()))
-      if (value.endsWith(".jar")) {
-        // The configured validator distribution includes manifest Class-Path
-        // dependencies beside the entry JAR; mount the bundle read-only.
-        Path bundle = source.path(value).getParent();
-        command +=
-            " --mount " + quote("type=bind,source=" + bundle + ",target=" + bundle + ",readonly");
-      }
-    return command
-        + " "
-        + quote(image)
-        + " -jar /opt/datenportal-agent/build/libs/datenportal-integrator.jar \"$@\"\n";
+    return "#!/usr/bin/env bash\nset -e\nif [[ ${1:-} == --config ]]; then shift 2; fi\ncd "
+        + quote(root.toString())
+        + "\nexport DATENPORTAL_AGENT_HOME="
+        + quote(AgentResources.resolve(source.root, "").toString())
+        + "\nexec "
+        + quote(JavaRuntime.java())
+        + " -jar "
+        + quote(AgentResources.jar(source.root).toString())
+        + " --config "
+        + quote(root.resolve("config/local.toml").toString())
+        + " \"$@\"\n";
   }
 
   static void copyAgentGuidance(Path sourceRoot, Path root) throws Exception {
@@ -640,7 +588,7 @@ final class DeliveryAcceptance {
     var params =
         ServerParameters.builder(executable.toString())
             .args(args)
-            .env(Map.of("JAVA_HOME", "/no-host-jdk", "DATENPORTAL_FORWARD_ENV", ""))
+            .env(Map.of("JAVA_HOME", System.getProperty("java.home")))
             .build();
     var transport =
         new StdioClientTransport(

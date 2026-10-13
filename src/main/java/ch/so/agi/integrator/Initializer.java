@@ -28,8 +28,8 @@ final class Initializer {
   }
 
   Map<String, Object> run(List<String> args) {
-    if (args.stream().anyMatch(a -> !Set.of("--update-tools", "--skip-smoke").contains(a)))
-      throw new Problem("invalid_arguments", "init [--update-tools] [--skip-smoke]");
+    if (args.stream().anyMatch(a -> !Set.of("--skip-smoke").contains(a)))
+      throw new Problem("invalid_arguments", "init [--skip-smoke]");
     if (OperatorWorkspace.installed(s.root)) {
       var harness = new Harness(s);
       Path codex = s.root.resolve(".codex/config.toml"), open = s.root.resolve("opencode.json");
@@ -43,12 +43,7 @@ final class Initializer {
       Json.atomic(report, state);
       try {
         step(state, "runtime", AgentRuntime.check(s));
-        var setup = new Setup(s);
-        step(state, "tools", setup.tools());
-        var update = args.contains("--update-tools") ? List.of("--update") : List.<String>of();
-        step(state, "mcps", setup.run("setup-mcps", update));
-        step(state, "gretl", setup.run("setup-gretl", update));
-        step(state, "services", setup.run("runtime-up", List.of()));
+        step(state, "tools", JavaRuntime.checkTools(s));
         step(state, "harness", new Harness(s).install());
         String fingerprint = fingerprint();
         var old = Json.obj(Json.obj(state.get("steps")).get("smoke"));
@@ -97,34 +92,9 @@ final class Initializer {
 
   String fingerprint() {
     var hashes = Json.map();
-    for (String path :
-        List.of(
-            "build/libs/datenportal-integrator.jar",
-            "runtime/Dockerfile",
-            "tests/fixtures/dataset.xtf",
-            "tests/fixtures/offices.xtf")) {
-      hashes.put(path, Json.sha(AgentResources.resolve(s.root, path)));
-    }
-    for (Path directory : List.of(s.topics.resolve("shared"), s.topics.resolve("agi"))) {
-      try (var paths = Files.walk(directory)) {
-        for (Path file : paths.filter(Files::isRegularFile).sorted().toList()) {
-          String relative = directory.relativize(file).toString();
-          if (relative.startsWith(".gradle/") || relative.startsWith("build/")) continue;
-          if (file.toString().endsWith(".gradle")
-              || file.toString().endsWith(".properties")
-              || file.toString().endsWith(".sh")
-              || file.getFileName().toString().equals("gradlew")
-              || file.getFileName().toString().equals("gradle-wrapper.jar"))
-            hashes.put(file.toString(), Json.sha(file));
-        }
-      } catch (java.io.IOException e) {
-        throw new Problem(
-            "smoke_source_missing", "GRETL-Prüfgrundlage fehlt.", "path", directory.toString());
-      }
-    }
     hashes.put("settings", s.fingerprint());
     hashes.put("offices", Json.sha(s.topics.resolve("shared/data/offices.xtf")));
-    hashes.put("agent_image", System.getenv("DATENPORTAL_RUNTIME_IMAGE"));
+
     hashes.put("java", System.getProperty("java.runtime.version"));
     return Json.digest(hashes);
   }

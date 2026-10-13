@@ -17,7 +17,7 @@ class HarnessTest {
     Path config = temp.resolve("config/selected.toml");
     Json.write(
         config,
-        "root=\"..\"\ntopics_repo=\"topics\"\nstack_repo=\"stack\"\n[datasheet]\ntransport=\"http\"\nurl=\"http://127.0.0.1:8000/mcp\"\n");
+        "root=\"..\"\ntopics_repo=\"topics\"\nstack_repo=\"stack\"\n[datasheet]\ntransport=\"stdio\"\n");
     harness = new Harness(new Settings(config));
     assertEquals(temp, harness.s.root);
     harness.s.values.put(
@@ -110,7 +110,7 @@ class HarnessTest {
     Path config = temp.resolve("external.toml");
     Json.write(
         config,
-        "root=\"project\"\ntopics_repo=\"topics\"\nstack_repo=\"stack\"\n[datasheet]\ntransport=\"http\"\nurl=\"http://127.0.0.1:8000/mcp\"\n");
+        "root=\"project\"\ntopics_repo=\"topics\"\nstack_repo=\"stack\"\n[datasheet]\ntransport=\"stdio\"\n");
     var other = new Harness(new Settings(config));
     var command = Json.strings(entry(other.updateOpenCode(Json.map())).get("command"));
     assertEquals(config.toString(), command.get(command.indexOf("--config") + 1));

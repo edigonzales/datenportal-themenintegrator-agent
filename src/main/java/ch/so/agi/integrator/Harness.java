@@ -127,7 +127,16 @@ final class Harness {
   }
 
   List<String> credentials() {
-    var names = new LinkedHashSet<String>();
+    var names =
+        new LinkedHashSet<String>(
+            List.of(
+                "JAVA_HOME",
+                "GH_TOKEN",
+                "GITHUB_TOKEN",
+                "GIT_AUTHOR_NAME",
+                "GIT_AUTHOR_EMAIL",
+                "GIT_COMMITTER_NAME",
+                "GIT_COMMITTER_EMAIL"));
     Json.obj(s.values.get("environments")).values().stream()
         .map(Json::obj)
         .forEach(

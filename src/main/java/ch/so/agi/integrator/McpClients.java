@@ -4,6 +4,7 @@ import io.modelcontextprotocol.client.*;
 import io.modelcontextprotocol.client.transport.*;
 import io.modelcontextprotocol.json.jackson3.JacksonMcpJsonMapper;
 import io.modelcontextprotocol.spec.*;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.*;
 
@@ -34,61 +35,50 @@ public final class McpClients {
   static final class Managed implements ToolClient {
     final Settings settings;
     final String service;
-    final DockerMcps docker;
+
     McpSyncClient client;
-    String container, session, identity;
+    String session, identity;
 
     Managed(Settings s, String service) {
       settings = s;
       this.service = service;
-      docker = new DockerMcps(s, new ProcessRunner());
     }
 
     synchronized void connect() {
-      var config = settings.mcp(service);
-      var selected = config.containsKey("image") ? docker.selected(service, false) : Json.map();
-      String expectedIdentity = Json.digest(Json.map("config", config, "runtime", selected));
+      Path jar = JavaRuntime.mcp(settings, service);
+      if (!java.nio.file.Files.isRegularFile(jar))
+        throw new Problem(
+            "package_incomplete",
+            "MCP-JAR fehlt; vollständiges Betriebspaket installieren.",
+            "service",
+            service);
+      String expectedIdentity = Json.sha(jar);
       if (client != null && !expectedIdentity.equals(identity)) close();
       if (client != null) return;
       try {
-        if (ComposeRuntime.managed(settings, service)) {
-          new ComposeRuntime(settings, new ProcessRunner()).ensure(service);
-          connectManagedHttp(config);
-          session = UUID.randomUUID().toString();
-          identity = expectedIdentity;
-          return;
-        }
-        McpClientTransport transport;
-        if (Json.str(config, "transport", "stdio").equals("http")) {
-          transport = http(Json.required(config, "url"));
-        } else {
-          selected = docker.selected(service, true);
-          docker.reap();
-          container = docker.name(service);
-          docker.register(container);
-          var command = docker.launch(container, Json.required(selected, "image_id"));
-          String logName = container;
-          var stdio =
-              new EofStdioTransport(
-                  command,
-                  settings.root,
-                  new JacksonMcpJsonMapper(new tools.jackson.databind.json.JsonMapper()),
-                  line -> {
-                    try {
-                      var log = docker.home().resolve("logs").resolve(logName + ".log");
-                      java.nio.file.Files.createDirectories(log.getParent());
-                      if (!java.nio.file.Files.exists(log)
-                          || java.nio.file.Files.size(log) < 1024 * 1024)
-                        java.nio.file.Files.writeString(
-                            log,
-                            line + "\n",
-                            java.nio.file.StandardOpenOption.CREATE,
-                            java.nio.file.StandardOpenOption.APPEND);
-                    } catch (Exception ignored) {
-                    }
-                  });
-          transport = stdio;
-        }
+        var command =
+            List.of(JavaRuntime.java(), "-Dspring.profiles.active=stdio", "-jar", jar.toString());
+        Path log =
+            settings.root.resolve(
+                ".datenportal-integrator/logs/" + service + "-" + UUID.randomUUID() + ".log");
+        McpClientTransport transport =
+            new EofStdioTransport(
+                command,
+                settings.root,
+                new JacksonMcpJsonMapper(new tools.jackson.databind.json.JsonMapper()),
+                line -> {
+                  try {
+                    java.nio.file.Files.createDirectories(log.getParent());
+                    if (!java.nio.file.Files.exists(log)
+                        || java.nio.file.Files.size(log) < 1024 * 1024)
+                      java.nio.file.Files.writeString(
+                          log,
+                          line + "\n",
+                          java.nio.file.StandardOpenOption.CREATE,
+                          java.nio.file.StandardOpenOption.APPEND);
+                  } catch (java.io.IOException ignored) {
+                  }
+                });
         client =
             McpClient.sync(transport)
                 .requestTimeout(Duration.ofSeconds(settings.timeout))
@@ -105,52 +95,6 @@ public final class McpClients {
         throw new Problem(
             "mcp_unavailable", "Fach-MCP kann nicht initialisiert werden.", "service", service);
       }
-    }
-
-    void connectManagedHttp(Map<String, Object> config) {
-      long deadline =
-          System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(settings.stackTimeout);
-      String exception = "unknown";
-      while (System.nanoTime() < deadline) {
-        try {
-          client =
-              McpClient.sync(http(Json.required(config, "url")))
-                  .requestTimeout(Duration.ofSeconds(settings.timeout))
-                  .initializationTimeout(Duration.ofSeconds(Math.min(10, settings.timeout)))
-                  .build();
-          client.initialize();
-          var available =
-              client.listTools().tools().stream()
-                  .map(McpSchema.Tool::name)
-                  .collect(java.util.stream.Collectors.toSet());
-          if (!available.containsAll(expectedTools(service)))
-            throw new Problem(
-                "runtime_tools_missing",
-                "Compose-MCP meldet nicht den erwarteten Werkzeugkatalog.",
-                "service",
-                service);
-          return;
-        } catch (Problem e) {
-          close();
-          throw e;
-        } catch (Exception e) {
-          exception = e.getClass().getSimpleName();
-          close();
-          try {
-            Thread.sleep(250);
-          } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            throw new Problem("runtime_interrupted", "MCP-Start unterbrochen.");
-          }
-        }
-      }
-      throw new Problem(
-          "runtime_start_timeout",
-          "MCP-Initialisierung wurde nicht rechtzeitig bereit; Compose-Logs pruefen.",
-          "service",
-          service,
-          "exception",
-          exception);
     }
 
     @Override
@@ -176,17 +120,6 @@ public final class McpClients {
     @Override
     public synchronized Map<String, Object> call(String name, Map<String, Object> args) {
       connect();
-      if (ComposeRuntime.managed(settings, service)) {
-        var actual = new ComposeRuntime(settings, new ProcessRunner()).inspect(service);
-        if (!"running".equals(actual.get("state"))) {
-          close();
-          throw new Problem(
-              "runtime_unhealthy",
-              "Compose-MCP wurde waehrend der Sitzung angehalten.",
-              "service",
-              service);
-        }
-      }
       try {
         return result(client.callTool(new McpSchema.CallToolRequest(name, args)));
       } catch (Problem p) {
@@ -212,10 +145,6 @@ public final class McpClients {
         }
         client = null;
       }
-      if (container != null) {
-        docker.stopped(container);
-        container = null;
-      }
       session = null;
     }
   }
@@ -234,16 +163,6 @@ public final class McpClients {
             "validate_datasheet",
             "export_xtf")
         : Set.of("authorIliModel", "applyIliModelChanges", "reviewIliModel", "reviewIliChange");
-  }
-
-  private static McpClientTransport http(String url) {
-    var u = Settings.url(url);
-    String base = u.getScheme() + "://" + u.getRawAuthority();
-    String endpoint = u.getRawPath() + (u.getRawQuery() == null ? "" : "?" + u.getRawQuery());
-    return HttpClientStreamableHttpTransport.builder(base)
-        .endpoint(endpoint)
-        .openConnectionOnStartup(false)
-        .build();
   }
 
   private static Map<String, Object> result(McpSchema.CallToolResult result) {

@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Isolated synthetic acceptance of the unpacked distribution; never publishes.
+set -euo pipefail
+package=$(cd -- "$1" && pwd -P)
+fixture=$(mktemp -d "${TMPDIR:-/tmp}/datenportal-java-smoke.XXXXXX")
+printf 'Synthetic package acceptance: %s\n' "$fixture"
+export DATENPORTAL_CLIENT_HOME="$fixture/user"
+export DATENPORTAL_CLIENT_CONFIG="$fixture/user/config.toml"
+unset DATENPORTAL_AGENT_HOME DATENPORTAL_LAUNCH_OPTIONS
+mkdir -p "$fixture/topics/shared/data" "$fixture/user"
+cp "$package/tests/fixtures/offices.xtf" "$fixture/topics/shared/data/offices.xtf"
+"$package/bin/datenportal-agent" workspace install "$fixture/work space" > "$fixture/install.json"
+cat > "$fixture/work space/config/local.toml" <<'CONFIG'
+root = ".."
+topics_repo = "../topics"
+[datasheet]
+transport = "stdio"
+[interlis]
+transport = "stdio"
+CONFIG
+"$fixture/work space/bin/datenportal-agent" init > "$fixture/init.json"
+"$fixture/work space/bin/datenportal-agent" doctor > "$fixture/doctor.json"
+# init exits unsuccessfully if positive/negative validation or MCP setup fails.
+"$package/bin/datenportal-agent" workspace update "$fixture/work space" > "$fixture/update.json"
+"$fixture/work space/bin/datenportal-agent" init > "$fixture/reinit.json"
+printf 'Package installation, both MCPs, validation and update passed: %s\n' "$fixture"

@@ -10,7 +10,9 @@ final class AgentResources {
   }
 
   static Path jar(Path workspace) {
-    return resolve(workspace, "build/libs/datenportal-integrator.jar");
+    return installed()
+        ? resolve(workspace, "lib/datenportal-integrator.jar")
+        : workspace.resolve("build/libs/datenportal-integrator.jar");
   }
 
   static boolean installed() {

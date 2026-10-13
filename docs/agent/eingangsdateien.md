@@ -11,7 +11,7 @@ Erlaubt sind ausschliesslich ASCII-Buchstaben, Ziffern und Unterstriche sowie di
 ## Chat-Anhänge übernehmen
 
 Im Betriebspaket übernimmt `datenportal_workspace.import_attachment` diese
-Dateioperation im Docker-Container ohne allgemeine Shell. Der Standard-Eingang
+Dateioperation im Java-Prozess ohne allgemeine Shell. Der Standard-Eingang
 ist `../datenportal-pilot-daten`, relativ zum Betriebsordner, dauerhaft mit
 `--mount-ro` eingebunden. Vorhandene externe Eingangsordner bleiben an ihrem Ort;
 in Stefans Einrichtung ist dies `/Users/stefan/sources/datenportal-pilot-daten`.
@@ -39,6 +39,6 @@ Vorschauen allein garantieren keinen lesbaren Originalpfad.
 1. Verwende die vollständigen Originaldateien über ihre tatsächlichen lokalen Anhangpfade. Fehlt der Originalpfad oder ist die Datei nicht lesbar, frage gezielt nach einem zugänglichen Pfad. Rekonstruiere keine Datei aus Chattext, Vorschauen oder vom Modell dekodierten Inhalten. Fehlt die Organisation, kläre sie vor der Ablage.
 2. Kopiere jeden neuen Anhang mit den Host-Dateiwerkzeugen bytegleich nach `<Integrator-Root>/.datenportal-integrator/input/<organisation>/<neue-UUID>/<Originaldateiname>`. Erhalte Originaldateiname und Endung. Verwende pro Anhang einen neuen Eingangsordner; auch gleichnamige Dateien erhalten getrennte Pfade. Überschreibe keine bestehenden Eingänge. Ändere weder Quelldatei, Kodierung, Zeilenenden noch Dateiinhalte. Nutze bei Shellbefehlen eigene Arbeitsvariablen wie `eingang_*`; `status` ist unter zsh reserviert.
 3. Vergleiche SHA-256 der Quelle vor und nach dem Kopieren mit SHA-256 der Kopie. Nur drei identische Prüfsummen bestätigen die Übernahme. Bei Abweichung die betroffene Datei nicht weiterreichen und die Ursache klären.
-4. Übergib ausschliesslich die verifizierten absoluten Kopiepfade an den Integrator: CSV als Daten, XTF als Metadaten und XLSX als Metadatenquelle. Die Ablage liegt im bereits eingebundenen Betriebsordner; für die Kopien sind keine zusätzlichen Docker-Mounts nötig. Der Java-Kern sichert die übernommenen Dateien und Prüfsummen zusätzlich im Vorgang.
+4. Übergib ausschliesslich die verifizierten absoluten Kopiepfade an den Integrator: CSV als Daten, XTF als Metadaten und XLSX als Metadatenquelle. Die Ablage liegt im bereits eingebundenen Betriebsordner; für die Kopien sind keine zusätzlichen Laufzeiteinstellungen nötig. Der Java-Kern sichert die übernommenen Dateien und Prüfsummen zusätzlich im Vorgang.
 
 Die Anhangübernahme ist keine CSV-, Modell-, Metadaten- oder Publikationsfreigabe. Die fachlichen Stopps und tatsächlichen menschlichen Antworten gelten unverändert.

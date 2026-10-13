@@ -72,7 +72,7 @@ public final class Converters {
     }
     var compiler = ToolProvider.getSystemJavaCompiler();
     if (compiler == null)
-      throw new Problem("jdk_required", "Konverter benötigen JDK 25 mit javac.");
+      throw new Problem("jdk_required", "Konverter benötigen JDK 21 mit javac.");
     String cp = System.getProperty("java.class.path");
     var output = new StringWriter();
     try (var manager =
@@ -85,7 +85,7 @@ public final class Converters {
                   null,
                   List.of(
                       "--release",
-                      "25",
+                      "21",
                       "-encoding",
                       "UTF-8",
                       "-classpath",

@@ -17,7 +17,7 @@ class WorkspaceFilesTest {
     root = temp.resolve("operator");
     Json.write(
         root.resolve("config/local.toml"),
-        "root=\"..\"\ntopics_repo=\"../repo\"\nstack_repo=\"../stack\"\n[datasheet]\ntransport=\"http\"\nurl=\"http://127.0.0.1:8000/mcp\"\n");
+        "root=\"..\"\ntopics_repo=\"../repo\"\nstack_repo=\"../stack\"\n[datasheet]\ntransport=\"stdio\"\n");
     files = new WorkspaceFiles(new Settings(root.resolve("config/local.toml")));
   }
 
@@ -162,7 +162,7 @@ class WorkspaceFilesTest {
   void integratorCannotBypassImportOrReadSourcesThroughFileArguments() throws Exception {
     Json.atomic(
         root.resolve(OperatorWorkspace.MANIFEST),
-        Json.map("schema_version", 1, "kind", "operator"));
+        Json.map("schema_version", 2, "kind", "operator"));
     Path original = temp.resolve("data.csv"), source = temp.resolve("Workflow.java");
     Json.write(original, "Id\n0012\n");
     Json.write(source, "private implementation");

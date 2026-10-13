@@ -1277,3 +1277,57 @@ Lokale Nachweise: `.datenportal-integrator/pilot-verification/` (Testskripte,
 Import- und Client-Ergebnisse), `.datenportal-integrator/pilot-doc-checks.log`
 (Build) sowie `.datenportal-integrator/setup/pilot-*.json` und `pilot-*.log`
 im eingerichteten Betriebsordner (`init`, erneutes `init`, `doctor`).
+
+## Java-21-Umstellung vom 13. Oktober 2026
+
+Implementiert ist die Trennung von unveränderlicher Java-Distribution,
+quellcodefreiem Betriebsarbeitsbereich und Entwicklungscheckout. Integrator und
+beide MCPs laufen mit JDK 21; lokale CSV-/XTF-Prüfung benötigt kein GRETL-Image.
+Jenkins verwendet weiterhin sein eigenes GRETL. GitHub-PR-Operationen verwenden
+REST; Git authentisiert HTTPS über den Java-Credential-Helper. Die MCP-Repositories
+behalten ihre Docker-Pipelines und ergänzen ausführbare Maven-JARs.
+
+Tatsächlich ausgeführt unter macOS mit JDK 21.0.7:
+
+- 182 Integrator-Unit-Tests und `spotlessCheck` erfolgreich, darunter REST-Fehler,
+  Rate-Limit, mehrdeutige PR-Antwort, Git-Credential-Protokoll sowie echte lokale
+  CSV-Positiv-/Negativprüfungen. REST und Git-Zugänge verwenden isolierte lokale
+  Testserver bzw. synthetische Zugangsdaten; kein echter PR wurde erstellt.
+- Alle 16 Integrationstests mit echten MCP-JARs und konfigurierter lokaler
+  Jenkins-Runtime erfolgreich. Ein vorheriger CLI-Test erreichte einmal sein
+  Zeitlimit; Einzelwiederholung und anschliessender vollständiger Lauf bestanden.
+- Paketinstallation in einen Pfad mit Leerzeichen, `init`, `doctor`, beide
+  MCP-Starts, Modellableitung, CSV-/XTF-Prüfung, Paketupdate und erneutes `init`
+  erfolgreich. Verwendet wurden ausdrücklich markierte lokale Entwicklungs-JARs.
+- Datenblatt-MCP: `check bootJar`; INTERLIS-MCP: `test e2eTest bootJar`
+  erfolgreich unter JDK 21. Für beide zusätzlich lokale Maven-Veröffentlichung,
+  Rückdownload, Bytevergleich, MCP-Initialisierung, Werkzeugliste und EOF-Ende.
+
+Offen sind die öffentlichen Maven-Veröffentlichungen, die neuen CI-Läufe auf
+Linux und macOS sowie die erneuten Multiarch-Image-Pipelines. Die ergänzten
+Publikationsschritte prüfen die veröffentlichten Artefakte durch Rückdownload;
+die Integrator-Pipeline installiert und prüft auch das zurückgeladene Paket.
+Benötigt werden `MAVEN_USERNAME` und `MAVEN_PASSWORD` in den publizierenden
+Repositories. Es wurden keine realen Freigaben erteilt, keine INT-/PROD-Lieferungen
+gestartet und keine Altvorgänge migriert. Bestehende externe Vorgänge bleiben mit
+ihrer bisherigen Runtime aufzuklären.
+
+Zusätzlich tatsächlich ausgeführte isolierte Lieferabnahme:
+
+- Java-Betriebsarbeitsbereich mit zwei unabhängigen Integrator-stdio-Verbindungen
+  entsprechend den Codex-/OpenCode-Konfigurationen; keine GUI-Dialogabnahme.
+- Echte MCP-Modellableitung, lokale Validierung, synthetische Testfreigaben,
+  Jenkins-Seed und positive Lieferung bis Portal, Manifest und geprüften
+  CSV-/XLSX-/Parquet-Downloads erfolgreich.
+- Ungültige CSV scheitert in Jenkins an GRETL-CsvValidator vor der Publikation;
+  das Manifest des erfolgreichen Releases bleibt unverändert. Infrastruktur-
+  Container werden während der Lieferung nicht ersetzt oder neu gestartet.
+- Der Testlauncher wurde nach zwei Startfehlern (Arbeitsverzeichnis und doppelte
+  Konfigurationsübergabe) korrigiert und durch einen Regressionstest abgesichert.
+  Der anschliessende vollständige Lauf meldet `valid=true`; die eigenen
+  Testcontainer und Testsecrets wurden danach erfolgreich bereinigt.
+
+Nachweis: `.datenportal-integrator/delivery-acceptance/3ee3b60f-764f-41d9-ad14-aba83408c543/report.json`,
+mit separat bereinigten positiven/negativen Jenkins-Konsolen und `cleanup.log`.
+Dies ist ein real ausgeführter technischer Test mit synthetischen Daten und
+markierten Testfreigaben, keine fachliche Lieferung und keine Benutzerabnahme.

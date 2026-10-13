@@ -10,9 +10,11 @@ final class OperatorWorkspace {
   static boolean installed(Path root) {
     if (!Files.isRegularFile(root.resolve(MANIFEST), LinkOption.NOFOLLOW_LINKS)) return false;
     var manifest = Json.read(root.resolve(MANIFEST));
-    if (!Objects.equals(manifest.get("schema_version"), 1)
+    if (!Objects.equals(manifest.get("schema_version"), 2)
         || !"operator".equals(manifest.get("kind")))
-      throw new Problem("workspace_manifest_invalid", "Betriebspaket-Manifest ist ungültig.");
+      throw new Problem(
+          "workspace_manifest_invalid",
+          "Neuen Java-Arbeitsbereich anlegen; alter Docker-Arbeitsbereich bleibt bei seiner bisherigen Version.");
     return true;
   }
 
@@ -27,7 +29,26 @@ final class OperatorWorkspace {
       throw new Problem("invalid_arguments", "workspace install|update <absoluter Zielordner>");
     Path target = Path.of(args.get(1));
     if (!target.isAbsolute()) throw new Problem("unsafe_path", "Absoluten Zielordner angeben.");
-    return install(bundle(Path.of("").toAbsolutePath()), target, args.getFirst().equals("update"));
+    var result =
+        install(bundle(Path.of("").toAbsolutePath()), target, args.getFirst().equals("update"));
+    if (AgentResources.installed()) {
+      Path launcher = target.resolve("bin/datenportal-agent");
+      Json.write(
+          launcher,
+          "#!/usr/bin/env bash\nset -e\ncd -- "
+              + GitHubCredentials.quote(target.toString())
+              + "\nexec "
+              + GitHubCredentials.quote(
+                  AgentResources.resolve(target, "bin/datenportal-agent").toString())
+              + " \"$@\"\n");
+      launcher.toFile().setExecutable(true);
+      var manifest = Json.read(target.resolve(MANIFEST));
+      Json.obj(manifest.get("managed_files")).put("bin/datenportal-agent", Json.sha(launcher));
+      manifest.put("package_sha256", Json.digest(manifest.get("managed_files")));
+      result.put("package_sha256", manifest.get("package_sha256"));
+      Json.atomic(target.resolve(MANIFEST), manifest);
+    }
+    return result;
   }
 
   static Map<String, Object> inventory(Path bundle) {
@@ -125,7 +146,7 @@ final class OperatorWorkspace {
           target.resolve(MANIFEST),
           Json.map(
               "schema_version",
-              1,
+              2,
               "kind",
               "operator",
               "version",

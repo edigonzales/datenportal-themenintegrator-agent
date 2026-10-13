@@ -24,7 +24,7 @@ class WorkspaceMcpIntegrationTest {
     Path config = root.resolve("config/local.toml");
     Json.write(
         config,
-        "root=\"..\"\ntopics_repo=\"../repo\"\nstack_repo=\"../stack\"\n[datasheet]\ntransport=\"http\"\nurl=\"http://127.0.0.1:8000/mcp\"\n");
+        "root=\"..\"\ntopics_repo=\"../repo\"\nstack_repo=\"../stack\"\n[datasheet]\ntransport=\"stdio\"\n");
     var settings = new Settings(config);
     new Harness(settings).install();
     Path original = temp.resolve("data.csv");

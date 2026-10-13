@@ -379,35 +379,14 @@ public final class Organizations {
     }
     errors.addAll(Xml.checkOffices(w.offices(r), Json.required(spec, "office_identifier")));
     var ili = w.validateXtf(r, null, "organization-validation");
-    Path snapshot = new Workspace(w).snapshot(r, "organization");
-    Path assertions = w.directory(r).resolve("organization-validation/check-organization.gradle");
-    Json.write(
-        assertions,
-        "gradle.projectsEvaluated {\n def p=gradle.rootProject\n def organization=p.ext.datenportalOrganization\n if(p.name != "
-            + Workspace.groovy(org)
-            + " || organization.id != "
-            + Workspace.groovy(org)
-            + " || organization.title != "
-            + Workspace.groovy(Json.required(spec, "title"))
-            + ") throw new GradleException('Organisation: Settings, Kennung und Titel sind inkonsistent')\n if(organization.defaultDataset) throw new GradleException('Leere Organisation darf kein defaultDataset definieren')\n}\n");
-    var gradle =
-        new Workspace(w)
-            .gradle(
-                r,
-                snapshot,
-                "tasks",
-                List.of("--all", "-I", assertions.toString()),
-                "organization-gradle");
     var report =
         Json.map(
             "valid",
-            errors.isEmpty() && Json.bool(ili, "valid", false) && Json.bool(gradle, "valid", false),
+            errors.isEmpty() && Json.bool(ili, "valid", false),
             "errors",
             errors,
             "ilivalidator",
             ili,
-            "gradle",
-            gradle,
             "organization",
             spec,
             "changes",

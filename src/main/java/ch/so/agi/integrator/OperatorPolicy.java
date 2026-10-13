@@ -234,7 +234,7 @@ final class OperatorPolicy {
     if (manifest.containsKey("version") && !Main.version().equals(manifest.get("version")))
       throw new Problem(
           "operator_package_version_mismatch",
-          "Image und Betriebspaket haben unterschiedliche Versionen; workspace update vor init ausführen.");
+          "Programm und Betriebspaket haben unterschiedliche Versionen; workspace update vor init ausführen.");
     Path codex = s.root.resolve(".codex/config.toml"), open = s.root.resolve("opencode.json");
     if (!Files.isRegularFile(codex) || !Files.isRegularFile(open))
       throw conflict("client_configuration_missing");

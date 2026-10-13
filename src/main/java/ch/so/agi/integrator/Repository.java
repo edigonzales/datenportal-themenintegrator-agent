@@ -5,13 +5,20 @@ import java.util.*;
 
 public final class Repository {
   final Workflow w;
+  GitHub github;
 
   public Repository(Workflow w) {
     this.w = w;
   }
 
   String command(Path cwd, String... args) {
-    return w.process.checked(List.of(args), cwd, w.settings.timeout);
+    if (!Set.of("clone", "push", "fetch").contains(args.length > 1 ? args[1] : ""))
+      return w.process.checked(List.of(args), cwd, w.settings.timeout);
+    var result =
+        w.process.run(
+            List.of(args), cwd, w.settings.timeout, null, GitHubCredentials.environment());
+    if (result.exitCode() != 0) throw new Problem("git_failed", "Git-Zugriff fehlgeschlagen.");
+    return result.output().strip();
   }
 
   public Object prepare(Map<String, Object> run, String environment) {
@@ -20,6 +27,8 @@ public final class Repository {
     var changes = Json.obj(run.get("changes"));
     if (changes.isEmpty()) return Json.map("required", false);
     if (run.containsKey("pull_request")) return run.get("pull_request");
+    if (github == null) github = w.github.get();
+    if (run.containsKey("pr_submission")) return recover(run);
     String
         remote =
             command(
@@ -29,6 +38,7 @@ public final class Repository {
                 "get-url",
                 Json.str(env, "git_remote", "origin")),
         base = Json.str(env, "git_branch", "main");
+    GitHub.Repo repo = GitHub.repository(remote);
     Path clone = w.directory(run).resolve("pr-checkout");
     if (Files.exists(clone))
       throw new Problem(
@@ -91,20 +101,25 @@ public final class Repository {
             + ".\n\nPrüfstand: `"
             + w.fingerprint(run, w.primaryGate(run))
             + "`. Prüfdetails liegen in der lokalen HTML-Vorschau.\n\nEin Mensch übernimmt den PR. Anschliessend prüft der Integrator den Zielstand und führt den ausdrücklich freigegebenen Seed beziehungsweise die Lieferung aus.\n");
-    String url =
-        command(
-            clone,
-            "gh",
-            "pr",
-            "create",
-            "--base",
-            base,
-            "--head",
+    run.put(
+        "pr_submission",
+        Json.map(
+            "owner",
+            repo.owner(),
+            "repository",
+            repo.name(),
+            "head",
+            head,
+            "branch",
             branch,
-            "--title",
-            title,
-            "--body-file",
-            body.toString());
+            "checkout",
+            clone.toString(),
+            "base",
+            base));
+    // Persist before POST, including when the process disappears before a response.
+    w.persist(run);
+    var response = github.create(repo, base, branch, title, Json.contents(body));
+    String url = Json.required(response, "html_url");
     var result =
         Json.map(
             "required",
@@ -123,6 +138,25 @@ public final class Repository {
     return result;
   }
 
+  Object recover(Map<String, Object> run) {
+    var pending = Json.obj(run.get("pr_submission"));
+    var repo =
+        new GitHub.Repo(Json.required(pending, "owner"), Json.required(pending, "repository"));
+    var matches =
+        github.find(repo, Json.required(pending, "branch"), Json.required(pending, "base")).stream()
+            .filter(pr -> Objects.equals(Json.obj(pr.get("head")).get("sha"), pending.get("head")))
+            .toList();
+    if (matches.size() != 1)
+      throw new Problem(
+          "github_pr_ambiguous",
+          "PR-Ausgang nicht eindeutig; vorhandenen GitHub-Stand klären. Kein erneuter POST.");
+    var result = new LinkedHashMap<>(pending);
+    result.put("required", true);
+    result.put("url", Json.required(matches.getFirst(), "html_url"));
+    run.put("pull_request", result);
+    return result;
+  }
+
   public void requireMerged(Map<String, Object> r, Map<String, Object> env) {
     var changes = Json.obj(r.get("changes"));
     if (changes.isEmpty()) return;
@@ -137,24 +171,24 @@ public final class Repository {
     if (Json.bool(pr, "required", false)) {
       clone = Path.of(Json.required(pr, "checkout"));
       remote = "origin";
-      var status =
-          Json.read(
-              command(
-                  clone,
-                  "gh",
-                  "pr",
-                  "view",
-                  Json.required(pr, "url"),
-                  "--json",
-                  "state,baseRefName,headRefOid,mergeCommit"));
-      if (!Objects.equals(status.get("state"), "MERGED")
-          || !Objects.equals(status.get("baseRefName"), branch))
+      if (github == null) github = w.github.get();
+      var uri = java.net.URI.create(Json.required(pr, "url"));
+      var parts = uri.getPath().split("/");
+      if (!"https".equals(uri.getScheme())
+          || !"github.com".equals(uri.getHost())
+          || parts.length != 5
+          || !"pull".equals(parts[3]))
+        throw new Problem("github_pr_invalid", "Gespeicherte PR-Adresse ist ungültig.");
+      var repo = GitHub.repository("https://github.com/" + parts[1] + "/" + parts[2]);
+      var status = github.get(repo, Long.parseLong(parts[4]));
+      if (!Json.bool(status, "merged", false)
+          || !Objects.equals(Json.obj(status.get("base")).get("ref"), branch))
         throw new Problem(
             "human_merge_required",
             "PR muss auf den vorgesehenen Zielbranch übernommen werden.",
             "url",
             pr.get("url"));
-      if (!Objects.equals(status.get("headRefOid"), pr.get("head")))
+      if (!Objects.equals(Json.obj(status.get("head")).get("sha"), pr.get("head")))
         throw new Problem("pr_changed", "PR wurde seit der Freigabe verändert.");
     }
     command(clone, "git", "fetch", remote, branch);

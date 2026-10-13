@@ -18,7 +18,7 @@ public final class WorkspaceArchive {
           bundle.resolve(OperatorWorkspace.MANIFEST),
           Json.map(
               "schema_version",
-              1,
+              2,
               "kind",
               "operator",
               "version",

@@ -1,348 +1,58 @@
-# Anwenderhandbuch
-
-Der Integrator unterstützt drei Vorgänge: ein Thema integrieren (`topic`), ein INTERLIS-Modell erstellen (`model`) und eine Organisation anlegen (`organization`). Das Sprachmodell läuft in Codex oder OpenCode. Der Java-Kern prüft Dateien und kontrolliert Freigaben sowie externe Abläufe. Er benötigt keinen Modellzugang und betreibt keinen zusätzlichen Webserver.
+# Anwenderhandbuch für das Java-Betriebspaket
 
 ## Installation und Konfiguration
 
-Für den Fachbetrieb öffnest du den **Betriebsordner** in Codex oder OpenCode.
-Er enthält drei Skills, Anleitungen, Konfiguration und Arbeitsdaten. Java und
-Integrator laufen im Docker-Image. Ein Integrator-Quellcheckout und Host-JDK
-sind dafür nicht erforderlich. Alle Shell-Befehle dieser Anleitung führst du
-selbst im Terminal aus; im Fachdialog arbeitet der Agent über seine MCP-Werkzeuge.
+Benötigt werden JDK 21 und für Repository-Änderungen Git. `gh`, Docker und Gradle sind für normale Facharbeit nicht erforderlich. Das JDK enthält den Compiler für fachliche Java-Konverter. JAVA_HOME muss auf das JDK zeigen; andernfalls wird Java im PATH verwendet.
 
-### 1. Voraussetzungen prüfen
+Das vollständige Archiv wird im Maven-Repository `https://jars.interlis.guru/snapshots/` unter `ch.so.agi:datenportal-themenintegrator-agent:<version>:bin@tar.gz` veröffentlicht. Eine konkrete veröffentlichte Version herunterladen, deren Prüfsumme prüfen und in ein dauerhaftes Installationsverzeichnis entpacken. Das Archiv enthält Programme, Modelle, Skills und Betriebsressourcen, aber keine Implementierungsquellen. Die Versionsauswahl erfolgt ausdrücklich; es gibt kein automatisches Update auf „latest“.
 
-Benötigt werden lokales Docker mit Compose, Git, Bash und ein eingerichteter
-Codex- oder OpenCode-Client. Anmeldung und Modellzugang richtest du im Client ein.
-Auf macOS in Docker Desktop ab 4.34 **Settings → Resources → Network → Enable
-host networking** aktivieren und **Apply and restart** wählen. Unter Linux einen
-lokalen Docker Engine verwenden. Remote-Docker-Kontexte sind nicht unterstützt.
-Siehe [Docker Host Networking](https://docs.docker.com/engine/network/drivers/host/).
-
-Für den Download brauchst du Zugriff auf die Git-Hosts, Docker Hub und
-`downloads.interlis.ch`; für private Repositories die entsprechenden Git-Rechte.
-Voraussetzung ist eine erfolgreiche Veröffentlichung des Betriebspakets:
-[Image-Pipeline](https://github.com/edigonzales/datenportal-themenintegrator-agent/actions/workflows/agent-image.yml).
-Ein fehlgeschlagener Lauf aktualisiert `latest` nicht. Meldet `workspace install`
-einen unbekannten Befehl oder verlangt bereits vor der Installation eine lokale
-Konfiguration (`configuration_missing`), zuerst Image-Version und Veröffentlichung
-prüfen; kein Entwicklungscheckout als Installationsersatz erforderlich.
-
-### 2. Fachliche Repositories und Eingangsordner bereitstellen
-
-Für eine neue Einrichtung im Terminal:
-
-```sh
-mkdir -p "$HOME/datenportal"
-cd "$HOME/datenportal"
-git clone https://github.com/sogis/datenportal-themenrepo.git
-git clone https://codeberg.org/edigonzales/datenportal-dev-stack.git
-mkdir -p datenportal-pilot-daten
+```bash
+export JAVA_HOME=/pfad/zum/jdk-21
+/pfad/zum/paket/bin/datenportal-agent workspace install /absoluter/pfad/betrieb
+cd /absoluter/pfad/betrieb
+cp config/local.example.toml config/local.toml
 ```
 
-Das Themenrepo enthält Datenblätter, Modelle und Lieferjobs. Der Dev-Stack enthält
-Skripte für die lokale Testumgebung und muss bereits bei `init` vorhanden sein.
-`init` klont keine Repositories. Hast du diese Checkouts bereits, überspringe die
-Clone-Befehle und verwende ihre vorhandenen Pfade in Schritt 4. Nichts verschieben.
-Separate Quellcheckouts der Fach-MCPs, von GRETL oder Jenkins sind nicht nötig.
-Der Pilotdatenordner enthält die Originaldateien. Verwende auch hier einen
-vorhandenen Ordner weiter; kein erneutes Klonen, Verschieben oder Kopieren nötig.
+`topics_repo` auf das fachliche Themenrepository setzen. `model_dirs` ergänzt bei Bedarf weitere Modellverzeichnisse. Die beiden MCPs werden aus dem Paket als stdio-Prozesse gestartet. Es gibt keine MCP-Image-, Port- oder Compose-Konfiguration. Für zusätzliche Eingangsordner `input_roots` in der lokalen Konfiguration setzen.
 
-### 3. Betriebsordner erstellen und Paket installieren
-
-Die folgenden Befehle installieren in einen **leeren** Ordner. Ein bereits
-installierter Ordner wird später mit `workspace update` aktualisiert.
-
-```sh
-betrieb="$HOME/datenportal/datenportal-betrieb"
-mkdir -p "$betrieb"
-agent_image='sogis/datenportal-themenintegrator-agent:latest'
-docker pull "$agent_image"
-docker run --rm --network none --user "$(id -u):$(id -g)" \
-  --mount "type=bind,source=$betrieb,target=/workspace" \
-  "$agent_image" workspace install /workspace
-cd "$betrieb"
+```bash
+bin/datenportal-agent init
+bin/datenportal-agent doctor
 ```
 
-`/workspace` bezeichnet hier nur das Installationsziel im Container. Auf deinem
-Rechner liegen die Dateien unter `$HOME/datenportal/datenportal-betrieb`.
-Der Installationsschritt benötigt keinen Docker-Socket im Container.
+`init` prüft JDK, Paketressourcen, beide MCPs sowie eine gültige und eine absichtlich ungültige synthetische CSV. Es richtet die eingeschränkten Clientzugänge ein. Synthetische Testfreigaben autorisieren keine fachlichen Änderungen. `doctor` trennt lokale Prüfbereitschaft von Publikationszugängen.
 
-```text
-~/datenportal/
-├── datenportal-betrieb/       ← im Client öffnen
-├── datenportal-themenrepo/
-├── datenportal-dev-stack/
-└── datenportal-pilot-daten/  ← Originaldateien, im Container read-only
-```
+Den Betriebsordner im Client öffnen. Der Fachagent arbeitet ausschliesslich mit den drei Skills und den öffentlichen MCP-Werkzeugen. Implementierungsquellen, allgemeine Shell und Buildwerkzeuge bleiben ausserhalb seines Arbeitsbereichs.
 
-`latest` dient dem Erstbezug. Das Paket enthält seine Versionskennung in
-`workspace-version`; der Launcher verwendet anschliessend diese veröffentlichte
-Version und hält die konkrete Image-Identität fest. Normale Starts wechseln
-nicht automatisch auf ein neueres Image. Alternativ kann das gleich versionierte
-CI-Archiv samt Prüfsummendatei heruntergeladen, mit `shasum -a 256 -c DATEI.sha256`
-geprüft und in einen leeren Betriebsordner entpackt werden.
+## Zugänge und Publikation
 
-### 4. Konfiguration prüfen
+GitHub-PRs werden direkt über die REST-API erstellt und geprüft. `GH_TOKEN` hat Vorrang vor `GITHUB_TOKEN`. Für das gewählte Repository werden Pull-Request-Schreibrechte und bei HTTPS-Push zusätzlich Contents-Schreibrechte benötigt. Git nutzt den vom Integrator gestarteten Credential-Helper; `gh auth login` ist nicht erforderlich. Tokens nicht in Konfigurationsdateien oder Chatnachrichten eintragen. Git-Autorenidentität wie üblich konfigurieren. Der Client muss die benötigten Umgebungsvariablen an den Integrator weitergeben.
 
-Bei der gezeigten Ordnerstruktur und freien Ports 8000/8080 direkt zu Schritt 5
-gehen. `init` erstellt die fehlende `config/local.toml` aus der Vorlage.
-Nur bei Abweichungen zuerst die Vorlage kopieren, ohne eine bestehende Datei zu
-überschreiben:
+Jenkins-Profile stehen unter `[environments.<name>]`: `kind`, `enabled`, `jenkins_url`, `portal_url`, `manifest_url`, `username_env`, `token_env`, `repository_mode="managed-git"`, `git_write_back=false`, optional `git_remote` und `git_branch`. INT/PROD-Adressen werden nicht vorbelegt. Jenkins-Zugänge können auch mit `credentials set <profil> --username <user> --token-stdin` eingerichtet werden. `credentials status` zeigt keine Geheimnisse.
 
-```sh
-if [ ! -e config/local.toml ]; then
-  cp config/local.example.toml config/local.toml
-fi
-```
+Die lokale CSV-Vorprüfung verwendet ilivalidator direkt. Jenkins prüft vor der Publikation eigenständig mit GRETL. Es gibt keinen Bundle-, Image- oder Bibliotheksabgleich zwischen beiden Prüfungen. Daten- und Modellprüfsummen binden Freigaben weiterhin an den gezeigten fachlichen Stand.
 
-Öffne danach `config/local.toml` in einem Texteditor. Zugangsdaten gehören in
-Umgebungsvariablen oder den Credential-Store, nicht in diese Datei.
-
-| Einstellung | Wann anpassen? |
-|---|---|
-| `topics_repo`, `stack_repo` | Vorhandene Checkouts liegen anders. Absolute Pfade sind erlaubt; relative Pfade beziehen sich auf `root`, bei `root = ".."` auf den Betriebsordner. |
-| `[datasheet].url`, `[interlis].url` | Ports 8000/8080 sind belegt; freie lokale Ports mit Pfad `/mcp` wählen. |
-| `[runtime].project` | Mehrere Betriebsordner parallel: eigenen Projektnamen und eigene MCP-Ports wählen. |
-| `--mount-rw` | Themenrepo oder Stack liegen ausserhalb von `~/datenportal`; zusätzlich zum Konfigurationseintrag ihre Verzeichnisse einbinden. |
-
-Beispiel für vorhandene Checkouts und Pilotdaten unter `~/sources/`, wie in
-Stefans Einrichtung: Nach Eintragen der Themenrepo- und Stack-Pfade in
-`config/local.toml` die Befehle aus Schritt 5 so ausführen:
-
-```sh
-./bin/datenportal-agent \
-  --mount-rw "$HOME/sources/datenportal-themenrepo" \
-  --mount-rw "$HOME/sources/datenportal-dev-stack" \
-  --mount-ro "$HOME/sources/datenportal-pilot-daten" init
-./bin/datenportal-agent \
-  --mount-rw "$HOME/sources/datenportal-themenrepo" \
-  --mount-rw "$HOME/sources/datenportal-dev-stack" \
-  --mount-ro "$HOME/sources/datenportal-pilot-daten" doctor
-```
-
-Mount-Verzeichnisse müssen existieren. Bei jedem späteren `init` dieselben
-benötigten Mount-Optionen angeben: Sie werden aus dem aktuellen Aufruf in die
-Client-Einträge übernommen. `harness-config` zeigt nur einen Konfigurationsvorschlag;
-auch für diese Diagnose die benötigten Optionen mitgeben.
-
-### 5. Initialisieren und Ergebnis prüfen
-
-Bei Standardpfaden:
-
-```sh
-./bin/datenportal-agent --mount-ro ../datenportal-pilot-daten init
-./bin/datenportal-agent --mount-ro ../datenportal-pilot-daten doctor
-```
-
-`init` richtet Fachwerkzeuge ein, erstellt `.codex/config.toml` und `opencode.json`
-und führt einen isolierten synthetischen Selbsttest durch. Es erstellt keine
-fachlichen Freigaben und führt keine Geschäftsdatenlieferung aus.
-
-Erwartet wird bei `init` **`ready: true`**. Bei `doctor` insbesondere prüfen:
-
-```json
-{
-  "agent_runtime": {"mounts_valid": true, "network": "host-loopback-verified"},
-  "datasheet_mcp": {"valid": true},
-  "interlis_mcp": {"valid": true},
-  "initialization": {"ready": true, "smoke_current": true}
-}
-```
-
-Auch `gretl_runtime` muss fehlerfrei sein. Der Exit-Code allein reicht nicht;
-ein inzwischen ausgefallener Dienst kann trotz gespeichertem erfolgreichen
-Selbsttest einen aktuellen Fehler melden. Bei Fehlern den genannten Bericht
-prüfen, Ursache beheben und `init` wiederholen. `--skip-smoke` bestätigt keine
-vollständige Bereitschaft. Widersprüchliche Client-Einstellungen gezielt abgleichen,
-keine Zugriffssperren abschalten.
-
-**Lokale Lieferung benötigt zusätzlich Jenkins, Portal und Lieferzugänge.**
-`init` startet nur die Fachwerkzeugdienste, nicht den Publikationsstack.
-Der Integrator verwendet diesen später über die Dev-Stack-Schnittstellen.
-Fehlende Publikationszugänge verhindern reine CSV-Prüfung oder Modellierung nicht.
-Die Einzelheiten stehen unter [Betrieb und Zugänge](agent/betrieb-und-zugaenge.md).
-
-### 6. Betriebsordner im Client öffnen
-
-Öffne immer `~/datenportal/datenportal-betrieb`, nicht den gemeinsamen
-Elternordner oder den Integrator-Quellcheckout. Nach Änderungen an Client-Einträgen
-MCP-Verbindungen und bestehende Sitzungen neu starten.
-
-**Codex Desktop:** Betriebsordner als Projekt öffnen und seine
-Projektkonfiguration als vertrauenswürdig bestätigen. Projektlokale MCPs gelten
-nur in vertrauenswürdigen Projekten; siehe
-[offizielle OpenAI-Dokumentation](https://learn.chatgpt.com/docs/extend/mcp).
-
-**Codex CLI:** Bei bereits installierter und angemeldeter Codex-CLI:
-
-```sh
-cd "$HOME/datenportal/datenportal-betrieb"
-./bin/datenportal-agent --mount-ro ../datenportal-pilot-daten codex
-```
-
-Der Launcher startet die Host-CLI mit den vorgesehenen Betriebseinstellungen.
-Bei vorhandenen Checkouts unter `~/sources/` dieselben drei Mount-Optionen wie
-beim dortigen `init` verwenden und lediglich `init` durch `codex` ersetzen.
-
-**OpenCode Desktop:** Betriebsordner als Projekt öffnen, Agent **`datenportal`**
-auswählen. Im Projektmenü **More options → Edit project → Extensions** die
-Bereiche **MCPs** und **Skills** prüfen (geprüft mit Desktop 2.0.27).
-
-**Mit OpenCode Desktop gelieferte CLI, macOS:** Bei Installation unter
-`/Applications/OpenCode.app` im Terminal:
-
-```sh
-cd "$HOME/datenportal/datenportal-betrieb"
-"/Applications/OpenCode.app/Contents/Resources/opencode-cli" --version
-"/Applications/OpenCode.app/Contents/Resources/opencode-cli" .
-```
-
-Keine zusätzliche globale OpenCode-CLI voraussetzen. Bei einem anderen
-Installationsort den App-Pfad anpassen. In Version 2.0.27 kann `mcp list` die
-Default-Location des Hintergrundservers statt des aktuellen Projekts anzeigen.
-Deshalb Projektpfad und projektspezifische Extensions prüfen; eine leere Liste
-allein belegt keinen fehlenden MCP-Eintrag.
-
-Erwartet werden diese **zwei MCP-Server**:
-
-| Server | Aufgabe |
-|---|---|
-| `datenportal_integrator` | Prüfen, modellieren, Vorgänge bearbeiten und liefern |
-| `datenportal_workspace` | Anhänge übernehmen und zulässige Arbeitsdateien lesen oder schreiben |
-
-Datenblatt- und INTERLIS-MCP werden intern verwaltet; nicht zusätzlich registrieren.
-Die **drei Skills** unter `.agents/skills/` sind `datenportal-themenintegrator`,
-`datenportal-validierungsmodell` und `datenportal-organisation`. In Codex mit `$`,
-in OpenCode mit `@` auswählen. Modellierung innerhalb einer Themenintegration
-nutzt denselben Vorgang. Ein funktionierender MCP-Handshake ersetzt keinen
-vollständig geprüften Fachdialog; Desktop-/CLI-Nachweise sind getrennt zu bewerten.
-Im Betriebsprofil sind allgemeine Shell und Zugriffe auf Implementierungsquellen
-gesperrt. Der Agent verwendet öffentliche Werkzeugschemas, Skills und Prüfberichte.
-Bei fehlenden Informationen fragt er nach; bei Einrichtungsfehlern den Betreiber
-einbeziehen und die Sperren beibehalten.
-
-## Erste CSV bearbeiten
-
-Ein Betriebsordner wird für mehrere Themen und Sitzungen verwendet. Bei der
-Standardinstallation liegen die Originaldateien im Geschwisterordner
-`../datenportal-pilot-daten`. Falls noch nicht vorhanden:
-
-```sh
-cd "$HOME/datenportal/datenportal-betrieb"
-mkdir -p ../datenportal-pilot-daten
-```
-
-Stelle neue CSV-Dateien unverändert und mit ihrem Originalnamen dort bereit,
-beispielsweise mit dem Dateimanager. Bereits vorhandene Dateien im eingerichteten
-Pilotdatenordner direkt verwenden. In Stefans Einrichtung ist dies
-`/Users/stefan/sources/datenportal-pilot-daten`; nichts verschieben.
-CSV-Namen dürfen nur ASCII-Buchstaben, Ziffern und Unterstriche vor `.csv`
-enthalten. Eine erforderliche Umbenennung ausdrücklich klären.
-
-Wähle den Themenintegrations-Skill und passe Datei, Organisation und Identifier an:
-
-```text
-Integriere ../datenportal-pilot-daten/Fahrzeugbestand.csv für mfk,
-Thema ch.so.fahrzeugbestand2025. Verwende das vorhandene Datenblatt im
-Themenrepo, erstelle ein INTERLIS-Validierungsmodell und liefere nach
-meinen Freigaben lokal. Prüfe CSV, Modell, Portal und Downloads.
-```
-
-Bei einem externen Eingang den vollständigen Originalpfad nennen, zum Beispiel
-`/Users/stefan/sources/datenportal-pilot-daten/ch.so.fahrzeugbestand/Fahrzeugbestand_SO_251231.csv`.
-Der Agent löst relative Angaben gegen den Betriebsordner auf und übergibt den
-absoluten Originalpfad an `datenportal_workspace.import_attachment`. Dieses
-Werkzeug erstellt eine getrennte Eingangskopie und prüft drei übereinstimmende
-SHA-256-Werte. Nur die verifizierte Kopie wird an den Integrator übergeben.
-
-Prüfe die angebotenen HTML-Berichte und beantworte die fachlichen Rückfragen.
-CSV-, Modell-/Metadaten- und Publikationsfreigaben erfordern deine tatsächliche
-Antwort zum jeweiligen Prüfstand. Beobachtete Werte sind noch keine bestätigten
-Fachregeln. Für reine Modellierung wähle `datenportal-validierungsmodell`, für eine
-eigenständige Organisationsanlage `datenportal-organisation`.
-
-### Warum ein dauerhaft eingebundener Pilotdatenordner?
-
-Ein einmal eingerichteter Eingang vermeidet Mount-Anpassungen für jede Datei.
-Beide Clients speichern den Read-only-Mount in ihren MCP-Startargumenten; normale
-neue Sitzungen brauchen keine erneute Einrichtung. Bei einem späteren `init`
-alle Mount-Optionen erneut angeben: Ein Aufruf ohne sie kann die gespeicherten
-Mounts entfernen. `doctor` allein speichert keine Client-Konfiguration.
-
-Die vorhandene Docker-/MCP-Lösung genügt dafür; ein zusätzlicher lokaler
-Import-MCP mit eigener Installation und Laufzeit entfällt. Das gesamte Home
-wird nicht eingebunden, weil dies unnötig private Dateien und Entwicklungsquellen
-zugänglich machen würde. Read-only schützt Originale vor Änderungen über diesen
-Mount, auch beim bereits schreibbar eingebundenen Elternordner. Die drei
-Prüfsummen sichern zusätzlich die unveränderte Übernahme ab. Ihr Entfernen würde
-den fehlenden Dateizugriff im Container nicht beheben.
-
-### Externe Dateien und Chat-Anhänge
-
-Ein Chat-Anhang garantiert keinen Zugriff auf die tatsächlichen Dateibytes im
-Container. Der Agent benötigt den zugänglichen Originalpfad; Chattext oder eine
-Vorschau dürfen die Originaldatei nicht ersetzen.
-
-Dateien ausserhalb der freigegebenen Eingänge unverändert im Pilotdatenordner
-bereitstellen und dessen Dateipfad nennen. Alternativ einen weiteren gezielten
-Read-only-Mount einrichten. Bei Standardpfaden beispielsweise:
-
-```sh
-./bin/datenportal-agent \
-  --mount-ro ../datenportal-pilot-daten --mount-ro "$HOME/Downloads" init
-./bin/datenportal-agent \
-  --mount-ro ../datenportal-pilot-daten --mount-ro "$HOME/Downloads" doctor
-```
-
-Bei externen Checkouts auch deren beide `--mount-rw`-Optionen und den tatsächlich
-verwendeten Pilotdatenpfad angeben. Danach beide MCP-Verbindungen und die Sitzung
-neu starten. Auch bei späterem `init` alle Optionen beibehalten.
-[Eingangsdateien](agent/eingangsdateien.md) beschreibt die Übernahme genau.
+Nur für eine ausdrücklich gewünschte lokale Publikation oder `acceptance delivery` werden Docker und ein vorhandener Dev-Stack benötigt. `stack_repo` und ein lokales Loopback-Profil dafür gesondert konfigurieren. Der Integrator startet keine lokalen Container für CSV/XTF- oder Modellprüfungen.
 
 ## Wiederaufnahme und Updates
 
-Sitzungen dürfen geschlossen werden; Vorgänge und Eingänge bleiben im
-Betriebsordner gespeichert. Zur Wiederaufnahme vorhandene `run_id` nennen und
-keinen zweiten Vorgang für denselben Auftrag starten. Bei einem unklaren Upload
-zuerst den bestehenden externen Lauf klären.
+Neue Vorgänge verwenden Schema 3. Vorgänge aus der früheren Docker-Version werden nicht migriert: den alten Arbeitsbereich mit seiner bisherigen Version abschliessen und für neue Aufträge einen neuen Arbeitsbereich verwenden. Offene externe Uploads zuerst im alten Vorgang aufklären; niemals durch einen neuen Vorgang doppelt senden.
 
-Vorgänge aus einem früheren Entwicklungsordner werden nicht automatisch
-übernommen. Den alten Arbeitsbereich erhalten und eine Übernahme mit allen
-referenzierten Ressourcen und Pfaden gezielt prüfen. Nur `state_dir` umzusetzen
-oder einzelne Zustandsdateien zu kopieren ist keine vollständige Migration.
-[Lieferung und Wiederaufnahme](agent/lieferung-und-wiederaufnahme.md)
+Innerhalb der neuen Version bleibt bei Wiederaufnahme die `run_id` erhalten. Bei einem unklaren PR-Erstellungsaufruf wird der bestehende GitHub-Stand abgefragt, kein zweiter PR blind erstellt. Rate-Limit-Berichte nennen die Wartezeit.
 
-Vor Updates aktive Arbeit abschliessen und MCP-Verbindungen trennen. Im
-Betriebsordner bei Standardpfaden ausführen:
+Für Updates ein neues vollständiges Paket in ein separates Installationsverzeichnis entpacken und dessen Launcher verwenden:
 
-```sh
-./bin/datenportal-agent --update-agent workspace update "$PWD"
-./bin/datenportal-agent --mount-ro ../datenportal-pilot-daten init
-./bin/datenportal-agent --mount-ro ../datenportal-pilot-daten doctor
+```bash
+/pfad/zum/neuen-paket/bin/datenportal-agent workspace update /absoluter/pfad/betrieb
+cd /absoluter/pfad/betrieb
+bin/datenportal-agent init
 ```
 
-Für Stefans bestehende Ordnerstruktur lautet der vollständige Ablauf:
+Arbeitsdateien und lokale Konfiguration bleiben erhalten. Individuell veränderte verwaltete Dateien führen zu einem Konfliktbericht. Das alte Paket erst entfernen, wenn kein Arbeitsbereich es mehr verwendet. Alte Container und Volumes werden nicht automatisch gelöscht.
 
-```sh
-./bin/datenportal-agent --update-agent workspace update "$PWD"
-./bin/datenportal-agent \
-  --mount-rw "$HOME/sources/datenportal-themenrepo" \
-  --mount-rw "$HOME/sources/datenportal-dev-stack" \
-  --mount-ro "$HOME/sources/datenportal-pilot-daten" init
-./bin/datenportal-agent \
-  --mount-rw "$HOME/sources/datenportal-themenrepo" \
-  --mount-rw "$HOME/sources/datenportal-dev-stack" \
-  --mount-ro "$HOME/sources/datenportal-pilot-daten" doctor
-```
+## Diagnose
 
-Das Update ersetzt nur unveränderte Paketdateien. Bei individuellen Änderungen
-wird ein Konfliktbericht ausgegeben; Änderungen bewusst abgleichen und erneut
-aktualisieren. Vor erfolgreicher Paketaktualisierung keine Fachsitzung starten:
-Image und Paket müssen dieselbe Version besitzen. Eigene Konfiguration,
-Zugangsdaten, Eingänge und Vorgänge werden nicht automatisch verschoben oder
-überschrieben. Fachwerkzeug-Pins sind gesondert zu aktualisieren. Danach beide
-MCP-Verbindungen und die Sitzung neu starten.
+`jdk_required` verlangt ein vollständiges JDK 21. `package_incomplete` verlangt ein vollständiges Paket; der Fachagent baut keine fehlenden Programme selbst. `configuration_upgrade_required` verweist auf die neue Konfigurationsvorlage. `unsupported_state_version` verlangt die bisherige Version für den alten Vorgang. `github_credentials_missing`, `github_access_denied` und `github_rate_limited` unterscheiden fehlende Zugänge, Berechtigungen und Wartezeiten.
 
 ## Mit dem Agenten arbeiten
 
@@ -421,11 +131,7 @@ keine durchgeführten Lieferungen. Den geprüften Betriebsstand hält die
 
 ### Ablauf und deine Entscheidungen
 
-Die [Architekturskizze](entwicklerhandbuch.md#zusammenspiel-der-komponenten)
-zeigt die beteiligten Komponenten. Das
-[Sequenzdiagramm](entwicklerhandbuch.md#sequenz-einer-themenintegration)
-zeigt ihre Zusammenarbeit bei einer Themenintegration einschliesslich Freigaben
-und optionaler INT-/PROD-Publikation.
+Das [Entwicklerhandbuch](entwicklerhandbuch.md#architektur) beschreibt Komponenten und Verantwortlichkeiten. Fachliche Freigaben und optionale INT-/PROD-Publikation bleiben getrennte Schritte.
 
 Du kannst einen vollständigen Ablauf oder einen einzelnen Schritt beauftragen.
 Für ein Thema mit CSV und neuen oder geänderten Metadaten gilt:
@@ -748,254 +454,6 @@ Antwort zum jeweils gezeigten Prüfstand.
 Der Korrekturauftrag in der zweiten Zeile ist noch keine Freigabe. Eine
 CSV-Freigabe umfasst weder das spätere Datenblatt noch eine INT-/PROD-Publikation.
 
-## Betrieb und Updates
-
-### Täglicher Start
-
-Docker starten, den Integrator-Arbeitsbereich im Client öffnen und den MCP
-verbinden. Ein erneutes `init` ist nicht vor jeder Sitzung nötig. Fehlende eigene
-Fachdienste startet der Integrator bei Bedarf. Die Dienste bleiben nach dem
-Schliessen des Chats verfügbar; Docker-Autostart auf dem Rechner richtet der
-Agent nicht ein.
-
-Mit `docker compose down` **im Betriebsordner** kannst du die eigenen
-Fachdienste anhalten. Dabei bleibt der Gradle-Cache erhalten. Keine Volumes zur
-normalen Fehlerbehebung löschen. Der Publikationsstack gehört zum separaten
-Dev-Stack und wird dadurch nicht angehalten.
-
-### Wiederaufnahme und Bereitschaft
-
-`init` protokolliert seine Schritte in `.datenportal-integrator/init.json` und
-verhindert parallele Initialisierungen. Nach Behebung eines Fehlers denselben
-Befehl erneut ausführen. Eine ausdrücklich mit `--config` gewählte fehlende
-Datei ist ein Fehler; nur die fehlende Standardkonfiguration wird angelegt.
-
-Der Funktionstest prüft Datenblatt-Import/-Export, XTF, Modellableitung und
-je eine gültige und absichtlich ungültige CSV mit GRETL. Er verwendet private
-Themenkopien und ausschliesslich synthetische Freigaben ohne Publikationsprofile.
-Nachweise liegen unter `.datenportal-integrator/smoke/`. Unveränderte gültige
-Nachweise werden wiederverwendet; veränderte Grundlagen verlangen neue Prüfungen.
-`init --skip-smoke` ist ein Entwicklungsweg und meldet keine volle Bereitschaft.
-
-### Agent-Image aktualisieren
-
-Im Betriebspaket Image und Paket gemeinsam über
-[Wiederaufnahme und Updates](#wiederaufnahme-und-updates) aktualisieren. Ein
-Git-Pull oder ein isoliertes Image-Update ersetzt die Paketaktualisierung nicht.
-Entwicklungsstände beschreibt das
-[Entwicklerhandbuch](entwicklerhandbuch.md#docker-launcher-und-initialisierung).
-
-### Fachwerkzeuge aktualisieren
-
-Die Image-Referenzen stehen unter `[datasheet].image`, `[interlis].image` und
-`[gretl].image` in deiner lokalen Konfiguration. Einen geprüften neuen Pin aus der
-aktuellen Vorlage beziehungsweise dem [Abnahmestand](abnahme.md) bewusst übernehmen.
-Ein unveränderlicher Digest bezeichnet immer denselben Inhalt; `--update-tools`
-macht daraus keine automatische Suche nach `latest`.
-
-Bei allen folgenden `init`-Beispielen für Standardpfade die vollständigen
-Mount-Optionen der eigenen Einrichtung verwenden; für externe Checkouts siehe
-[Konfiguration prüfen](#4-konfiguration-prüfen).
-
-Vor einem Werkzeugwechsel MCP-Verbindungen trennen und die **eigenen** Dienste
-mit der bisherigen Compose-Konfiguration anhalten. Im Betriebsordner:
-
-```sh
-docker compose down
-# Jetzt die gewünschten Image-Referenzen in config/local.toml ändern.
-./bin/datenportal-agent --mount-ro ../datenportal-pilot-daten init --update-tools
-./bin/datenportal-agent --mount-ro ../datenportal-pilot-daten doctor
-```
-
-`init` bereitet die ausgewählten Stände und die eigene Compose-Konfiguration
-vor und prüft erneut. Anschliessend den Client verbinden. Betroffene fachliche
-Kandidaten neu prüfen und erforderliche Freigaben erneuern. Eine abweichende
-laufende Instanz wird nicht still ersetzt. Agent-Update und Werkzeugupdate sind
-zwei getrennte Vorgänge.
-
-### Mounts und Aufruf aus Codex oder OpenCode
-
-Der Launcher bindet den gemeinsamen Elternordner des Betriebsordners und der fachlichen Checkouts schreibbar unter
-dem gleichen absoluten Pfad ein. Der explizite Read-only-Mount des Pilotdatenordners
-überlagert dessen schreibbaren Eltern-Mount. Eingangsdateien ausserhalb dieses Ordners
-benötigen einen zusätzlichen Mount. Gib ihn bereits bei `init` an, damit
-die erzeugten Client-Einträge ihn bei späteren Aufrufen behalten:
-
-```sh
-./bin/datenportal-agent --mount-ro ../datenportal-pilot-daten --mount-ro '/pfad/mit leerzeichen/eingang' init
-./bin/datenportal-agent --mount-ro ../datenportal-pilot-daten --mount-ro '/pfad/mit leerzeichen/eingang' doctor
-```
-
-Für abweichende Themen-/Stack-Checkouts oder einen externen Arbeitsordner
-`--mount-rw` verwenden. Die Konfiguration muss diese Pfade ebenfalls enthalten.
-Mounts verlangen vorhandene Verzeichnisse; Symlinks werden aufgelöst. Übernommene
-Chat-Anhänge liegen bereits im Betriebsordner und benötigen keinen Zusatzmount.
-
-Die Konfigurationsauswahl erfolgt über `--config /absoluter/pfad/local.toml`,
-alternativ `DATENPORTAL_INTEGRATOR_CONFIG`, sonst `config/local.toml` im
-Betriebsordner. Eine externe Konfigurationsdatei muss ebenfalls erreichbar
-sein. Zugangsdatenwerte gehören nicht in diese Datei.
-
-`DATENPORTAL_FORWARD_ENV` benennt weitergereichte Umgebungsvariablen. `init`
-speichert deren Namen in den Client-Einträgen. Werte müssen in der späteren
-Startumgebung vorhanden sein; eine GUI erbt Shell-Variablen nicht automatisch.
-
-### Vorhandene lokale Konfiguration umstellen
-
-Es werden ausschliesslich die aktuellen Formate unterstützt. Die entfernten
-Felder `datasheet_mcp_url`, `gretl_java_home`, `gretl_offline_jars` sowie
-`[interlis].jar` und `java_command` führen zu `invalid_configuration`.
-Vergleiche deine Datei mit `config/local.example.toml`, übernimm
-bewusst die benötigten aktuellen Abschnitte und erhalte eigene Pfade,
-Ports und Umgebungsprofile. Es gibt keine automatische Migration.
-
-Für Codex ist ein Launcher-Eintrag erforderlich; OpenCode 2.x verwendet
-`mcp.servers.datenportal_integrator`, `disabled` und ein Timeout-Objekt.
-Alte Java-Startbefehle, direkte MCP-Einträge und numerische Timeouts führen zu
-`harness_conflict`. Den gemeldeten Eintrag sichern und bewusst anhand von
-`./bin/datenportal-agent harness-config` neu einrichten. Fremde Einträge nicht
-löschen. Bei einem erkannten Konflikt verändert `init` keine der beiden
-Client-Dateien. Danach `init` erneut ausführen.
-
-Ein alter GRETL-Runtime-Nachweis wird ebenfalls nicht überschrieben: die in der
-Fehlermeldung genannte Datei ausserhalb ihres Runtime-Verzeichnisses archivieren
-und mit `init` neu einrichten. Vorgänge und fachliche Artefakte bleiben erhalten.
-Alte Vorgangsschemata können mit diesem Agenten nicht fortgeführt werden; siehe
-[Wiederaufnahme und Fehler](#wiederaufnahme-und-fehler).
-
-### Lokale Publikation vorbereiten
-
-Für CSV-Prüfung, Datenblattbearbeitung und Modellierung genügt die Einrichtung
-oben. Erst die lokale Lieferung benötigt Jenkins-Zugangsdaten und den
-Publikationsstack. Der Agent verwendet eine passende laufende Instanz oder
-startet die vorhandenen Dev-Stack-Skripte im freigegebenen Lieferablauf.
-
-Ein manueller vollständiger Start mit `../datenportal-dev-stack/scripts/up.sh`
-ist ein gesonderter Betriebsweg: Er richtet Secrets und Garage ein und führt
-Seed, Erstpublikation und Portalstart aus. Auf dem Host benötigt er OpenSSL und
-Python 3. Das ist kein zusätzlicher Schritt der Integrator-Erstinstallation.
-Beim Aufruf über den Java-Integrator stehen diese Werkzeuge im Agent-Image zur
-Verfügung. `--infrastructure-only` beim manuellen Stackstart überspringt den
-Bootstrap, benötigt aber weiterhin OpenSSL.
-
-INT und PROD müssen mit tatsächlichen Adressen, Zielbranch und benannten
-Zugangsvariablen bewusst eingerichtet werden. Es gibt dafür keine aktivierten
-Standardprofile. Fachliche Freigaben und der menschliche PR-Merge gelten
-unabhängig von der technischen Bereitschaft.
-
-### GitHub-Anmeldung im Docker-Betrieb
-
-`gh` ist bereits im Agent-Image installiert. Eine lokale `gh`-Installation oder
-ein `gh auth login` auf dem Host ist für den Docker-Betrieb nicht erforderlich.
-Für GitHub-HTTPS-Zugriffe und Pull Requests verwendet der Container `GH_TOKEN`;
-der Launcher richtet `gh auth git-credential` als Git-Credential-Helper ein.
-Das Token muss die für den Zielvorgang erforderlichen Repository-Rechte besitzen.
-Siehe auch die [GitHub-CLI-Dokumentation zu Umgebungsvariablen](https://cli.github.com/manual/gh_help_environment).
-
-Im Integrator-Root in Bash oder zsh ausführen. Die Token-Eingabe bleibt unsichtbar;
-die Weitergabeliste wird um die GitHub- und Git-Variablen ergänzt, bestehende
-Namen bleiben erhalten:
-
-```sh
-printf 'GitHub-Token: '
-read -rs GH_TOKEN
-printf '\nGit-Autorenname: '
-read -r GIT_AUTHOR_NAME
-printf 'Git-Autoren-E-Mail: '
-read -r GIT_AUTHOR_EMAIL
-export GH_TOKEN GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL
-export GIT_COMMITTER_NAME="$GIT_AUTHOR_NAME"
-export GIT_COMMITTER_EMAIL="$GIT_AUTHOR_EMAIL"
-export DATENPORTAL_FORWARD_ENV="${DATENPORTAL_FORWARD_ENV:+$DATENPORTAL_FORWARD_ENV }GH_TOKEN GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL"
-
-# Die Variablennamen auch in die projektlokale MCP-Konfiguration übernehmen.
-./bin/datenportal-agent --mount-ro ../datenportal-pilot-daten init
-```
-
-Die Werte müssen beim späteren Start des Launchers beziehungsweise des
-MCP-Clients ebenfalls in dessen Umgebung vorhanden sein. `init` speichert hier
-nur die zusätzlichen Variablennamen. Nach Änderungen bestehende MCP-Verbindungen
-neu starten. Ein aus dem Finder gestarteter Desktop erbt die Shell-Variablen
-nicht automatisch; seine Startumgebung muss die Werte ausdrücklich bereitstellen.
-Der lokale Jenkins-Credential-Store verwaltet keine GitHub-Tokens.
-
-Nach erfolgreicher Einrichtung die Anmeldung im ausgewählten Agent-Image prüfen:
-
-```sh
-agent_image_id=$(cat .datenportal-integrator/launcher/image.id)
-docker run --rm -e GH_TOKEN --entrypoint gh "$agent_image_id" \
-  auth status --hostname github.com
-```
-
-Dieser Aufruf liest den Anmeldestatus und verwendet das Token ausschliesslich
-aus der Umgebung. Ein erfolgreicher Check bestätigt noch keine Schreibberechtigung
-für das Zielrepository. Eine bestehende Host-Anmeldung und persönliche
-Git-Konfigurationen werden nicht automatisch in den Container übernommen;
-persönliche Credential-Verzeichnisse werden nicht pauschal eingebunden.
-Token-Werte weder in versionierte Dateien noch in Chatnachrichten schreiben.
-
-### Jenkins-Zugangsdaten für Codex und OpenCode
-
-Der gemeinsame Java-Kern kann lokale Zugangsdaten aus
-`.datenportal-integrator/credentials/local.json` lesen. Damit muss eine GUI keine
-Jenkins-Variablen von ihrem Startprozess erben. Der Store ist ignoriert und
-unverschlüsselt; Verzeichnisrechte 0700 und Dateirechte 0600 schützen den Zugriff.
-Symlinks, fremde Eigentümer und weitergehende Rechte werden abgewiesen.
-
-Einmalig Benutzer und Token in einer Shell hinterlegen, ohne den Token in
-Kommandoargumente oder den Chat zu schreiben:
-
-```sh
-printf 'Jenkins-Benutzer: '
-read -r credential_user
-printf 'Jenkins-Token: '
-read -rs credential_token
-printf '\n'
-printf '%s' "$credential_token" | ./bin/datenportal-agent credentials set local --username "$credential_user" --token-stdin
-unset credential_token credential_user
-./bin/datenportal-agent credentials status local
-```
-
-Alternativ ausdrücklich aus der vorhandenen Umgebung übernehmen:
-
-```sh
-DATENPORTAL_FORWARD_ENV="DATENPORTAL_LOCAL_USER DATENPORTAL_LOCAL_TOKEN" \
-  ./bin/datenportal-agent credentials set local --from-env
-./bin/datenportal-agent credentials remove local
-```
-
-Bei abweichender Konfiguration gelten deren Variablennamen und `--config`.
-Ein vollständiges Umgebungspaar hat Vorrang vor dem Store. Teilweise gesetzte
-Werte sind ein Fehler; Benutzer und Token aus verschiedenen Quellen werden nicht
-gemischt. Store-Einträge gelten nur für das gewählte lokale Profil und seine
-Jenkins-Adresse. Eine geänderte Adresse erfordert eine neue Hinterlegung.
-INT/PROD bleiben bei expliziten Umgebungsvariablen.
-
-`doctor` zeigt technische Bereitschaft und Publikationszugänge getrennt.
-Modellierung und `init` benötigen keine Jenkins-Zugangsdaten. Eine neue
-Anlieferung prüft die Zugangsdaten vor Stack-Änderungen; fehlende oder abgewiesene
-Zugänge erlauben keine Passwortversuche oder Container-Neuerstellung.
-
-Nach einem JAR-Update den MCP einmal neu verbinden. Spätere Änderungen am Store
-werden vom laufenden MCP ohne Neustart gelesen. Den vorhandenen Vorgang anhand
-seiner ID fortsetzen; bei unbestätigtem Upload zunächst aufklären.
-
-## Codex Desktop, Codex CLI und OpenCode
-
-Die vier getrennten Startwege und die Kontrolle von MCPs und Skills stehen unter
-[Betriebsordner im Client öffnen](#6-betriebsordner-im-client-öffnen).
-`init` erzeugt beide vollständigen Client-Dateien inklusive Betriebsregeln.
-Keine vereinfachten Einzel-MCP-Konfigurationen darüberkopieren oder dieselben
-Server zusätzlich global registrieren. Zur Diagnose dient
-`./bin/datenportal-agent harness-config`; benötigte Mounts dabei mitgeben.
-Persönliche Einstellungen und Zugänge bleiben erhalten; fremde MCPs werden
-im Betriebsprofil deaktiviert. Konflikte werden vor dem Schreiben gemeldet.
-Sicherungen liegen unter `.datenportal-integrator/harness-backups/`.
-
-Die tatsächlichen Desktop-/CLI-Prüfungen und offenen Fachdialog-Nachweise stehen
-in [Abnahme](abnahme.md). Sie sind von der blossen Konfigurationsbereitschaft
-zu unterscheiden.
-
 ## Durchgängiges Thema: CSV, XLSX und XTF
 
 Die folgenden JSON-Dateien sind Beispiele. Pfade, fachliche Angaben, Vorgangs-ID und Prüfsummen durch die tatsächlichen Werte ersetzen. `schema <operation>` zeigt Pflichtargumente und erlaubte Typen. `call` gibt JSON aus; Exit-Code 2 bezeichnet einen fachlichen Fehler, Exit-Code 1 einen unerwarteten technischen Fehler.
@@ -1070,8 +528,7 @@ Notwendige fachliche Repository-Dateien vor der Freigabe mit `stage_change` regi
 `deliver` führt je Aufruf höchstens eine externe Phase weiter. Eine passende
 laufende Stack-Instanz wird verwendet; andernfalls führt der Integrator das
 Startskript `scripts/up.sh --infrastructure-only` des Dev-Stacks aus.
-Vor Publikation vergleicht er die tatsächliche Jenkins-Image-/Bundle-Identität
-mit seiner festgelegten GRETL-Runtime. Für einen noch fehlenden
+Für einen noch fehlenden
 lokalen Publikationsstand delegiert er an `scripts/bootstrap.sh` mit den
 konfigurierten Compose-Dateien. Der gemeinsame Helfer übernimmt erfolgreichen
 Seed, pausierten administrativen Erstaufbau und Portalstart. Bei vorhandenem
@@ -1109,7 +566,7 @@ Standard für neue CSV-Validierungsmodelle: INTERLIS 2.4, Profil `SO-DATA`, Zwec
 
 Vorhandene Modelle werden mit einem typisierten `changes`-Batch über `applyIliModelChanges` bearbeitet. `allow_breaking` ist eine ausdrückliche Entscheidung über potenziell brechende Änderungen. Der Integrator übernimmt Compiler-, Review- und Constraint-Nachweise des Fach-MCP. Unvollständige Nachweise bleiben Kandidaten. Manuelle Reviewpunkte erscheinen im HTML.
 
-Nach erfolgreicher Ableitung werden `.ili`, `dataset.gradle` und die Datenblatt-Modellreferenz zusammen vorbereitet. Die Referenz wird über den Datenblatt-MCP vor dem abschliessenden Export gesetzt. `validate_model` führt GRETL `CsvValidator` in einer isolierten Repository-Kopie aus. Derselbe Themen-Task läuft später vor `preparePublicationWorkspace`; Metadatenlieferungen überspringen ihn ausdrücklich. Es gibt dafür keine eigene CSV-zu-XTF-Konvertierung.
+Nach erfolgreicher Ableitung werden `.ili`, `dataset.gradle` und die Datenblatt-Modellreferenz zusammen vorbereitet. Die Referenz wird über den Datenblatt-MCP vor dem abschliessenden Export gesetzt. `validate_model` prüft die CSV mit dem lokalen INTERLIS-Adapter. Derselbe Themen-Task läuft später vor `preparePublicationWorkspace`; Metadatenlieferungen überspringen ihn ausdrücklich. Es gibt dafür keine eigene CSV-zu-XTF-Konvertierung.
 
 Beim eigenständigen Modellvorgang: Modellvorschau prüfen, `gate: model` bestätigen und lokal übernehmen oder über einen freigegebenen Zielplan als PR vorbereiten. Kein automatischer Datenupload. Beim Themenvorgang werden `model` und `metadata` für die gemeinsam gezeigten Prüfstände bestätigt.
 
@@ -1178,9 +635,9 @@ Zulässig sind `CORE`, `SO-GIS` und `SO-DATA`. `SO-DATA` ist der Standard für
 neue CSV-Validierungsmodelle. Der frühere Wert `SO` wird mit `model_profile`
 abgewiesen; vorhandene Kandidaten werden nicht automatisch umgeschrieben.
 Eine ausdrücklich beauftragte Profiländerung erzeugt einen neuen Kandidaten
-mit erneuter Prüfung und Freigabe. Den geprüften Image-Stand nennt die
+mit erneuter Prüfung und Freigabe. Den geprüften Paketstand nennt die
 [Abnahme](abnahme.md); vorhandene Installationen wechseln nur durch ein
-[ausdrückliches Update](#fachwerkzeuge-aktualisieren).
+[ausdrückliches Update](#wiederaufnahme-und-updates).
 
 ## Neue Organisation und Dienststelle
 
@@ -1212,7 +669,7 @@ Neue Dienststellen benötigen `identifier`, `name`, `abbreviation`, `phoneNumber
 
 Neue Teams unter `values.new_teams` mit `{ "teamname": { "users": ["bestaetigter-benutzer"] } }` vorbereiten; dieselben bestätigten Kennungen unter `values.confirmed_users` nennen. Leere, unbekannte oder widersprüchliche Teams werden abgewiesen. Bestehende Mitgliedschaften bleiben erhalten.
 
-Der Kandidat enthält Organisationsordner, `gretl-datenportal-job.yaml`, `settings.gradle`, `build.gradle`, gegebenenfalls Office-Katalog und Teamkatalog. `validate_organization` prüft Office-XTF, YAML, Berechtigungen und die Gradle-Konfiguration. HTML-Dateien und Dateivergleiche zeigen die Änderungen.
+Der Kandidat enthält Organisationsordner, `gretl-datenportal-job.yaml`, `settings.gradle`, `build.gradle`, gegebenenfalls Office-Katalog und Teamkatalog. `validate_organization` prüft Office-XTF, YAML und Berechtigungen. HTML-Dateien und Dateivergleiche zeigen die Änderungen.
 
 **Organisations-Stopp:** alle Dateien und Berechtigungszuordnungen prüfen und `gate: organization` bestätigen. Danach `apply_local_changes` oder Zielplan/PR. Eine Organisation ohne Thema wird als `repository_created` abgeschlossen. Das bestehende Jenkins-Plugin erzeugt ihren Job erst mit dem ersten Thema; Dummy-Themen werden nicht angelegt. Ein optionaler `seed` verwendet die vorhandene Schnittstelle und gespeicherte Kennungen, publiziert aber keine Daten.
 
@@ -1268,45 +725,3 @@ Eine unbestätigte letzte Änderung blockiert weitere Bearbeitung mit `metadata_
 | `unsupported_state_version` | Nicht unterstützten Altstand erhalten und bestehende externe Läufe klären; keine automatische Übernahme. |
 
 `retry_delivery` ist nur für eindeutig fehlgeschlagene, nicht publizierte Versuche vorgesehen. Bei unklarer Publikation wird es abgewiesen. Freigaben sichern den Arbeitsablauf ab; sie sind keine unabhängige menschliche Authentisierung gegenüber einem Agenten mit vollständigem Dateizugriff.
-
-### Docker-MCP-Fehler
-
-| Fehler | Vorgehen |
-|---|---|
-| `mcp_setup_required` | Konfigurierte Images mit `setup-mcps` vorbereiten. |
-| `mcp_image_missing` / `mcp_pull_failed` | Docker, Image-Referenz und gegebenenfalls `docker login` prüfen; anschliessend `setup-mcps`. Kein lokaler Build-Fallback. |
-| `mcp_models_changed` | Modellcache wurde verändert oder fehlt; `setup-mcps` kopiert ihn erneut aus dem festgelegten Image. Danach erneut prüfen. |
-| `invalid_configuration` bei `model_dirs` | Doppelte Originalmodelle entfernen; der Docker-Betrieb verwendet den Image-Cache. |
-| `draft_restore_mismatch` | Rekonstruktion weicht ab; Vorgang erhalten und Ursache klären. Keine Änderung oder Lieferung fortsetzen. |
-| `mcp_unavailable` | Docker und den lokalen Fehlerlog unter `.datenportal-integrator/tools/mcps/logs/` prüfen. Unbestätigte Änderungen separat aufklären. |
-
-Der stdio-Export liefert keine Browser-Downloadadresse. Der Integrator speichert das validierte XML lokal und zeigt seine Vorschau. HTTP bleibt für Browser-Downloads verfügbar. Eigene stdio-Container werden beim Beenden entfernt; bei einem abgebrochenen Integratorprozess räumt die nächste Docker-MCP-Verbindung seine gespeicherten, nicht mehr zu einem lebenden Prozess gehörenden Containerkennungen auf. Fremde Container werden nicht entfernt.
-
-## GRETL-Vorprüfungen im Container
-
-Mit `[gretl].mode = "compose"` verwenden CSV-Modellprüfung und Organisationsprüfung einen eigenen dauerhaften Container aus dem festgelegten Jenkins-Image. Java 17, GRETL und die ursprünglichen Gradle-Abhängigkeiten kommen aus dem Image. Der eigene beschreibbare Cache gehört zu genau dieser Image-Identität. Nach jedem Containerstart läuft ein nebenwirkungsfreies `help` in einem minimalen Projekt mit dem bestehenden Themenrepo-Wrapper. Das Themenrepo ist dafür read-only eingebunden; dessen fachlicher Build wird beim Warm-up nicht ausgeführt.
-
-Jede Prüfung erhält eine neue beschreibbare Themenkopie und eigene Eingabepfade. Gradle läuft als `jenkins` mit `--daemon`, ohne S3-Publikation, Git-Rückschreiben oder Reload. Prüfungen sind pro Runtime serialisiert. Der Daemon wird wiederverwendet, solange Gradle ihn aktiv hält; nach Inaktivität oder einem Abbruch darf er neu starten. Die aktuelle Jenkins-Instanz und ihr Home werden für Vorprüfungen nicht verwendet. Die eigentliche Anlieferung bleibt ein Jenkins-Job.
-
-Ohne `mode` oder mit `mode = "ephemeral"` startet ein neuer Container pro Prüfung mit `--no-daemon`; anschliessend wird er entfernt. Es gibt keinen automatischen Wechsel zwischen den Betriebswegen bei einem Fehler.
-
-`setup-gretl` behält die ausgewählte Image-Version bei. Nach einer bewusst geänderten Image-Referenz oder mit `setup-gretl --update` wird ein neuer Stand aufgenommen; anschliessend betroffene Prüfungen und Freigaben erneuern. Vor dem lokalen Gesamttest vergleicht der Integrator Image und Bundle mit dem tatsächlich laufenden Jenkins. Bei `gretl_runtime_mismatch` anhalten, die Konfiguration abstimmen und erneut vorbereiten/prüfen; der Integrator ändert den Stack nicht automatisch.
-
-GRETL verwendet ausschliesslich die Laufzeit im ausgewählten Jenkins-Image. Alte Konfigurationsfelder und alte Runtime-Nachweise werden abgewiesen; siehe [Konfiguration umstellen](#vorhandene-lokale-konfiguration-umstellen).
-
-Prüfberichte enthalten Runtime-Identität, Exit-Code, lokalen Konsollog und einen Ordner für Gradle-Prüfartefakte. Im Compose-Modus bleiben Container und Diagnosearbeitskopien erhalten. Logs, Abschlussnachweise und Prüfartefakte liegen zusätzlich unter `/var/lib/integrator/jobs/` im eigenen Volume. Ein Timeout beendet den Task im Container; bei nicht bestätigtem Abbruch wird ausschliesslich die eigene GRETL-Runtime unter der Sperre neu gestartet. Auch nach Verlust des Hostprozesses wartet die nächste Prüfung auf den Abschluss oder klärt ihn durch diesen Neustart. Im ephemeral-Modus werden Container wie bisher entfernt. `gretl_setup_required` verlangt die Einrichtung; `gretl_image_missing` weist auf ein fehlendes festgelegtes Image hin. Normale Prüfungen beziehen keine neuen Images.
-
-### Compose-Diagnose
-
-| Beobachtung | Vorgehen |
-|---|---|
-| `runtime_start_failed` | Genannten Startlog unter `.datenportal-integrator/tools/compose/` prüfen; Docker, freien Port und `docker compose logs datasheet interlis gretl` prüfen. |
-| `runtime_mismatch` | Arbeitsbereich, Image-Identität, Portfreigabe und eigenen GRETL-Cache abgleichen. Fremde Instanzen nicht ersetzen. |
-| `runtime_tools_missing` / `runtime_start_timeout` | MCP-Profil, Serverlogs und erwarteten Werkzeugkatalog prüfen; keine Mutation automatisch wiederholen. |
-| `runtime_configuration_conflict` | Eigene `compose.override.yaml` sichern und deren Verwendung klären; der Integrator überschreibt sie nicht. |
-| `runtime_locked` | Laufende Prüfung beziehungsweise Container-Abschlussnachweis prüfen. Ein getrennter Host kann einen noch laufenden Task hinterlassen. |
-| GRETL-Warm-up schlägt fehl | `docker compose logs gretl` und `/var/lib/integrator/warmup.log` lesen; Wrapper, Java 17, Image und Cache prüfen. |
-
-Die erzeugte Compose-Konfiguration wird nach Änderungen mit den Setup-Befehlen erneuert. Eine vorhandene lokale Konfiguration wird nicht automatisch auf den neuen Standard umgestellt.
-
-[fiktiver-validator-log]: /absoluter/vorgang/diagnostics/pruefkennung/artifact-csv.log

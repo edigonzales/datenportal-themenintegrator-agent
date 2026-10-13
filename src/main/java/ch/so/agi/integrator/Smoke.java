@@ -42,7 +42,7 @@ final class Smoke {
             new ProcessRunner(),
             McpClients.datasheet(source),
             McpClients.interlis(source))) {
-      w.gretl = new GretlRuntime(source, w.process);
+
       String id =
           Json.required(
               Json.obj(
@@ -102,18 +102,10 @@ final class Smoke {
       if (Json.bool(derived, "candidate", true)) fail("Modellableitung unvollständig", derived);
       var positive = Json.obj(w.call("validate_model", Json.map("run_id", id)));
       if (!Json.bool(positive, "valid", false)) fail("Positivprüfung fehlgeschlagen", positive);
-      Path snapshot = Path.of(Json.required(Json.obj(positive.get("gretl")), "workspace"));
+      Path ili = dir.resolve("runs").resolve(id).resolve("model/SO_Integrator_Smoke_20261009.ili");
       var negative =
-          w.store.edit(
-              id,
-              state ->
-                  new Workspace(w)
-                      .gradle(
-                          state,
-                          snapshot,
-                          "validateThemenCsv",
-                          List.of("-Pdataset=ch.so.grundwasser.qualitaet", "-PdataFile=" + invalid),
-                          "smoke-negative"));
+          w.csvValidation.validate(
+              invalid, ili, "SO_Integrator_Smoke_20261009", dir.resolve("negative"));
       if (!validationRejected(negative))
         fail("Negativprüfung hat keine CSV-Validierungsverletzung nachgewiesen", negative);
       var report =
@@ -153,7 +145,7 @@ final class Smoke {
   static boolean validationRejected(Map<String, Object> report) {
     if (Json.bool(report, "valid", true) || !report.containsKey("log")) return false;
     String log = Json.contents(Path.of(Json.required(report, "log")));
-    return log.contains("validateThemenCsv FAILED")
+    return log.contains("INTEGRATOR_CSV_VALIDATED=false")
         && log.contains("not-a-number")
         && log.contains("is not a number in attribute Jahr");
   }

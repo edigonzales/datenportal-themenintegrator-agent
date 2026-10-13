@@ -175,10 +175,6 @@ public final class Models {
         questions.add(
             column
                 + ": maximale Textlänge für das gewählte Regelprofil bestätigen; beobachtete Längen sind keine fachliche Grenze.");
-      if (type.equals("DATETIME") && typeSpec.isEmpty())
-        questions.add(
-            column
-                + ": Der bestehende GRETL-/INTERLIS-XMLDateTime-Adapter akzeptiert den vorgeschriebenen CSV-Offset +01:00 nicht. Passende belegte Modelldomain klären; keine stille Umdeutung zu TEXT und keine Formatänderung.");
       if (!typeSpec.isEmpty() && proposal.isEmpty() && !Json.bool(confirmation, "confirmed", false))
         questions.add(column + ": zusätzliche Typsemantik bestätigen.");
       if (typeSpec.isEmpty())
@@ -368,13 +364,7 @@ public final class Models {
         Path taskExisting = w.repoFile(r, taskRelative);
         String original = Files.exists(taskExisting) ? Json.contents(taskExisting) : "";
         Path task = w.directory(r).resolve("model/dataset.gradle");
-        var runtime = w.gretl.selected(false);
-        String bundleSha = Json.required(runtime, "sha256");
-        model.put("gretl_runtime", runtime);
-        model.put("gretl_bundle_sha256", bundleSha);
-        Json.write(
-            task,
-            task(original, Json.required(r, "identifier"), modelName, bundleSha, Json.sha(out)));
+        Json.write(task, task(original, Json.required(r, "identifier"), modelName, Json.sha(out)));
         w.stage(r, taskRelative, task);
         model.put("dataset_task_sha256", Json.sha(task));
         // Set reference through the existing Java MCP before the final export. This avoids
@@ -481,11 +471,10 @@ public final class Models {
   }
 
   public static String task(String original, String identifier, String model) {
-    return task(original, identifier, model, "", "");
+    return task(original, identifier, model, "");
   }
 
-  public static String task(
-      String original, String identifier, String model, String bundleSha, String modelSha) {
+  public static String task(String original, String identifier, String model, String modelSha) {
     int start = original.indexOf(BEGIN), end = original.indexOf(END);
     if ((start >= 0) != (end >= 0) || end >= 0 && end < start)
       throw new Problem(
@@ -526,15 +515,8 @@ public final class Models {
                         if (!file(integratorCsvInput.get()).isFile()) throw new GradleException('CSV-Lieferdatei fehlt')
                         if (java.nio.file.Files.mismatch(file(integratorCsvInput.get()).toPath(), integratorValidationCsv.get().asFile.toPath()) != -1L) throw new GradleException('CSV-Prüfkopie ist nicht bytegleich')
                         def expectedModelSha = %s
-                        def expectedBundleSha = %s
                         def modelFile = file(%s)
                         if (expectedModelSha && java.security.MessageDigest.getInstance('SHA-256').digest(modelFile.bytes).encodeHex().toString() != expectedModelSha) throw new GradleException('INTERLIS-Modell entspricht nicht dem freigegebenen Prüfstand')
-                        if (expectedBundleSha) {
-                            def runtimePath = findProperty('datenportalOfflineJarsDir') ?: System.getenv('DATENPORTAL_OFFLINE_JARS_DIR')
-                            if (!runtimePath || !file(runtimePath).isDirectory()) throw new GradleException('Freigegebenes GRETL-Offline-Bundle fehlt')
-                            def inventory = file(runtimePath).listFiles().findAll { it.name.endsWith('.jar') }.sort { it.name }.collect { it.name + '=' + java.security.MessageDigest.getInstance('SHA-256').digest(it.bytes).encodeHex().toString() + '\\n' }.join('')
-                            if (java.security.MessageDigest.getInstance('SHA-256').digest(inventory.getBytes('UTF-8')).encodeHex().toString() != expectedBundleSha) throw new GradleException('GRETL-Binärstand unterscheidet sich von der frühen CSV-Prüfung')
-                        }
                     }
                     doLast { println('INTEGRATOR_CSV_VALIDATED=' + validationOk) }
                 }
@@ -553,7 +535,6 @@ public final class Models {
                 Workspace.groovy(model),
                 Workspace.groovy(identifier),
                 Workspace.groovy(modelSha),
-                Workspace.groovy(bundleSha),
                 Workspace.groovy(identifier + "/" + model + ".ili"),
                 Workspace.groovy(identifier))
         + END
@@ -628,7 +609,6 @@ public final class Models {
                 Json.contents(w.repoFile(r, relative)),
                 Json.required(r, "identifier"),
                 name,
-                Json.str(model, "gretl_bundle_sha256", ""),
                 Json.sha(ili)));
         w.stage(r, relative, candidate);
         model.put("dataset_task_sha256", Json.sha(candidate));
@@ -667,54 +647,44 @@ public final class Models {
               "repository_model_mismatch",
               "message",
               "Themenmodell und Prüfmodell unterscheiden sich."));
-    Map<String, Object> gretl;
-    if (data == null) gretl = Json.map("valid", true, "skipped", true, "reason", "metadata_only");
+    Map<String, Object> csvValidation;
+    if (data == null)
+      csvValidation = Json.map("valid", true, "skipped", true, "reason", "metadata_only");
     else if (!errors.isEmpty())
-      gretl = Json.map("valid", false, "skipped", true, "reason", "model_invalid");
+      csvValidation = Json.map("valid", false, "skipped", true, "reason", "model_invalid");
     else {
-      Path snapshot = new Workspace(w).snapshot(r, "model-csv");
-      gretl =
-          new Workspace(w)
-              .gradle(
-                  r,
-                  snapshot,
-                  "validateThemenCsv",
-                  List.of("-Pdataset=" + r.get("identifier"), "-PdataFile=" + data),
-                  "model-csv");
-      if (Json.bool(gretl, "valid", false)
-          && !Json.contents(Path.of(Json.required(gretl, "log")))
-              .contains("INTEGRATOR_CSV_VALIDATED=true")) {
-        gretl.put("valid", false);
-        errors.add(
-            Json.map(
-                "code",
-                "csv_validation_not_executed",
-                "message",
-                "GRETL hat keine ausgeführte erfolgreiche CSV-Validierung bestätigt."));
-      }
+      csvValidation =
+          w.csvValidation.validate(data, ili, modelName, w.directory(r).resolve("model-csv"));
     }
-    if (!Json.bool(gretl, "skipped", false))
+    if (!Json.bool(csvValidation, "skipped", false))
       Diagnostics.record(
-          w, r, "gretl-csv", Json.bool(gretl, "valid", false) ? "PASSED" : "FAILED", gretl, true);
-    if (gretl.containsKey("log")
-        && !Json.bool(gretl, "valid", false)
-        && Json.contents(Path.of(Json.required(gretl, "log")))
+          w,
+          r,
+          "csv-validation",
+          Json.bool(csvValidation, "valid", false) ? "PASSED" : "FAILED",
+          csvValidation,
+          true);
+    if (csvValidation.containsKey("log")
+        && !Json.bool(csvValidation, "valid", false)
+        && Json.contents(Path.of(Json.required(csvValidation, "log")))
             .contains("invalid format of datetime value"))
       errors.add(
           Json.map(
               "code",
               "datetime_validator_limit",
               "message",
-              "Die bestehende GRETL-/ilivalidator-Prüfung für INTERLIS.XMLDateTime akzeptiert den gültigen CSV-Zeitzonenoffset +01:00 nicht. Eine passende Modelldomain oder separat beauftragte Komponentenänderung ist erforderlich; Daten werden nicht still verändert."));
+              "Die lokale ilivalidator-Prüfung für INTERLIS.XMLDateTime akzeptiert den gültigen CSV-Zeitzonenoffset +01:00 nicht. Eine passende Modelldomain oder separat beauftragte Komponentenänderung ist erforderlich; Daten werden nicht still verändert."));
     var xtf = w.validateXtf(r, w.sheet(r), "model-xtf-validation");
     var report =
         Json.map(
             "valid",
-            errors.isEmpty() && Json.bool(gretl, "valid", false) && Json.bool(xtf, "valid", false),
+            errors.isEmpty()
+                && Json.bool(csvValidation, "valid", false)
+                && Json.bool(xtf, "valid", false),
             "errors",
             errors,
-            "gretl",
-            gretl,
+            "csv_validation",
+            csvValidation,
             "ilivalidator",
             xtf,
             "model_text",

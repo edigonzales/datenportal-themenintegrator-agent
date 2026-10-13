@@ -84,11 +84,11 @@ class InitializerTest {
   void infrastructureFailureCannotPassNegativeSmoke() {
     Path log = temp.resolve("negative.log");
     var report = Json.map("valid", false, "log", log.toString());
-    Json.write(log, "> Task :validateThemenCsv FAILED\nError: connection refused\n");
+    Json.write(log, "INTEGRATOR_CSV_VALIDATED=false\nError: connection refused\n");
     assertFalse(Smoke.validationRejected(report));
     Json.write(
         log,
-        "> Task :validateThemenCsv FAILED\nline 3: value <not-a-number> is not a number in attribute Jahr\n");
+        "INTEGRATOR_CSV_VALIDATED=false\nline 3: value <not-a-number> is not a number in attribute Jahr\n");
     assertTrue(Smoke.validationRejected(report));
     report.put("valid", true);
     assertFalse(Smoke.validationRejected(report));

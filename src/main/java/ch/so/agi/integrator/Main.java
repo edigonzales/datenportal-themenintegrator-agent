@@ -35,10 +35,11 @@ public final class Main {
       }
       if (args.isEmpty() || args.getFirst().equals("--help")) {
         System.out.println(
-            "Java 25 Themenintegrator\nbin/datenportal-agent [--runtime docker|docker-build|local] [--update-agent] [--mount-ro PATH|--mount-rw PATH] [--config PATH] init|doctor|serve|serve-workspace|schema OP|call OP [--json JSON|--args-file PATH|-]\nworkspace install|update ZIELORDNER\ninit [--update-tools] [--skip-smoke]\ncredentials set PROFIL --username USER --token-stdin | --from-env\ncredentials status|remove PROFIL\nacceptance delivery\nbin/datenportal-agent gradle TASK... (nur Entwicklung)\nDirekt: java -jar build/libs/datenportal-integrator.jar [--config PATH] COMMAND\nWeitere Helfer: setup-java, setup-tools, setup-mcps [--update], setup-gretl [--update], runtime-up, harness-config, codex");
+            "Java 21 Themenintegrator\nbin/datenportal-agent [--config PATH] init|doctor|serve|serve-workspace|schema OP|call OP [--json JSON|--args-file PATH]\nworkspace install|update ZIELORDNER\ninit [--skip-smoke]\ncredentials set|status|remove PROFIL\nacceptance delivery (optional, Docker erforderlich)\nWeitere Helfer: harness-config, codex");
         return 0;
       }
       String command = args.removeFirst();
+      if (command.equals("git-credential")) return GitHubCredentials.run(args);
       if (command.equals("workspace")) {
         print(OperatorWorkspace.command(args));
         return 0;
@@ -149,7 +150,7 @@ public final class Main {
     var checks =
         Json.map(
             "java",
-            Runtime.version().feature() == 25,
+            Runtime.version().feature() == 21,
             "topics_repo",
             Files.isDirectory(s.topics),
             "stack_repo",
@@ -173,11 +174,12 @@ public final class Main {
     } catch (Problem p) {
       checks.put("configuration_fingerprint", p.result());
     }
-    try {
-      checks.put("stack", new Stack(s, new ProcessRunner()).inspect());
-    } catch (Problem e) {
-      checks.put("stack", e.result());
-    }
+    if (Files.isDirectory(s.stack))
+      try {
+        checks.put("stack", new Stack(s, new ProcessRunner()).inspect());
+      } catch (Problem e) {
+        checks.put("stack", e.result());
+      }
     for (String service : List.of("datasheet", "interlis")) {
       try (var client =
           service.equals("datasheet") ? McpClients.datasheet(s) : McpClients.interlis(s)) {
@@ -211,12 +213,6 @@ public final class Main {
       }
     }
     checks.put("interlis_configured", !s.mcp("interlis").isEmpty());
-    try {
-      var runtime = new GretlRuntime(s, new ProcessRunner());
-      checks.put("gretl_runtime", runtime.doctor());
-    } catch (Problem p) {
-      checks.put("gretl_runtime", p.result());
-    }
     checks.put("initialization", new Initializer(s).status());
     var publication = Json.map();
     Json.obj(s.values.get("environments"))

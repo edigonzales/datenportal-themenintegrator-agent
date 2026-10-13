@@ -1,227 +1,34 @@
 #!/usr/bin/env bash
-set -eo pipefail
-root=$(cd -- "$(dirname -- "$0")/.." && pwd -P)
-cd "$root"
-[[ $root != *','* && $root != *$'\n'* ]] || { echo 'Unsupported checkout path' >&2; exit 2; }
-mode=docker
-update_agent=false
-mounts=()
-input_mounts=()
-launch_options=()
-args=()
-config_file=
-while (($#)); do
-  case "$1" in
-    --update-agent) update_agent=true; shift ;;
-    --runtime)
-      [[ $# -ge 2 ]] || { echo '--runtime docker|docker-build|local required' >&2; exit 2; }
-      mode=$2; shift 2 ;;
-    --mount-ro|--mount-rw)
-      [[ $# -ge 2 && -d $2 ]] || { echo 'Mount must be an existing directory' >&2; exit 2; }
-      mount_path=$(cd -- "$2" && pwd -P)
-      [[ $mount_path != *','* && $mount_path != *$'\n'* ]] || { echo 'Unsupported mount path' >&2; exit 2; }
-      mount_spec="type=bind,source=$mount_path,target=$mount_path"
-      [[ $1 == --mount-ro ]] && mount_spec+=',readonly'
-      mounts+=(--mount "$mount_spec")
-      launch_options+=("$1" "$mount_path")
-      if [[ $1 == --mount-ro ]]; then input_mounts+=("$mount_path"); fi
-      shift 2 ;;
-    --config)
-      [[ $# -ge 2 ]] || { echo '--config PATH required' >&2; exit 2; }
-      config_file=$2; shift 2 ;;
-    *) args+=("$1"); shift ;;
-  esac
-done
-[[ -z $config_file ]] || args=(--config "$config_file" "${args[@]}")
-[[ $mode == docker || $mode == docker-build || $mode == local ]] || { echo 'Unknown runtime (docker|docker-build|local)' >&2; exit 2; }
-mkdir -p .datenportal-integrator/launcher .datenportal-integrator/tmp
-export DATENPORTAL_TEST_TMP="$root/.datenportal-integrator/tmp"
+set -euo pipefail
+home_dir=$(cd -- "$(dirname -- "$0")/.." && pwd -P)
+java_cmd=${JAVA_HOME:+$JAVA_HOME/bin/java}
+java_cmd=${java_cmd:-$(command -v java || true)}
+[[ -n $java_cmd && -x $java_cmd ]] || { echo 'JDK 21 required; set JAVA_HOME.' >&2; exit 2; }
+"$java_cmd" -version 2>&1 | head -1 | grep -Eq 'version "21[.\"]' || { echo 'JDK 21 required; set JAVA_HOME.' >&2; exit 2; }
+case "${1:-}" in
+  --runtime|--update-agent|--mount-ro|--mount-rw) echo 'Legacy Docker options retired. Install the Java package into a new workspace.' >&2; exit 2 ;;
+esac
+if [[ -f $home_dir/lib/datenportal-integrator.jar ]]; then
+  export DATENPORTAL_AGENT_HOME=$home_dir
+  jar=$home_dir/lib/datenportal-integrator.jar
+else
+  [[ ! -f $home_dir/.datenportal-workspace.json ]] || { echo 'Installed package is incomplete.' >&2; exit 2; }
+  cd "$home_dir"
+  if [[ ${1:-} == gradle ]]; then shift; exec "$home_dir/gradlew" --console=plain "$@"; fi
+  "$home_dir/gradlew" --console=plain jar >&2
+  jar=$home_dir/build/libs/datenportal-integrator.jar
+fi
+args=("$@")
 command_index=0
 if [[ ${args[0]:-} == --config ]]; then command_index=2; fi
-if [[ -f $root/.datenportal-workspace.json && ( $mode != docker || ${args[$command_index]:-} == gradle ) ]]; then
-  echo 'Operator workspaces require the installed Docker runtime; local builds are unavailable.' >&2
-  exit 2
-fi
-if [[ ${args[$command_index]:-} == workspace && ${args[$((command_index+1))]:-} == install && ${args[$((command_index+2))]:-} == /* ]]; then
-  package_target=${args[$((command_index+2))]}
-  mkdir -p "$package_target"
-  mounts+=(--mount "type=bind,source=$package_target,target=$package_target")
-fi
-if [[ ${args[$command_index]:-} == gradle && $mode == docker ]]; then mode=docker-build; fi
-launch_options=(--runtime "$mode" "${launch_options[@]}")
-if ((${#launch_options[@]})); then export DATENPORTAL_LAUNCH_OPTIONS; DATENPORTAL_LAUNCH_OPTIONS=$(printf '%s\n' "${launch_options[@]}"); fi
-if $update_agent && [[ $mode != docker ]]; then echo '--update-agent requires --runtime docker' >&2; exit 2; fi
-# Updating before host-side delegation ensures recursive calls keep the selected image.
-if $update_agent && [[ ${args[$command_index]:-} == codex || ${args[$command_index]:-} == acceptance ]]; then
-  "$root/bin/datenportal-agent" --update-agent --help >&2
-  update_agent=false
-fi
-# The disposable acceptance stack is deliberately created by the host Docker CLI.
-# All fixture construction, credential handling and MCP checks remain Java.
-if [[ ${args[$command_index]:-} == acceptance && ${args[$((command_index+1))]:-} == delivery ]]; then
-  [[ $mode != local && ${#args[@]} == $((command_index+2)) ]] || { echo 'acceptance delivery requires Docker and no extra arguments' >&2; exit 2; }
-  export DATENPORTAL_FORWARD_ENV='' JAVA_HOME=/no-host-jdk
+if [[ ${args[$command_index]:-} == acceptance && ${args[$((command_index+1))]:-} == delivery && ${#args[@]} == $((command_index+2)) ]]; then
   prefix=("${args[@]:0:$command_index}")
-  if ! acceptance_fixture=$("$root/bin/datenportal-agent" "${launch_options[@]}" "${prefix[@]}" acceptance-prepare); then
-    printf '%s\n' "$acceptance_fixture" >&2
-    exit 2
-  fi
-  [[ $acceptance_fixture == "$root/.datenportal-integrator/delivery-acceptance/"* && -f $acceptance_fixture/SYNTHETIC_TEST_FIXTURE ]] || { echo 'Invalid delivery acceptance fixture' >&2; exit 2; }
-  acceptance_cleanup() {
-    acceptance_exit=$?
-    trap - EXIT INT TERM
-    "$root/bin/datenportal-agent" "${launch_options[@]}" "${prefix[@]}" acceptance-cleanup "$acceptance_fixture" > "$acceptance_fixture/cleanup-result.json" || acceptance_exit=2
-    exit "$acceptance_exit"
-  }
-  trap acceptance_cleanup EXIT
-  trap 'exit 130' INT
-  trap 'exit 143' TERM
-  echo "SYNTHETIC delivery acceptance: $acceptance_fixture" >&2
-  if ! COMPOSE_PROJECT_NAME="delivery-test-$(basename "$acceptance_fixture")" bash "$acceptance_fixture/datenportal-dev-stack/scripts/up.sh" --infrastructure-only > "$acceptance_fixture/startup.log" 2>&1; then
-    echo "Synthetic stack startup failed; inspect $acceptance_fixture/startup.log" >&2
-    exit 2
-  fi
-  "$root/bin/datenportal-agent" "${launch_options[@]}" "${prefix[@]}" acceptance-run "$acceptance_fixture"
+  fixture=$("$java_cmd" -jar "$jar" "${prefix[@]}" acceptance-prepare)
+  [[ -f $fixture/SYNTHETIC_TEST_FIXTURE ]] || exit 2
+  cleanup() { result=$?; trap - EXIT; "$java_cmd" -jar "$jar" "${prefix[@]}" acceptance-cleanup "$fixture" || result=2; exit "$result"; }
+  trap cleanup EXIT
+  COMPOSE_PROJECT_NAME="delivery-test-$(basename "$fixture")" bash "$fixture/datenportal-dev-stack/scripts/up.sh" --infrastructure-only > "$fixture/startup.log" 2>&1
+  "$java_cmd" -jar "$jar" "${prefix[@]}" acceptance-run "$fixture"
   exit $?
 fi
-# Codex itself remains a host application. Java emits correctly encoded arguments.
-if [[ ${args[$command_index]:-} == codex ]]; then
-  argfile=$(mktemp "$root/.datenportal-integrator/launcher/codex-args.XXXXXX")
-  trap 'rm -f "$argfile"' EXIT
-  prefix=("${args[@]:0:$command_index}")
-  "$root/bin/datenportal-agent" --runtime "$mode" "${launch_options[@]}" "${prefix[@]}" codex-arguments > "$argfile"
-  codex_options=()
-  while IFS= read -r -d '' value; do codex_options+=("$value"); done < "$argfile"
-  rm -f "$argfile"; trap - EXIT
-  exec codex "${codex_options[@]}" "${args[@]:$((command_index+1))}"
-fi
-if [[ $mode == local ]]; then
-  java_cmd=${DATENPORTAL_JAVA_COMMAND:-${JAVA_HOME:+$JAVA_HOME/bin/java}}
-  [[ -n $java_cmd ]] || java_cmd="$root/.datenportal-integrator/tools/java"
-  [[ -x $java_cmd ]] || java_cmd=$(command -v java || true)
-  "$java_cmd" -version 2>&1 | head -1 | grep -Eq 'version "25[.\"]' || { echo 'Local runtime requires JDK 25' >&2; exit 2; }
-  export JAVA_HOME
-  JAVA_HOME=$("$java_cmd" -XshowSettings:properties -version 2>&1 | sed -n "s/^[[:space:]]*java.home = //p")
-  export PATH="$JAVA_HOME/bin:$PATH"
-  if [[ ${args[$command_index]:-} == gradle ]]; then exec ./gradlew --console=plain "${args[@]:$((command_index+1))}"; fi
-  ./gradlew --console=plain jar >&2
-  exec "$java_cmd" -Djava.io.tmpdir="$DATENPORTAL_TEST_TMP" -jar build/libs/datenportal-integrator.jar "${args[@]}"
-fi
-command -v docker >/dev/null || { echo 'Docker is required' >&2; exit 2; }
-if [[ -n ${DOCKER_CONTEXT:-} ]]; then endpoint=$(docker context inspect --format '{{.Endpoints.docker.Host}}'); else endpoint=${DOCKER_HOST:-$(docker context inspect --format '{{.Endpoints.docker.Host}}')}; fi
-[[ $endpoint == unix://* ]] || { echo 'Remote Docker is unsupported: use a local Unix socket for bind mounts' >&2; exit 2; }
-socket=${endpoint#unix://}
-[[ -S $socket ]] || { echo 'Local Docker socket is unavailable' >&2; exit 2; }
-docker version --format '{{.Server.Version}}' >/dev/null
-# Host lock serializes image build; remove only a lock owned by this process.
-lock="$root/.datenportal-integrator/launcher/build.lock"
-for ((attempt=0; ; attempt++)); do
-  if mkdir "$lock" 2>/dev/null; then break; fi
-  [[ $attempt -lt 600 ]] || { echo 'Agent build locked; inspect the owning process before removing build.lock' >&2; exit 2; }
-  sleep 1
-done
-printf '%s\n' "$$" > "$lock/pid"
-trap 'rm -f "$lock/pid"; rmdir "$lock" 2>/dev/null || true' EXIT
-trap '[[ -z ${build_pid:-} ]] || kill -INT "$build_pid" 2>/dev/null || true; exit 130' INT
-trap '[[ -z ${build_pid:-} ]] || kill -TERM "$build_pid" 2>/dev/null || true; exit 143' TERM
-run_build() {
-  "$@" &
-  build_pid=$!
-  wait "$build_pid"
-  build_pid=
-}
-if [[ $mode == docker-build ]]; then
-  image=datenportal-agent-java25:local
-  stamp=$(cksum < runtime/Dockerfile)
-  record=.datenportal-integrator/launcher
-  if [[ ! -f $record/dockerfile.checksum ]] || [[ $(cat "$record/dockerfile.checksum") != "$stamp" ]] || [[ ! -f $record/build-image.id ]] || ! docker image inspect "$(cat "$record/build-image.id")" >/dev/null 2>&1; then
-    run_build docker build --target tools -f runtime/Dockerfile -t "$image" . >&2
-    docker image inspect --format '{{.Id}}' "$image" > "$record/build-image.id"
-    printf '%s\n' "$stamp" > "$record/dockerfile.checksum"
-  fi
-  # Keep the recorded image even if somebody retags the shared local image name.
-  if [[ -f $record/build-image.id && $(cat "$record/dockerfile.checksum") == "$stamp" ]] && docker image inspect "$(cat "$record/build-image.id")" >/dev/null 2>&1; then
-    image_id=$(cat "$record/build-image.id")
-  else
-    image_id=$(docker image inspect --format '{{.Id}}' "$image")
-  fi
-
-else
-  record=.datenportal-integrator/launcher
-  reference=sogis/datenportal-themenintegrator-agent:latest
-  if ! $update_agent && [[ -f $root/.datenportal-workspace.json && -f $root/workspace-version ]]; then
-    package_version=$(cat "$root/workspace-version")
-    [[ $package_version =~ ^0\.1\.[0-9]+$ ]] || { echo 'Operator package requires a published version.' >&2; exit 2; }
-    reference="sogis/datenportal-themenintegrator-agent:$package_version"
-  fi
-  selection="$record/release-image"
-  if [[ -f $selection ]] && ! $update_agent; then
-    { IFS= read -r reference; IFS= read -r digest; IFS= read -r image_id; } < "$selection"
-    [[ $digest =~ ^sogis/datenportal-themenintegrator-agent@sha256:[a-f0-9]{64}$ && $image_id =~ ^sha256:[a-f0-9]{64}$ ]] || { echo 'Invalid recorded agent image; use --update-agent' >&2; exit 2; }
-    if ! docker image inspect "$image_id" >/dev/null 2>&1; then
-      run_build docker pull "$digest" >&2
-      restored=$(docker image inspect --format '{{.Id}}' "$digest")
-      [[ $restored == "$image_id" ]] || { echo 'Recorded agent image identity differs' >&2; exit 2; }
-    fi
-  else
-    run_build docker pull "$reference" >&2
-    image_id=$(docker image inspect --format '{{.Id}}' "$reference")
-    digest=$(docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$image_id" | sed -n '/^sogis\/datenportal-themenintegrator-agent@sha256:[a-f0-9]\{64\}$/p' | head -1)
-    [[ $image_id =~ ^sha256:[a-f0-9]{64}$ && -n $digest ]] || { echo 'Published agent image identity missing' >&2; exit 2; }
-    run_build docker run --rm --network none "$image_id" --help >&2
-    # One atomic record: a failed pull or smoke check never replaces the selection.
-    pending=$(mktemp "$record/release-image.XXXXXX")
-    printf '%s\n%s\n%s\n' "$reference" "$digest" "$image_id" > "$pending"
-    mv "$pending" "$selection"
-  fi
-fi
-
-printf '%s\n' "$image_id" > "$record/image.id"
-uid=$(id -u); gid=$(id -g)
-socket_gid=$(docker run --rm --mount "type=bind,source=$socket,target=/var/run/docker.sock" --entrypoint stat "$image_id" -c '%g' /var/run/docker.sock)
-cache="datenportal-agent-build-$uid"
-# Only the named agent cache is initialized as root; checkout files use host UID/GID.
-docker run --rm --mount "type=volume,source=$cache,target=/cache" --entrypoint bash "$image_id" \
-  -c 'mkdir -p /cache/gradle /cache/home; chown "$1:$2" /cache /cache/gradle /cache/home' -- "$uid" "$gid" >&2
-common=(--rm --init --entrypoint "" --label "datenportal.integrator.agent.root=$root" --user "$uid:$gid" --group-add "$socket_gid"
-  --mount "type=bind,source=$(dirname -- "$root"),target=$(dirname -- "$root")"
-  --mount "type=bind,source=$socket,target=/var/run/docker.sock"
-  --mount "type=volume,source=$cache,target=/cache"
-  -w "$root" -e HOME=/cache/home -e JAVA_TOOL_OPTIONS=-Djava.net.preferIPv4Stack=true -e DATENPORTAL_FORWARD_ENV -e DATENPORTAL_CONTAINER_MODE=true
-  -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=credential.https://github.com.helper -e 'GIT_CONFIG_VALUE_0=!gh auth git-credential'
-  -e "DATENPORTAL_RUNTIME_IMAGE=$image_id" -e "DATENPORTAL_TEST_TMP=$DATENPORTAL_TEST_TMP")
-common+=(-e "DATENPORTAL_CLIENT_HOME=$HOME" -e "DATENPORTAL_CLIENT_CONFIG=${CODEX_HOME:-$HOME/.codex}/config.toml" -e "DATENPORTAL_HOST_DOCKER_SOCKET=$socket")
-client_config=${CODEX_HOME:-$HOME/.codex}/config.toml
-if [[ -f $client_config ]]; then common+=(--mount "type=bind,source=$client_config,target=$client_config,readonly"); fi
-if [[ -f $root/.datenportal-workspace.json ]]; then
-  policy_parent=$(dirname "$root")
-  while [[ $policy_parent != / ]]; do
-    parent_config=$policy_parent/.codex/config.toml
-    if [[ -f $parent_config && $parent_config != "$client_config" ]]; then
-      common+=(--mount "type=bind,source=$parent_config,target=$parent_config,readonly")
-    fi
-    policy_parent=$(dirname "$policy_parent")
-  done
-fi
-if ((${#input_mounts[@]})); then common+=(-e "DATENPORTAL_INPUT_ROOTS=$(printf '%s\n' "${input_mounts[@]}")"); fi
-common+=("${mounts[@]}")
-if ((${#launch_options[@]})); then common+=(-e "DATENPORTAL_LAUNCH_OPTIONS=$(printf '%s\n' "${launch_options[@]}")"); fi
-forward=()
-for name in ${DATENPORTAL_FORWARD_ENV:-}; do
-  [[ $name =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || { echo 'Invalid forwarded environment variable name' >&2; exit 2; }
-  case "$name" in HOME|PATH|JAVA_HOME|JAVA_TOOL_OPTIONS|DOCKER_HOST|DOCKER_CONTEXT|DATENPORTAL_CONTAINER_MODE|DATENPORTAL_RUNTIME_IMAGE|DATENPORTAL_LAUNCH_OPTIONS|DATENPORTAL_TEST_TMP|DATENPORTAL_CLIENT_HOME|DATENPORTAL_CLIENT_CONFIG|DATENPORTAL_INPUT_ROOTS|DATENPORTAL_HOST_DOCKER_SOCKET|GRADLE_USER_HOME|DATENPORTAL_AGENT_HOME|GIT_CONFIG_COUNT|GIT_CONFIG_KEY_*|GIT_CONFIG_VALUE_*) echo 'Reserved runtime variable cannot be forwarded' >&2; exit 2;; esac
-  forward+=(-e "$name")
-done
-if [[ -n ${DATENPORTAL_INTEGRATOR_CONFIG:-} ]]; then forward+=(-e DATENPORTAL_INTEGRATOR_CONFIG); fi
-if [[ ${args[$command_index]:-} == gradle ]]; then
-  run_build docker run "${common[@]}" --network host "${forward[@]}" "$image_id" flock /cache/agent-build.lock ./gradlew --console=plain "${args[@]:$((command_index+1))}"
-  exit $?
-fi
-if [[ $mode == docker-build ]]; then
-  run_build docker run "${common[@]}" --network bridge "$image_id" flock /cache/agent-build.lock ./gradlew --console=plain jar >&2
-fi
-jar_path=/opt/datenportal-agent/build/libs/datenportal-integrator.jar
-[[ $mode != docker-build ]] || jar_path=build/libs/datenportal-integrator.jar
-rm -f "$lock/pid"; rmdir "$lock"; trap - EXIT INT TERM
-exec docker run -i --network host "${common[@]}" "${forward[@]}" "$image_id" \
-  java -Djava.io.tmpdir="$DATENPORTAL_TEST_TMP" -jar "$jar_path" "${args[@]}"
+exec "$java_cmd" -jar "$jar" "$@"

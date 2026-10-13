@@ -26,21 +26,28 @@ class RepositoryTest {
           }
 
           @Override
-          public String checked(List<String> args, Path cwd, int timeout) {
-            if (args.getFirst().equals("gh")) {
-              if (args.contains("create")) return "https://example.org/fixture/pull/1";
-              return Json.text(
-                  Json.map(
-                      "state",
-                      state[0],
-                      "baseRefName",
-                      "main",
-                      "headRefOid",
-                      head[0],
-                      "mergeCommit",
-                      Json.map("oid", "fixture")));
+          public Result run(
+              List<String> args, Path cwd, int timeout, Path log, Map<String, String> environment) {
+            var local = new ArrayList<>(args);
+            int remoteIndex = local.indexOf("https://github.com/fixture/repo.git");
+            if (remoteIndex >= 0) local.set(remoteIndex, temp.resolve("remote.git").toString());
+            var result = system.run(local, cwd, timeout, log);
+            if (args.contains("clone") && result.exitCode() == 0) {
+              Path clone = Path.of(args.getLast());
+              system.checked(
+                  List.of("git", "config", "user.name", "Integration Test Fixture"), clone, 60);
+              system.checked(
+                  List.of("git", "config", "user.email", "fixture@example.org"), clone, 60);
             }
+            return result;
+          }
+
+          @Override
+          public String checked(List<String> args, Path cwd, int timeout) {
+            if (args.equals(List.of("git", "remote", "get-url", "origin")))
+              return "https://github.com/fixture/repo.git";
             String result = system.checked(args, cwd, timeout);
+
             if (args.contains("clone")) {
               Path clone = Path.of(args.getLast());
               system.checked(
@@ -52,6 +59,26 @@ class RepositoryTest {
           }
         };
     var f = new Fixtures(temp, process, (n, a) -> Json.map(), (n, a) -> Json.map());
+    f.workflow.github =
+        () ->
+            new GitHub(java.net.URI.create("http://127.0.0.1"), "SYNTHETIC", 1) {
+              @Override
+              Map<String, Object> create(
+                  Repo repo, String base, String branch, String title, String body) {
+                return Json.map("html_url", "https://github.com/fixture/repo/pull/1");
+              }
+
+              @Override
+              Map<String, Object> get(Repo repo, long number) {
+                return Json.map(
+                    "merged",
+                    "MERGED".equals(state[0]),
+                    "base",
+                    Json.map("ref", "main"),
+                    "head",
+                    Json.map("sha", head[0]));
+              }
+            };
     String rel = "agi/ch.so.grundwasser.qualitaet/datasheet.xtf";
     Json.write(f.repo.resolve(rel), Json.contents(Fixtures.FIXTURES.resolve("dataset.xtf")));
     system.checked(List.of("git", "init", "--initial-branch=main"), f.repo, 60);

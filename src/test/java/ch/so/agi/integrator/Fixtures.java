@@ -53,66 +53,11 @@ final class Fixtures {
             + "\nstate_dir = "
             + Json.text(temp.resolve("runs").toString())
             + "\nvalidator_command = [\"fixture-validator\"]\nmodel_dirs = ["
-            + Json.text(FIXTURES.resolve("models").toString())
+            + (AgentResources.installed() ? "" : Json.text(FIXTURES.resolve("models").toString()))
             + "]\n[environments.local]\nkind=\"local\"\nenabled=true\nrepository_mode=\"working-tree\"\njenkins_url=\"http://localhost:8081/jenkins\"\nportal_url=\"http://localhost:8081\"\nmanifest_url=\"http://localhost:8081/current.json\"\nusername_env=\"INTEGRATOR_TEST_USER\"\ntoken_env=\"INTEGRATOR_TEST_TOKEN\"\n");
-    Files.writeString(
-        config,
-        "\n[datasheet]\ntransport=\"http\"\nurl=\"http://127.0.0.1:8000/mcp\"\n",
-        StandardOpenOption.APPEND);
+    Files.writeString(config, "\n[datasheet]\ntransport=\"stdio\"\n", StandardOpenOption.APPEND);
     settings = new Settings(config);
     workflow = new Workflow(settings, process, data, model);
-    if (process instanceof FakeProcess)
-      workflow.gretl =
-          new GretlRuntime(settings, process) {
-            @Override
-            public Map<String, Object> selected(boolean inspect) {
-              return Json.map(
-                  "reference",
-                  GretlRuntime.DEFAULT_IMAGE,
-                  "image_id",
-                  "sha256:" + "a".repeat(64),
-                  "sha256",
-                  "b".repeat(64),
-                  "architecture",
-                  "fixture",
-                  "os",
-                  "fixture");
-            }
-
-            @Override
-            public Map<String, Object> matchJenkins() {
-              return Json.map("valid", true, "fixture", true);
-            }
-
-            @Override
-            public Map<String, Object> gradle(
-                Workflow w,
-                Map<String, Object> run,
-                Path snapshot,
-                String task,
-                List<String> properties,
-                String logName) {
-              Path log = w.directory(run).resolve("validation").resolve(logName + ".log");
-              var args = new ArrayList<>(List.of("FIXTURE_GRETL", task));
-              args.addAll(properties);
-              var result = process.run(args, snapshot, settings.timeout, log);
-              return Json.map(
-                  "valid",
-                  result.exitCode() == 0,
-                  "returncode",
-                  result.exitCode(),
-                  "workspace",
-                  snapshot.toString(),
-                  "runtime",
-                  selected(false),
-                  "log",
-                  log.toString(),
-                  "log_sha256",
-                  Json.sha(log),
-                  "messages",
-                  List.of());
-            }
-          };
   }
 
   static class FakeProcess extends ProcessRunner {

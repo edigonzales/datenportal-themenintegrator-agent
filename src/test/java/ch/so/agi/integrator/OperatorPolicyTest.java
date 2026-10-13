@@ -16,10 +16,10 @@ class OperatorPolicyTest {
   void setup() {
     Json.atomic(
         temp.resolve(OperatorWorkspace.MANIFEST),
-        Json.map("schema_version", 1, "kind", "operator"));
+        Json.map("schema_version", 2, "kind", "operator"));
     Json.write(
         temp.resolve("config/local.toml"),
-        "root=\"..\"\ntopics_repo=\"../repo\"\nstack_repo=\"../stack\"\n[datasheet]\ntransport=\"http\"\nurl=\"http://127.0.0.1:8000/mcp\"\n");
+        "root=\"..\"\ntopics_repo=\"../repo\"\nstack_repo=\"../stack\"\n[datasheet]\ntransport=\"stdio\"\n");
     settings = new Settings(temp.resolve("config/local.toml"));
   }
 
