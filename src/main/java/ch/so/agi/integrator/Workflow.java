@@ -68,6 +68,7 @@ public final class Workflow implements AutoCloseable {
           try {
             return switch (operation) {
               case "status" -> status(r);
+              case "set_issue" -> IssueSelection.set(r, args);
               case "attach" -> attach(r, args);
               case "provenance" -> provenance(r, args);
               case "xlsx" ->
@@ -608,7 +609,11 @@ public final class Workflow implements AutoCloseable {
     var warnings = new ArrayList<Object>();
     if (sheet.get("kind").equals("series") && data != null && r.get("issue") == null)
       errors.add(
-          Json.map("code", "issue_required", "message", "Ausgabenbezeichnung (SERIES_ID) fehlt."));
+          Json.map(
+              "code",
+              "issue_required",
+              "message",
+              "Ausgabenbezeichnung (SERIES_ID) fehlt. Tatsächliche Antwort mit set_issue im bestehenden Vorgang setzen; keinen neuen start-Aufruf verwenden."));
     if (sheet.get("kind").equals("dataset") && r.get("issue") != null)
       errors.add(
           Json.map("code", "unexpected_issue", "message", "Ausgabe nur bei Serien angeben."));

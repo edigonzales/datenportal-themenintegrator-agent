@@ -27,3 +27,11 @@ Chat angeben. Das Öffnen ist keine fachliche Freigabe. Falls am MCP-Host kein
 Browser verfügbar ist, den zurückgegebenen Pfad manuell öffnen. Ein gültiger
 Modellbericht ersetzt keine separate Metadatenprüfung; deren Fehler (z.B.
 fehlende Ausgabenbezeichnung) müssen vor einer Freigabe geklärt werden.
+
+Eine nachträglich bestätigte Ausgabenbezeichnung wird mit
+`set_issue(run_id, issue, human_statement)` am bestehenden Vorgang gesetzt.
+Dies ändert keine Datenblattfelder und erteilt keine Freigabe. Bisherige
+Prüfungen, Freigaben und Publikationspläne werden archiviert und entwertet;
+Dateien und Entwürfe bleiben erhalten. Danach `analyze`, `validate` und bei
+vorhandenem Modell `validate_model(scope=integration)` ausführen. Niemals einen
+zweiten Vorgang anlegen, um eine fehlende Ausgabe nachzutragen.

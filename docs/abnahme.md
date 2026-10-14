@@ -1498,3 +1498,23 @@ vorhandene lokale Konfiguration blieb beim Update unverändert. Der erste
 Fachintegrationstestlauf verwendete den Betriebsordner ohne gesetzten Paketpfad
 und scheiterte an fehlenden Werkzeug-JARs. Mit dem expliziten Testpaket als
 `DATENPORTAL_AGENT_HOME` bestanden alle 19 Tests ohne Auslassung.
+
+## 2026-10-14 – Ausgabe im bestehenden Vorgang setzen
+
+`set_issue` ergänzt die fehlende öffentliche Operation für bestätigte
+Ausgabenbezeichnungen. Sie erhält Vorgangskennung, Dateien, Modell, Entwurf und
+Historie. Geänderte Ausgaben archivieren und entwerten Prüfungen/Freigaben/Pläne;
+identische Wiederholungen sind wirkungslos. Ungültige Argumente, unklare
+MCP-Mutationen sowie bereits übernommene/extern eingereichte Vorgänge werden ohne
+Teiländerung abgewiesen. Rückwechsel auf eine frühere Ausgabe reaktivieren keine
+alte Freigabe. Fehlermeldung und Skill verweisen direkt auf `set_issue`, nicht
+auf einen erneuten `start`. Isolierte Tests decken Zustands- und Artefakterhalt,
+Idempotenz, Rückwechsel, Sperren und den tatsächlichen STDIO-Aufruf ab.
+
+Lokale Prüfung: 204 Java-Tests, Formatprüfung und Paketinstallation/update mit
+init/doctor bestanden. 18 Fachintegrationstests bestanden im ersten Lauf; der
+STDIO-Workspace-Test wurde wegen unterschiedlicher Versionen von Test-JAR und
+Workspace-Manifest abgewiesen. Mit einheitlichem `agentVersion=0.2.17-dev`
+bestand auch dieser Test einschliesslich `set_issue` und anschliessendem Status
+im selben Vorgang. Es wurden keine fachlichen Freigaben oder Publikationen
+zur Testabnahme ausgelöst.

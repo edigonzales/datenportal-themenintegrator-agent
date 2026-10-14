@@ -103,6 +103,7 @@ final class McpResults {
                 "model_text",
                 "mapping",
                 "diagnostic_history",
+                "issue_history",
                 "columns",
                 "observed",
                 "evidence",

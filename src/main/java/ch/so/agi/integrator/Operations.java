@@ -14,7 +14,7 @@ public final class Operations {
         "operation!");
     add(
         "start",
-        "Vorgang aufnehmen. Originaldateien bleiben unverändert.",
+        "Nur neuen Vorgang anlegen. Bei Wiederaufnahme status, für nachträgliche Ausgabe set_issue verwenden. Originaldateien bleiben unverändert.",
         "organization!",
         "identifier",
         "workflow",
@@ -26,6 +26,12 @@ public final class Operations {
         "status",
         "Gespeicherten Vorgang lesen; current_approvals enthält je Gate true nur für den weiterhin gültigen konkreten Prüfstand. Vor Wiederaufnahme und bei unklarem Upload zuerst lesen; kein zweites start.",
         "run_id!");
+    add(
+        "set_issue",
+        "Bestätigte Ausgabenbezeichnung (SERIES_ID) im bestehenden Vorgang setzen. Keine Datenblattänderung oder Freigabe. Änderungen archivieren und entwerten Prüfungen/Freigaben; identischer Wert ist wirkungslos. Nach externer Einreichung gesperrt.",
+        "run_id!",
+        "issue!",
+        "human_statement!");
     add(
         "attach",
         "Neue Datei aufnehmen und abhängige Freigaben entwerten.",
@@ -175,6 +181,11 @@ public final class Operations {
       properties.put("confirmations", ModelArguments.schema(false));
       properties.put("range_proposals", ModelArguments.schema(true));
     }
+    if (name.equals("set_issue"))
+      Json.obj(Json.obj(op.schema().get("properties")).get("human_statement"))
+          .put(
+              "description",
+              "Tatsächliche menschliche Bestätigung der Ausgabenbezeichnung. Dies erteilt keine Freigabe.");
     ALL.put(name, op);
   }
 

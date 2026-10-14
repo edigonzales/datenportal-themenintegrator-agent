@@ -52,3 +52,11 @@ zeigen und als absoluten Dateilink im Chat anbieten. Grosse MCP-Ergebnisse
 verweisen mit `full_result_path` auf die vollständige Ausgabe; diese bei Bedarf
 über `read_file` und `next_offset` abschnittweise lesen. Keine erneute Prüfung
 zum Lesen auslösen und keine internen OpenCode-Ausgabedateien anfordern.
+
+Fehlt die Ausgabe in einem bestehenden Vorgang, nach tatsächlicher Antwort
+`set_issue(run_id, issue="2025", human_statement="<tatsächliche Antwort>")`
+verwenden. Dafür niemals erneut `start` aufrufen. Die Angabe ist keine Freigabe.
+Nach einer Änderung `analyze`, `validate` und bei vorhandenem Modell
+`validate_model(scope=integration)` ausführen und die neuen Berichte zeigen.
+Identische Werte verändern keine Prüfstände; vorherige Prüfungen/Freigaben
+bleiben bei Änderungen in der Historie, sind aber nicht mehr gültig.

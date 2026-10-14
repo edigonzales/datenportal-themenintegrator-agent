@@ -113,7 +113,24 @@ class WorkspaceMcpIntegrationTest {
           start.put("data_path", importedPath);
           var created = client.callTool(new McpSchema.CallToolRequest("start", start));
           assertFalse(Boolean.TRUE.equals(created.isError()));
-          assertNotNull(Json.obj(created.structuredContent()).get("id"));
+          String runId = Json.required(Json.obj(created.structuredContent()), "id");
+          var selected =
+              client.callTool(
+                  new McpSchema.CallToolRequest(
+                      "set_issue",
+                      Json.map(
+                          "run_id",
+                          runId,
+                          "issue",
+                          "2025",
+                          "human_statement",
+                          "ISOLATED TEST: Ausgabe 2025")));
+          assertFalse(Boolean.TRUE.equals(selected.isError()));
+          assertEquals("2025", Json.obj(selected.structuredContent()).get("issue"));
+          var resumed =
+              client.callTool(new McpSchema.CallToolRequest("status", Json.map("run_id", runId)));
+          assertEquals(runId, Json.obj(resumed.structuredContent()).get("id"));
+          assertEquals("2025", Json.obj(resumed.structuredContent()).get("issue"));
         }
       }
     }
