@@ -278,15 +278,85 @@ class ModelsTest {
     String task =
         Models.task("ext.existingSetting = true\n", "ch.so.fixture", "FixtureModel_20261006");
     assertTrue(task.startsWith("ext.existingSetting"));
-    assertTrue(task.contains("preparePublicationWorkspace"));
+    assertTrue(task.contains("tasks.named('validateDeliveredCsv')"));
+    assertFalse(task.contains("preparePublicationWorkspace"));
+    assertFalse(task.contains("tasks.register"));
+    assertFalse(task.contains("stageThemenCsv"));
+    assertFalse(task.contains("validateThemenCsv"));
+    assertFalse(task.contains("MessageDigest"));
+    assertFalse(task.contains("Files.mismatch"));
     assertTrue(task.contains("failOnError.set(true)"));
     assertTrue(task.contains("encoding.set('UTF-8')"));
     assertTrue(task.contains("valueSeparator.set(';')"));
-    assertTrue(task.contains("Metadatenlieferungen überspringen"));
+    assertFalse(task.contains("onlyIf"));
     assertEquals(
         1,
         Models.task(task, "ch.so.fixture", "FixtureModel_20261006").split(Models.BEGIN, -1).length
             - 1);
+  }
+
+  @Test
+  void legacyGeneratedBlockIsReplacedCompletely() {
+    String original =
+        "ext.before = true\n"
+            + Models.BEGIN
+            + "\ntasks.register('stageThemenCsv') {}\ntasks.register('validateThemenCsv') {}\n"
+            + "// Files.mismatch MessageDigest expectedModelSha\n"
+            + Models.END
+            + "\next.after = true\n";
+    String task = Models.task(original, "ch.so.fixture", "FixtureModel_20261006");
+    assertTrue(task.contains("ext.before = true"));
+    assertTrue(task.contains("ext.after = true"));
+    assertFalse(task.contains("stageThemenCsv"));
+    assertFalse(task.contains("validateThemenCsv"));
+    assertFalse(task.contains("MessageDigest"));
+    assertEquals(1, task.split("tasks.named", -1).length - 1);
+  }
+
+  @Test
+  void legacyRunRefreshesOnlyTaskAndRequiresNewReview() {
+    f.call("derive_model", "run_id", id, "identity", identity(), "range_proposals", proposals());
+    f.call("validate_model", "run_id", id, "scope", "model");
+    f.call("prepare_model_reference", "run_id", id);
+    f.workflow.store.edit(
+        id,
+        r -> {
+          Path legacy = temp.resolve("legacy.gradle");
+          Json.write(
+              legacy,
+              "ext.keep = true\n"
+                  + Models.BEGIN
+                  + "\ntasks.register('validateThemenCsv') {}\n"
+                  + Models.END
+                  + "\n");
+          f.workflow.stage(r, f.workflow.topic(r) + "/dataset.gradle", legacy);
+          Json.obj(r.get("model")).put("dataset_task_sha256", Json.sha(legacy));
+          // A historical approved state, deliberately not revalidated by the new runtime.
+          Json.obj(r.get("approvals"))
+              .put(
+                  "model",
+                  Json.map(
+                      "fingerprint",
+                      f.workflow.fingerprint(r, "model"),
+                      "human_statement",
+                      "SYNTHETIC ISOLATED TEST"));
+          r.put(
+              "deliveries",
+              Json.map("local", Json.map("phase", "failed", "job", "historical-build")));
+          return null;
+        });
+    String before = f.workflow.store.edit(id, r -> Json.sha(f.workflow.store.file(r, "model")));
+    int calls = requests.size();
+    var checked = f.call("validate_model", "run_id", id);
+    assertTrue(Json.bool(checked, "valid", false), Json.pretty(checked));
+    assertEquals(calls, requests.size());
+    assertEquals(
+        before, f.workflow.store.edit(id, r -> Json.sha(f.workflow.store.file(r, "model"))));
+    var state = f.call("status", "run_id", id);
+    assertEquals(false, Json.obj(state.get("current_approvals")).get("model"));
+    assertEquals("failed", Json.obj(Json.obj(state.get("deliveries")).get("local")).get("phase"));
+    String fingerprint = Json.required(checked, "fingerprint");
+    assertEquals(fingerprint, f.call("validate_model", "run_id", id).get("fingerprint"));
   }
 
   @Test

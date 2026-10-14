@@ -1518,3 +1518,32 @@ Workspace-Manifest abgewiesen. Mit einheitlichem `agentVersion=0.2.17-dev`
 bestand auch dieser Test einschliesslich `set_issue` und anschliessendem Status
 im selben Vorgang. Es wurden keine fachlichen Freigaben oder Publikationen
 zur Testabnahme ausgelöst.
+
+## 2026-10-14: Ein vorhandener GRETL-CSV-Validator
+
+Der Integrator konfiguriert ausschliesslich `validateDeliveredCsv` mit Semikolon,
+Anführungszeichen, UTF-8, Kopfzeile und Themenmodellverzeichnis. Der zusätzliche
+Validator, Copy-Task sowie die Gradle-Byte-/Modell-Hash-Prüfungen entfallen.
+Java-Vorprüfung und Freigabefingerprints bleiben bestehen. Ein unveränderter
+historischer Integrator-Block wird bei `validate_model` als neuer Kandidat
+ersetzt; Modell und Datenblatt bleiben unverändert, neue Freigaben sind nötig.
+
+Tatsächlich geprüft: 206 Java-Tests, Formatprüfung und 19 Integrationstests mit
+den konfigurierten MCP-JARs und dem vorhandenen Jenkins-GRETL bestanden.
+Die isolierte GRETL-Fixture verwendet zwei Spalten, Semikolon und den Textwert
+`01`. Der echte Publikationstask akzeptiert die gültige CSV, stoppt beim
+ungültigen Zahlenwert vor `prepareCsvConversion` und wird bei Metadatenlieferung
+übersprungen. Für diesen gezielten Test wird nur das Ergebnis von
+`mergeDatasheets` als synthetische Fixture bereitgestellt; es gibt keinen Upload.
+Paketinstallation, beide MCPs, init, doctor und Update mit unveränderter lokaler
+Konfiguration wurden in einem temporären Betriebsordner geprüft.
+
+Zusätzlich berücksichtigt der Paket-Build die Version als Task-Eingabe, damit
+inkrementelle Builds keine veraltete Workspace-Versionsangabe übernehmen.
+Frühere Testversuche mit veralteten lokalen Pfaden und einer falschen
+Dateiberechtigung der synthetischen Container-Fixture wurden korrigiert; der
+abschliessende vollständige Integrationstestlauf war erfolgreich.
+
+Der tatsächliche mfk-Lauf (Build 3, Queue 590) wurde nur abgefragt und als
+fehlgeschlagen/nicht publiziert erfasst. Eine erneute fachliche Lieferung sowie
+Portal-/Download-Abnahme nach der Korrektur bleiben bis zur neuen Freigabe offen.

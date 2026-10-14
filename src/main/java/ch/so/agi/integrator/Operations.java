@@ -166,7 +166,7 @@ public final class Operations {
         "human_statement!");
     add(
         "validate_model",
-        "Modell und CSV mit Java prüfen. scope=model ist eine Zwischenprüfung ohne Freigabewirkung; integration prüft das vollständige Paket (Standard).",
+        "Modell und CSV mit Java prüfen. Unveränderte alte Integrator-CSV-Taskblöcke werden als Kandidat auf den bestehenden Publikationsvalidator umgestellt; danach neue Prüfung/Freigabe erforderlich. scope=model ist eine Zwischenprüfung ohne Freigabewirkung; integration prüft das vollständige Paket (Standard).",
         "run_id!",
         "scope");
   }

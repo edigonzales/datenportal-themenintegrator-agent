@@ -323,27 +323,25 @@ INTERLIS-Modell überprüfbar werden.
 **Agentenunterstützung:** Auf ausdrücklichen Auftrag ein Modell aus CSV und
 bestätigtem Datenblatt ableiten, Modellidentität und offene Fachregeln klären
 und die CSV gegen das Modell prüfen lassen. Zur erfolgreichen Modellableitung
-gehört automatisch auch die Vorbereitung von `dataset.gradle` mit Copy- und
-Validierungstask im Themenordner. Standard sind INTERLIS 2.4,
+gehört automatisch auch die Vorbereitung von `dataset.gradle` mit Konfiguration des bestehenden CSV-Validierungstasks im Themenordner. Standard sind INTERLIS 2.4,
 Profil `SO-DATA` ohne Kommentare und zunächst eine flache Klasse. Beobachtete Werte von 120 bis
 20'000 begründen keinen fachlichen Wertebereich; zufällige Eindeutigkeit
 begründet keinen Schlüssel.
 
 **Ergebnis:** INTERLIS-Modell (`.ili`), `dataset.gradle`, Prüfresultate und
 aktualisierte Modellreferenz im Datenblatt werden gemeinsam vorbereitet.
-Die erzeugte Taskdatei legt für CSV-Datenlieferungen diese Reihenfolge fest:
+Der konfigurierte Validator bleibt in der bestehenden Publikationsreihenfolge:
 
 ```text
-stageThemenCsv (Copy)
-  → validateThemenCsv (CsvValidator)
-    → preparePublicationWorkspace
+mergeDatasheets
+  → validateDeliveredCsv (CsvValidator)
+    → prepareCsvConversion
 ```
 
-Der Copy-Task stellt Jenkins-Uploads ohne Dateiendung bytegleich als
-`build/integrator-validation/input.csv` bereit. Der GRETL-CsvValidator prüft
-diese Kopie gegen das Modell. Schlägt die Validierung fehl, stoppt der Ablauf
-vor der Publikationsvorbereitung. Reine Metadatenlieferungen überspringen
-die Copy- und CSV-Validierungstasks.
+Der vorhandene GRETL-CsvValidator prüft die Lieferdatei gegen das Modell mit
+Semikolon, Anführungszeichen, UTF-8 und Kopfzeile. Schlägt die Validierung fehl,
+stoppt der Ablauf vor Konvertierung und Publikation. Reine Metadatenlieferungen
+überspringen die CSV-Validierung. Die unabhängige Java-Vorprüfung bleibt bestehen.
 
 **Deine Entscheidung:** Modellname mit Datumssuffix, absolute URI, passendes
 ISO-Versionsdatum sowie unbelegte Regeln klären. Numerische Vorschläge mit
@@ -355,7 +353,7 @@ Eigenständige Modellierung ist auch ohne Datenpublikation möglich.
 
 **Beispielprompt für Modellierung im Themenvorgang:**
 
-> Verwende den Skill `datenportal-themenintegrator`. Leite im Vorgang `<Vorgangs-ID>` aus der bestätigten CSV und dem Datenblatt ein INTERLIS-Modell ab. Frage die Modellidentität und fachlich nicht belegte Regeln nach. Zeige die dabei regulär vorbereiteten Dateien `.ili` und `dataset.gradle` mit dem Copy-Task `stageThemenCsv` und dem Validierungstask `validateThemenCsv` gemeinsam mit dem aktualisierten Datenblatt und den Prüfresultaten zur Freigabe.
+> Verwende den Skill `datenportal-themenintegrator`. Leite im Vorgang `<Vorgangs-ID>` aus der bestätigten CSV und dem Datenblatt ein INTERLIS-Modell ab. Frage die Modellidentität und fachlich nicht belegte Regeln nach. Zeige die dabei regulär vorbereiteten Dateien `.ili` und `dataset.gradle` mit der Konfiguration des vorhandenen Validierungstasks `validateDeliveredCsv` gemeinsam mit dem aktualisierten Datenblatt und den Prüfresultaten zur Freigabe.
 
 **Beispielprompt für eigenständige Modellierung:**
 

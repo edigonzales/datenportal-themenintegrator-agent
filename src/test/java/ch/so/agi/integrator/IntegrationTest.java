@@ -109,7 +109,7 @@ class IntegrationTest {
   }
 
   @Test
-  void bothRealMcpAdaptersAndGretlEarlyValidation() throws Exception {
+  void bothRealMcpAdaptersAndSinglePublicationValidator() throws Exception {
     Settings s = Fixtures.integrationSettings();
     var data = own(McpClients.datasheet(s));
     var schema = data.call("describe_schema", Json.map());
@@ -126,9 +126,12 @@ class IntegrationTest {
         Json.contents(Fixtures.FIXTURES.resolve("dataset.xtf"))
             .replace(
                 "<ns2:name>Jahr</ns2:name>",
-                "<ns2:name>Jahr</ns2:name><ns2:description>Beobachtungsjahr des Testwerts</ns2:description>"));
+                "<ns2:name>Jahr</ns2:name><ns2:description>Beobachtungsjahr des Testwerts</ns2:description>")
+            .replace(
+                "<ns1:dataAvailableFrom>",
+                "<ns1:attributes><ns2:DatasetAttribute><ns2:name>Code</ns2:name><ns2:dataType>TEXT</ns2:dataType><ns2:description>Code mit führender Null</ns2:description><ns2:mandatory>false</ns2:mandatory></ns2:DatasetAttribute></ns1:attributes><ns1:dataAvailableFrom>"));
     Path csv = temp.resolve("input.csv");
-    Json.write(csv, "Jahr\n2025\n");
+    Json.write(csv, "Jahr;Code\n2025;01\n");
     String id =
         Json.required(
             f.call(
@@ -188,7 +191,22 @@ class IntegrationTest {
             "reason",
             "Synthetischer Typbereich 1800–2100; separater Constraint begrenzt Lieferwerte auf Jahre ab 1900.");
     var derived =
-        f.call("derive_model", "run_id", id, "identity", identity, "range_proposals", proposals);
+        f.call(
+            "derive_model",
+            "run_id",
+            id,
+            "identity",
+            identity,
+            "range_proposals",
+            proposals,
+            "confirmations",
+            Json.map(
+                "Code",
+                Json.map(
+                    "confirmed",
+                    true,
+                    "type_spec",
+                    Json.map("baseType", Json.map("kind", "TEXT", "maxLength", 2)))));
     assertFalse(
         Json.list(Json.obj(Json.obj(derived.get("model")).get("evidence")).get("constraintProofs"))
             .isEmpty());
@@ -201,12 +219,12 @@ class IntegrationTest {
     Path task =
         f.workflow.store.edit(
             id, r -> f.workflow.repoFile(r, f.workflow.topic(r) + "/dataset.gradle"));
-    assertTrue(Json.contents(task).contains("preparePublicationWorkspace"));
+    assertTrue(Json.contents(task).contains("validateDeliveredCsv"));
     Path snapshot =
         f.workflow.store.edit(
             id, state -> new Workspace(f.workflow).snapshot(state, "jenkins-test"));
     Path invalid = temp.resolve("invalid.csv");
-    Json.write(invalid, "Jahr\nnot-a-number\n");
+    Json.write(invalid, "Jahr;Code\nnot-a-number;01\n");
     Path modelFile =
         f.workflow.store.edit(
             id,
@@ -266,42 +284,79 @@ class IntegrationTest {
             "--console=plain",
             "-I",
             work + "/shared/gradle/init.gradle");
+    // Seed only the output of mergeDatasheets in this isolated snapshot. All task
+    // configuration and the validation-to-conversion dependency are the real ones.
+    Path control = temp.resolve("delivery.json");
+    Json.atomic(control, List.of(Json.map("model", Json.required(identity, "name"))));
+    String input = work + "/agi/build/publication/input";
+    process.checked(List.of("docker", "exec", container, "mkdir", "-p", input), s.stack, 30);
+    process.checked(
+        List.of(
+            "docker",
+            "cp",
+            control.toString(),
+            container + ":" + work + "/agi/build/publication/delivery.json"),
+        s.stack,
+        30);
+    process.checked(
+        List.of("docker", "cp", csv.toString(), container + ":" + input + "/data.csv"),
+        s.stack,
+        30);
+    process.checked(
+        List.of(
+            "docker",
+            "exec",
+            "--user",
+            "root",
+            container,
+            "chown",
+            "-R",
+            "jenkins:jenkins",
+            work + "/agi/build/publication"),
+        s.stack,
+        30);
     var positiveArgs = new ArrayList<>(prefix);
     positiveArgs.addAll(
         List.of(
-            "validateThemenCsv",
+            "validateDeliveredCsv",
+            "-x",
+            "mergeDatasheets",
             "-Pdataset=ch.so.grundwasser.qualitaet",
             "-PdataFile=" + work + "/DATA_FILE"));
     var positive =
         process.run(positiveArgs, s.stack, 180, temp.resolve("jenkins-csv-positive.log"));
     assertEquals(0, positive.exitCode(), positive.output());
-    assertTrue(positive.output().contains("INTEGRATOR_CSV_VALIDATED=true"));
-    String inputHashes =
-        process.checked(
-            List.of(
-                "docker",
-                "exec",
-                container,
-                "sha256sum",
-                work + "/DATA_FILE",
-                work + "/agi/build/integrator-validation/input.csv"),
-            s.stack,
-            30);
-    assertTrue(
-        inputHashes.lines().allMatch(line -> line.startsWith(Json.sha(csv) + " ")),
-        "Jenkins input and validation copy must keep the original bytes");
+    assertTrue(positive.output().contains("> Task :validateDeliveredCsv"));
+    assertFalse(positive.output().contains("validateThemenCsv"));
+    process.checked(
+        List.of("docker", "cp", invalid.toString(), container + ":" + input + "/data.csv"),
+        s.stack,
+        30);
     var negativeArgs = new ArrayList<>(prefix);
     negativeArgs.addAll(
         List.of(
-            "preparePublicationWorkspace",
+            "prepareCsvConversion",
+            "-x",
+            "mergeDatasheets",
             "-Pdataset=ch.so.grundwasser.qualitaet",
             "-PdataFile=" + work + "/INVALID_DATA_FILE"));
     var negative =
         process.run(negativeArgs, s.stack, 180, temp.resolve("jenkins-csv-negative.log"));
     assertNotEquals(0, negative.exitCode());
-    assertTrue(negative.output().contains("validateThemenCsv FAILED"), negative.output());
-    assertFalse(
-        negative.output().contains("> Task :preparePublicationWorkspace"), negative.output());
+    assertTrue(negative.output().contains("validateDeliveredCsv FAILED"), negative.output());
+    assertFalse(negative.output().contains("> Task :prepareCsvConversion"), negative.output());
+    var metadataArgs = new ArrayList<>(prefix);
+    metadataArgs.addAll(
+        List.of(
+            "validateDeliveredCsv",
+            "-x",
+            "mergeDatasheets",
+            "-Pdataset=ch.so.grundwasser.qualitaet"));
+    var metadataOnly =
+        process.run(metadataArgs, s.stack, 180, temp.resolve("jenkins-csv-metadata.log"));
+    assertEquals(0, metadataOnly.exitCode(), metadataOnly.output());
+    assertTrue(
+        metadataOnly.output().contains("validateDeliveredCsv SKIPPED"), metadataOnly.output());
   }
 
   @Test

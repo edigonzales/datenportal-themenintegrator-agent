@@ -30,7 +30,7 @@ GitHub-PRs werden direkt über die REST-API erstellt und geprüft. `GH_TOKEN` ha
 
 Jenkins-Profile stehen unter `[environments.<name>]`: `kind`, `enabled`, `jenkins_url`, `portal_url`, `manifest_url`, `username_env`, `token_env`, `repository_mode="managed-git"`, `git_write_back=false`, optional `git_remote` und `git_branch`. INT/PROD-Adressen werden nicht vorbelegt. Jenkins-Zugänge können auch mit `credentials set <profil> --username <user> --token-stdin` eingerichtet werden. `credentials status` zeigt keine Geheimnisse.
 
-Die lokale CSV-Vorprüfung verwendet ilivalidator direkt. Jenkins prüft vor der Publikation eigenständig mit GRETL. Es gibt keinen Bundle-, Image- oder Bibliotheksabgleich zwischen beiden Prüfungen. Daten- und Modellprüfsummen binden Freigaben weiterhin an den gezeigten fachlichen Stand.
+Die lokale CSV-Vorprüfung verwendet ilivalidator direkt. Jenkins prüft vor der Publikation eigenständig mit dem bestehenden GRETL-Task `validateDeliveredCsv`. Der Themenblock konfiguriert Semikolon, Anführungszeichen, UTF-8, Kopfzeile und das Modellverzeichnis. Es gibt keinen zusätzlichen CSV-Validator- oder Copy-Task und keine zusätzliche CSV-Byte- oder Modell-Hash-Prüfung im Gradle-Block. Es gibt keinen Bundle-, Image- oder Bibliotheksabgleich zwischen beiden Prüfungen. Daten- und Modellprüfsummen binden Freigaben weiterhin an den gezeigten fachlichen Stand.
 
 Nur für eine ausdrücklich gewünschte lokale Publikation oder `acceptance delivery` werden Docker und ein vorhandener Dev-Stack benötigt. `stack_repo` und ein lokales Loopback-Profil dafür gesondert konfigurieren. Der Integrator startet keine lokalen Container für CSV/XTF- oder Modellprüfungen.
 
@@ -60,3 +60,5 @@ Arbeitsdateien und lokale Konfiguration bleiben erhalten. Individuell verändert
 Die drei Skills führen durch Themenintegration, eigenständige Modellierung und Organisationsanlage. Öffentliche Argumente mit `operation_schema` erfragen. Chat-Anhänge mit `datenportal_workspace.import_attachment` unverändert übernehmen; nur drei gleiche SHA-256-Prüfsummen bestätigen die Kopie.
 
 Lokale CSV-Konverter sind fachliche Java-Arbeitsprodukte. Sie werden durch den Integrator mit JDK 21 kompiliert und getestet; keine Integrator-Quellen bearbeiten. CSV-/Modell-/Metadatenänderungen prüfen und nur tatsächliche menschliche Freigaben protokollieren.
+
+Bei bestehenden Modellvorgängen ersetzt `validate_model` einen unveränderten alten Integrator-Taskblock durch diese Konfiguration als Kandidat. Modell und Datenblatt bleiben unverändert. Anschliessend die vollständigen Prüfberichte aktualisieren und den geänderten Stand freigeben lassen; es erfolgt keine automatische Übernahme oder Lieferung.

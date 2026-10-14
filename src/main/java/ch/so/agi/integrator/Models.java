@@ -430,7 +430,7 @@ public final class Models {
         Path taskExisting = w.repoFile(r, taskRelative);
         String original = Files.exists(taskExisting) ? Json.contents(taskExisting) : "";
         Path task = w.directory(r).resolve("model/dataset.gradle");
-        Json.write(task, task(original, Json.required(r, "identifier"), modelName, Json.sha(out)));
+        Json.write(task, task(original, Json.required(r, "identifier"), modelName));
         w.stage(r, taskRelative, task);
         model.put("dataset_task_sha256", Json.sha(task));
       }
@@ -575,10 +575,6 @@ public final class Models {
   }
 
   public static String task(String original, String identifier, String model) {
-    return task(original, identifier, model, "");
-  }
-
-  public static String task(String original, String identifier, String model, String modelSha) {
     int start = original.indexOf(BEGIN), end = original.indexOf(END);
     if ((start >= 0) != (end >= 0) || end >= 0 && end < start)
       throw new Problem(
@@ -593,54 +589,20 @@ public final class Models {
         + BEGIN
         + "\n"
         + """
-                def integratorCsvInput = providers.gradleProperty('dataFile').orElse('')
-                // Jenkins file parameters have no extension. CsvValidator requires .csv.
-                def integratorValidationCsv = layout.buildDirectory.file('integrator-validation/input.csv')
-                def integratorStageCsv = tasks.register('stageThemenCsv', Copy) {
-                    onlyIf('CSV-Datenlieferung vorhanden') { !integratorCsvInput.get().trim().isEmpty() }
-                    from(integratorCsvInput.map { value -> value.trim().isEmpty() ? [] : [file(value)] })
-                    into(layout.buildDirectory.dir('integrator-validation'))
-                    rename { 'input.csv' }
-                }
-                def integratorCsvValidator = project.plugins.getPlugin('ch.so.agi.gretl').class.classLoader.loadClass('ch.so.agi.gretl.tasks.CsvValidator')
-                tasks.register('validateThemenCsv', integratorCsvValidator) {
-                    dependsOn(integratorStageCsv)
-                    onlyIf('CSV-Datenlieferung vorhanden; Metadatenlieferungen überspringen') { !integratorCsvInput.get().trim().isEmpty() }
-                    dataFiles(integratorCsvInput.map { value -> value.trim().isEmpty() ? [] : [integratorValidationCsv.get().asFile] })
-                    modelNames(%s)
-                    modelDirectories(file(%s).absolutePath)
-                    firstLineIsHeader.set(true)
-                    valueSeparator.set(';')
-                    valueDelimiter.set('"')
-                    encoding.set('UTF-8')
-                    logFile(layout.buildDirectory.file('integrator-validation/csv.log'))
-                    failOnError.set(true)
-                    doFirst {
-                        if (!file(integratorCsvInput.get()).isFile()) throw new GradleException('CSV-Lieferdatei fehlt')
-                        if (java.nio.file.Files.mismatch(file(integratorCsvInput.get()).toPath(), integratorValidationCsv.get().asFile.toPath()) != -1L) throw new GradleException('CSV-Prüfkopie ist nicht bytegleich')
-                        def expectedModelSha = %s
-                        def modelFile = file(%s)
-                        if (expectedModelSha && java.security.MessageDigest.getInstance('SHA-256').digest(modelFile.bytes).encodeHex().toString() != expectedModelSha) throw new GradleException('INTERLIS-Modell entspricht nicht dem freigegebenen Prüfstand')
-                    }
-                    doLast { println('INTEGRATOR_CSV_VALIDATED=' + validationOk) }
-                }
-                tasks.configureEach { task ->
-                    if (task.name == 'preparePublicationWorkspace') task.dependsOn('validateThemenCsv')
-                }
-                // The publication validator also needs the reviewed topic-local model.
+                // Configure the existing publication validator; do not register a second task.
                 gradle.projectsEvaluated {
-                    tasks.matching { it.name == 'validateDeliveredCsv' }.configureEach {
+                    tasks.named('validateDeliveredCsv').configure {
                         def sharedModels = System.getenv('DATENPORTAL_MODELS_DIR') ?: file('../shared/models').absolutePath
                         modelDirectories(file(%s).absolutePath + ';' + sharedModels)
+                        firstLineIsHeader.set(true)
+                        valueSeparator.set(';')
+                        valueDelimiter.set('"')
+                        encoding.set('UTF-8')
+                        failOnError.set(true)
                     }
                 }
                 """
-            .formatted(
-                Workspace.groovy(model),
-                Workspace.groovy(identifier),
-                Workspace.groovy(modelSha),
-                Workspace.groovy(identifier + "/" + model + ".ili"),
-                Workspace.groovy(identifier))
+            .formatted(Workspace.groovy(identifier))
         + END
         + "\n";
   }
@@ -716,11 +678,7 @@ public final class Models {
         Path candidate = w.directory(r).resolve("model/dataset.gradle");
         Json.write(
             candidate,
-            task(
-                Json.contents(w.repoFile(r, relative)),
-                Json.required(r, "identifier"),
-                name,
-                Json.sha(ili)));
+            task(Json.contents(w.repoFile(r, relative)), Json.required(r, "identifier"), name));
         w.stage(r, relative, candidate);
         model.put("dataset_task_sha256", Json.sha(candidate));
       }
@@ -743,6 +701,26 @@ public final class Models {
               "Datenblatt-Modellreferenz fehlt oder stimmt nicht überein."));
     String iliRelative = w.topic(r) + "/" + modelName + ".ili",
         taskRelative = w.topic(r) + "/dataset.gradle";
+    Path existingTask = w.repoFile(r, taskRelative);
+    if (Json.bool(model, "authoring_valid", false)
+        && Files.isRegularFile(existingTask)
+        && Objects.equals(Json.sha(existingTask), model.get("dataset_task_sha256"))) {
+      String original = Json.contents(existingTask);
+      if (original.contains(BEGIN) && original.contains("tasks.register('validateThemenCsv'")) {
+        Path candidate = w.directory(r).resolve("model/dataset.gradle");
+        Json.write(candidate, task(original, Json.required(r, "identifier"), modelName));
+        w.stage(r, taskRelative, candidate);
+        model.put("dataset_task_sha256", Json.sha(candidate));
+        Store.event(
+            r,
+            "csv_task_updated",
+            Json.map(
+                "path",
+                taskRelative,
+                "reason",
+                "Single publication CSV validator; fresh review required."));
+      }
+    }
     if (!Files.isRegularFile(w.repoFile(r, taskRelative))
         || !Objects.equals(Json.sha(w.repoFile(r, taskRelative)), model.get("dataset_task_sha256")))
       errors.add(

@@ -367,13 +367,10 @@ final class DeliveryAcceptance {
       Json.write(directory.resolve("positive-console.log"), positive);
       if (!Json.bool(delivery, "verified", false))
         fail("Anlieferung nicht vollständig bestätigt", delivery);
-      if (!positive.contains("INTEGRATOR_CSV_VALIDATED=true")
-          || !positive.contains("preparePublicationWorkspace"))
+      if (!positive.lines().anyMatch(line -> line.equals("> Task :validateDeliveredCsv"))
+          || !positive.contains("preparePublicationWorkspace")
+          || positive.contains("validateThemenCsv"))
         fail("GRETL-CSV-Prüfung im Lieferjob nicht nachgewiesen", positiveStatus);
-      String modelSha =
-          Json.sha(s.topics.resolve("agi/" + DATASET + "/SO_Integrator_Delivery_20261009.ili"));
-      if (!Json.contents(s.topics.resolve("agi/" + DATASET + "/dataset.gradle")).contains(modelSha))
-        fail("Modellbytes sind nicht an die Task gebunden", Json.map());
       var manifest = Jenkins.manifest(env);
       var negativeJob =
           jenkins.submit(
@@ -397,10 +394,10 @@ final class DeliveryAcceptance {
       Json.write(directory.resolve("negative-console.log"), negative);
       // Keep only the separately redacted console, never the API's raw embedded log.
       negativeStatus.remove("logText");
-      if (!negative.contains("validateThemenCsv FAILED")
+      if (!negative.contains("validateDeliveredCsv FAILED")
           || !negative.contains("not-a-number")
           || !negative.contains("is not a number in attribute Jahr")
-          || negative.contains("> Task :preparePublicationWorkspace"))
+          || negative.contains("> Task :prepareCsvConversion"))
         fail("Negativfall weist keine frühe CSV-Validierungsverletzung nach", negativeStatus);
       if (!Objects.equals(manifest, Jenkins.manifest(env)))
         fail("Negativfall hat den erfolgreichen Release verändert", negativeStatus);
@@ -429,7 +426,7 @@ final class DeliveryAcceptance {
               "release_unchanged_after_negative",
               true,
               "model_sha256",
-              modelSha,
+              Json.sha(s.topics.resolve("agi/" + DATASET + "/SO_Integrator_Delivery_20261009.ili")),
               "csv_sha256",
               Json.sha(directory.resolve("valid.csv")),
               "positive_console_sha256",

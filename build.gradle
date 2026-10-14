@@ -34,6 +34,7 @@ test {
     inputs.files(fileTree('bin'), fileTree('runtime') { include '*.sh' }, 'README.md', 'AGENTS.md', fileTree('.agents/skills'), fileTree('docs'), fileTree('templates'), fileTree('config') { exclude 'local.toml' }, fileTree('skills'))
 }
 tasks.register('operatorWorkspaceFiles', Sync) {
+    inputs.property('agentVersion', project.version.toString())
     into layout.buildDirectory.dir('operator-workspace')
     doFirst {
         def links = destinationDir.toPath().resolve('.agents')

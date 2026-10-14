@@ -59,7 +59,7 @@ public final class ReportExamples {
     String ili =
         "INTERLIS 2.4;\nMODEL Beispiel AT \"https://example.org/models\" VERSION \"2026-10-09\" =\n  TOPIC Daten =\n    CLASS Beobachtung =\n      Code : MANDATORY TEXT*3;\n      Anzahl : 0 .. 100000;\n    END Beobachtung;\n  END Daten;\nEND Beispiel.\n";
     String gradle =
-        "// Synthetisches Darstellungsbeispiel\ntasks.register('stageThemenCsv', Copy) {\n    from(providers.gradleProperty('dataFile'))\n    into(layout.buildDirectory.dir('integrator-validation'))\n    rename { 'input.csv' }\n}\ntasks.register('validateThemenCsv', CsvValidator) {\n    dependsOn('stageThemenCsv')\n    modelNames('Beispiel')\n    failOnError.set(true)\n}\n";
+        "// Synthetisches Darstellungsbeispiel\ntasks.named('validateDeliveredCsv') {\n    valueSeparator.set(';')\n    failOnError.set(true)\n}\n";
     var model =
         Json.map(
             "identity",
