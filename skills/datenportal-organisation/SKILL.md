@@ -19,3 +19,9 @@ Kontakte, Teams und Benutzerkennungen nicht erfinden. Originaldateien unverände
 4. `validate_organization` prüft Office-XTF, YAML-/Team-/Namensregeln und isolierte Gradle-Konfiguration. HTML mit allen geplanten Dateien und Berechtigungen zeigen.
 5. **Organisations-Stopp:** tatsächliche Antwort abwarten und `approve(gate=organization)` mit angezeigtem Fingerprint und tatsächlicher Aussage bestätigen. Korrekturen erneut vorbereiten und prüfen; Korrekturaufträge sind keine Freigaben.
 6. Nur beauftragte lokale Übernahme oder Zielplan/PR fortsetzen. Vorher [Lieferung und Wiederaufnahme](../../docs/agent/lieferung-und-wiederaufnahme.md) lesen. Eine leere Organisation ist als im Repo angelegt abgeschlossen; das bestehende Plugin erzeugt ihren Jenkins-Job erst mit dem ersten Thema. `seed` nur auf Auftrag und ohne Datenupload.
+
+Prüfberichte dem Menschen mit `datenportal_workspace.open_report(path=...)`
+zeigen und als absoluten Dateilink im Chat anbieten. Grosse MCP-Ergebnisse
+verweisen mit `full_result_path` auf die vollständige Ausgabe; diese bei Bedarf
+über `read_file` und `next_offset` abschnittweise lesen. Keine erneute Prüfung
+zum Lesen auslösen und keine internen OpenCode-Ausgabedateien anfordern.

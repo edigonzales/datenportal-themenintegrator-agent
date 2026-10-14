@@ -11,3 +11,19 @@ Die lokale CSV-Prüfung läuft direkt mit ilivalidator. Jenkins verwendet seinen
 Nur ausdrücklich gewünschte lokale Publikationsprüfungen benötigen Docker und den Dev-Stack. `acceptance delivery` ist synthetisch und autorisiert keine fachlichen Änderungen. Offene externe Laufkennungen zuerst aufklären; keine blinden Wiederholungen.
 
 Alte Schema-2-Vorgänge mit der alten Version abschliessen. Neue Java-Arbeitsbereiche verwenden Schema 3; keine Übernahme alter Freigaben. Einrichtung und Updates stehen im [Anwenderhandbuch](../anwenderhandbuch.md).
+
+## Prüfberichte und grosse Antworten
+
+MCP-Antworten liefern kompakte Ergebnisse. `response_compacted: true` verweist mit
+`full_result_path` auf das vollständige Ergebnis. Dieses mit
+`datenportal_workspace.read_file(path=..., offset=0, limit=6000)` lesen und nur bei
+Bedarf mit `next_offset` fortsetzen. `next_offset: null` bedeutet Dateiende.
+Nicht dieselbe Prüfung wiederholen, um abgeschnittene Ausgaben zu lesen, und
+keine OpenCode-internen `tool-output`-Dateien anfordern.
+
+HTML-Prüfberichte mit `datenportal_workspace.open_report(path=...)` im lokalen
+Standardbrowser anzeigen und den absoluten Berichtspfad als Markdown-Link im
+Chat angeben. Das Öffnen ist keine fachliche Freigabe. Falls am MCP-Host kein
+Browser verfügbar ist, den zurückgegebenen Pfad manuell öffnen. Ein gültiger
+Modellbericht ersetzt keine separate Metadatenprüfung; deren Fehler (z.B.
+fehlende Ausgabenbezeichnung) müssen vor einer Freigabe geklärt werden.

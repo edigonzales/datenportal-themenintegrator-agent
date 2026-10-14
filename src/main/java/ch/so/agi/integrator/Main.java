@@ -269,15 +269,48 @@ public final class Main {
                                     files
                                         ? workspace.call(name, request.arguments())
                                         : workflow.call(name, request.arguments());
+                                result = McpResults.present(s, name, result);
+                                if (!files
+                                    && request.arguments().get("run_id") instanceof String runId
+                                    && runId.matches("[0-9a-f]{32}")
+                                    && result instanceof Map<?, ?>) {
+                                  var withReports = new LinkedHashMap<>(Json.obj(result));
+                                  var reports = new ArrayList<Object>();
+                                  for (String reportName :
+                                      List.of(
+                                          "data-review.html",
+                                          "metadata-review.html",
+                                          "model-review.html",
+                                          "model-preparation-review.html",
+                                          "organization-review.html")) {
+                                    var report = s.runs.resolve(runId).resolve(reportName);
+                                    if (java.nio.file.Files.isRegularFile(report))
+                                      reports.add(
+                                          Json.map(
+                                              "path",
+                                              report.toString(),
+                                              "url",
+                                              report.toUri().toString()));
+                                  }
+                                  if (!reports.isEmpty()) {
+                                    withReports.put("reports", reports);
+                                    withReports.put(
+                                        "show_report",
+                                        "datenportal_workspace.open_report(path=...) zeigt den Bericht im lokalen Browser; keine Freigabe.");
+                                  }
+                                  result = withReports;
+                                }
+
                                 return McpSchema.CallToolResult.builder()
                                     .structuredContent(result)
-                                    .addTextContent(Json.text(result))
+                                    .addTextContent(Json.pretty(result))
                                     .isError(false)
                                     .build();
                               } catch (Problem e) {
+                                var failure = McpResults.present(s, name, e.result());
                                 return McpSchema.CallToolResult.builder()
-                                    .structuredContent(e.result())
-                                    .addTextContent(Json.text(e.result()))
+                                    .structuredContent(failure)
+                                    .addTextContent(Json.pretty(failure))
                                     .isError(true)
                                     .build();
                               } catch (Exception e) {

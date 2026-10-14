@@ -16,7 +16,13 @@ final class WorkspaceFiles {
         "path!");
     tool(
         "read_file",
-        "Zulässige Anleitung, Fachdatei oder Prüfbericht lesen; keine Quellen, Secrets oder state.json.",
+        "Zulässige Datei abschnittweise lesen (max. 6000 Zeichen). next_offset verwenden. report_url im Browser öffnen; keine erneute Prüfung zum Lesen. Keine Quellen/Secrets/state.json.",
+        "path!",
+        "offset:integer",
+        "limit:integer");
+    tool(
+        "open_report",
+        "Vorhandenen HTML-Prüfbericht im lokalen Standardbrowser anzeigen. Keine Prüfung/Freigabe/Publikation.",
         "path!");
     tool(
         "list_files",
@@ -65,7 +71,12 @@ final class WorkspaceFiles {
     return switch (operation) {
       case "import_attachment" ->
           importAttachment(Json.required(args, "organization"), Json.required(args, "path"));
-      case "read_file" -> read(Json.required(args, "path"));
+      case "read_file" ->
+          read(
+              Json.required(args, "path"),
+              Json.number(args, "offset", 0),
+              Json.number(args, "limit", 6000));
+      case "open_report" -> openReport(Json.required(args, "path"));
       case "list_files" -> list(Json.required(args, "path"));
       case "write_file" -> write(args);
       default -> throw new Problem("unknown_operation", "Unbekanntes Dateiwerkzeug.");
@@ -103,6 +114,9 @@ final class WorkspaceFiles {
     if (path.startsWith(packagePath("topics"))) return converterPath(path);
     if (path.startsWith(packagePath(".datenportal-integrator/input")))
       return name.matches("(?i).+\\.(csv|xtf)");
+    if (beneath(path, s.runs)
+        && beneath(path, s.runs.resolve("responses"))
+        && name.matches("[0-9a-f-]{36}[.]json")) return true;
     if (beneath(path, s.runs)) return name.matches("(?i).+\\.(html|log|ili|xtf|xml|csv|gradle)");
     if (beneath(path, s.topics)) {
       Path relative = s.topics.toAbsolutePath().normalize().relativize(path);
@@ -127,15 +141,73 @@ final class WorkspaceFiles {
   }
 
   Object read(String value) {
+    return read(value, 0, 6000);
+  }
+
+  Object read(String value, int offset, int limit) {
     Path path = canonical(value);
     if (!readable(path)) throw denied();
+    if (offset < 0 || limit < 1 || limit > 6000)
+      throw new Problem(
+          "invalid_arguments", "offset muss >= 0 und limit zwischen 1 und 6000 liegen.");
     try {
-      if (!Files.isRegularFile(path) || Files.size(path) > MAX_TEXT)
-        throw new Problem("workspace_file_size", "Textdatei fehlt oder ist grösser als 512 KiB.");
-      return Json.map(
-          "path", path.toString(), "content", Files.readString(path), "sha256", Json.sha(path));
+      if (!Files.isRegularFile(path) || Files.size(path) > 32 * 1024 * 1024)
+        throw new Problem("workspace_file_size", "Textdatei fehlt oder ist grösser als 32 MiB.");
+      String text = Files.readString(path);
+      if (offset > text.length())
+        throw new Problem("invalid_arguments", "offset liegt hinter dem Dateiende.");
+      int end = Math.min(text.length(), offset + limit);
+      var result =
+          Json.map(
+              "path",
+              path.toString(),
+              "content",
+              text.substring(offset, end),
+              "sha256",
+              Json.sha(path),
+              "offset",
+              offset,
+              "next_offset",
+              end < text.length() ? end : null,
+              "total_characters",
+              text.length(),
+              "complete",
+              end == text.length());
+      if (path.getFileName().toString().endsWith(".html"))
+        result.put("report_url", path.toUri().toString());
+      return result;
     } catch (java.io.IOException e) {
       throw new Problem("file_missing", "Fachdatei ist nicht lesbar.");
+    }
+  }
+
+  Object openReport(String value) {
+    Path path = canonical(value);
+    if (!readable(path)
+        || !beneath(path, s.runs)
+        || !path.getFileName().toString().endsWith("-review.html")
+        || !Files.isRegularFile(path)) throw denied();
+    try {
+      if (System.getProperty("os.name").startsWith("Mac")) {
+        if (new ProcessBuilder("/usr/bin/open", path.toString()).start().waitFor() != 0)
+          throw new java.io.IOException("Browserstart fehlgeschlagen");
+      } else if (java.awt.Desktop.isDesktopSupported()) {
+        java.awt.Desktop.getDesktop().browse(path.toUri());
+      } else {
+        throw new java.io.IOException("Kein lokaler Browser verfügbar");
+      }
+      return Json.map(
+          "opened", true, "path", path.toString(), "report_url", path.toUri().toString());
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new Problem(
+          "report_open_failed", "Browserstart unterbrochen.", "path", path.toString());
+    } catch (java.io.IOException | UnsupportedOperationException e) {
+      throw new Problem(
+          "report_open_failed",
+          "Bericht über den angegebenen Dateipfad im Browser öffnen.",
+          "path",
+          path.toString());
     }
   }
 

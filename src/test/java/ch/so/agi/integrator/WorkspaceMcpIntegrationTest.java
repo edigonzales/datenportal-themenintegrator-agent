@@ -51,6 +51,22 @@ class WorkspaceMcpIntegrationTest {
               WorkspaceFiles.TOOLS.keySet(),
               new HashSet<>(
                   client.listTools().tools().stream().map(McpSchema.Tool::name).toList()));
+          Path report = settings.runs.resolve("fixture/model-review.html");
+          Json.write(report, "<html>" + "x".repeat(600000) + "</html>");
+          var page =
+              client.callTool(
+                  new McpSchema.CallToolRequest("read_file", Json.map("path", report.toString())));
+          assertFalse(Boolean.TRUE.equals(page.isError()));
+          assertEquals(6000, Json.obj(page.structuredContent()).get("next_offset"));
+          assertTrue(((McpSchema.TextContent) page.content().getFirst()).text().length() < 16000);
+          var nextPage =
+              client.callTool(
+                  new McpSchema.CallToolRequest(
+                      "read_file", Json.map("path", report.toString(), "offset", 6000)));
+          assertEquals(12000, Json.obj(nextPage.structuredContent()).get("next_offset"));
+          Files.delete(report);
+          Files.delete(report.getParent());
+          Files.delete(settings.runs);
           var imported =
               client.callTool(
                   new McpSchema.CallToolRequest(

@@ -46,3 +46,9 @@ Eigenständige Organisationsaufträge verwenden [datenportal-organisation](../da
 ## Zielumgebung und Wiederaufnahme
 
 Vor Zielplan/PR, Lieferung oder Wiederaufnahme [Lieferung und Wiederaufnahme](../../docs/agent/lieferung-und-wiederaufnahme.md) lesen. Vorhandene Vorgänge und externe Läufe fortsetzen; geänderte Prüfstände erneut freigeben lassen.
+
+Prüfberichte dem Menschen mit `datenportal_workspace.open_report(path=...)`
+zeigen und als absoluten Dateilink im Chat anbieten. Grosse MCP-Ergebnisse
+verweisen mit `full_result_path` auf die vollständige Ausgabe; diese bei Bedarf
+über `read_file` und `next_offset` abschnittweise lesen. Keine erneute Prüfung
+zum Lesen auslösen und keine internen OpenCode-Ausgabedateien anfordern.

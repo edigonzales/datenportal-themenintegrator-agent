@@ -1473,3 +1473,28 @@ werden separat im Betriebsordner unter `.datenportal-integrator/setup/` mit dem
 Präfix `model-arguments-` abgelegt. Der echte Vorgang behält seine tatsächlichen
 menschlichen Freigaben; die separat bestätigte Modellidentität lautet
 `SO_Fahrzeugbestand_20261013`, Version `2026-10-13`.
+
+## 2026-10-14 – kompakte MCP-Ergebnisse und sichtbare Prüfberichte
+
+Ursache in OpenCode: JSON-Textantworten enthielten vollständige HTML-Dateien,
+Diffs und wiederholte Diagnostikhistorien. OpenCode kürzte eine lange JSON-Zeile
+auf null sichtbare Zeilen; der Zugriff auf seine ausgelagerte interne Datei war
+für den Fachagenten nicht erlaubt. Der aktive Vorgang hatte zusätzlich den
+unabhängigen Fehler `issue_required` (fehlende Ausgabenbezeichnung).
+
+Die MCP-Darstellung lagert grosse Ergebnisse unverändert in lesbare
+Antwortdateien aus, hält Fehler und kompakte Prüfergebnisse sichtbar und liefert
+mehrzeiligen JSON-Text. `read_file` bietet begrenzte Zeichenabschnitte samt
+`next_offset`, auch für Berichte über 512 KiB. `open_report` öffnet vorhandene
+Prüfberichte im lokalen Browser. Zustandsdateien und fachliche Freigaberegeln
+bleiben unverändert; ausgelagerte Dateien gewähren keinen Zugriff auf Secrets
+oder beliebige JSON-Dateien. Regressionen prüfen grosse Fehlerantworten,
+verlustfreies abschnittweises Lesen, grosse/einzeilige Berichte und Pfadgrenzen.
+
+Lokale Abnahme: 202 Java-Tests und 19 Integrationstests bestanden, darunter
+STDIO-Paginierung eines 600-KiB-Berichts mit den tatsächlichen MCP-Servern.
+Formatprüfung und synthetische Paketinstallation/init/doctor/update bestanden;
+vorhandene lokale Konfiguration blieb beim Update unverändert. Der erste
+Fachintegrationstestlauf verwendete den Betriebsordner ohne gesetzten Paketpfad
+und scheiterte an fehlenden Werkzeug-JARs. Mit dem expliziten Testpaket als
+`DATENPORTAL_AGENT_HOME` bestanden alle 19 Tests ohne Auslassung.

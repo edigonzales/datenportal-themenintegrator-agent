@@ -32,3 +32,9 @@ HTML mit Modell, Task, aktualisiertem Datenblatt, Prüfresultaten und manuellen 
 Eigenständiger Vorgang: `approve(gate=model)` mit angezeigtem Fingerprint und tatsächlicher Aussage, dann nur beauftragte lokale Übernahme oder fachlichen PR vorbereiten. Vor Zielplan/PR oder Wiederaufnahme [Lieferung und Wiederaufnahme](../../docs/agent/lieferung-und-wiederaufnahme.md) lesen. Keine Datenlieferung starten.
 
 Beim Themenvorgang den gemeinsamen Review und die beauftragte Fortsetzung dem Hauptablauf überlassen; eine separate Modellprüfung ersetzt keine Metadatenfreigabe.
+
+Prüfberichte dem Menschen mit `datenportal_workspace.open_report(path=...)`
+zeigen und als absoluten Dateilink im Chat anbieten. Grosse MCP-Ergebnisse
+verweisen mit `full_result_path` auf die vollständige Ausgabe; diese bei Bedarf
+über `read_file` und `next_offset` abschnittweise lesen. Keine erneute Prüfung
+zum Lesen auslösen und keine internen OpenCode-Ausgabedateien anfordern.
