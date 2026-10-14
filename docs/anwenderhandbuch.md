@@ -733,3 +733,19 @@ bei identischem Prüfinhalt kontrolliert überführen; alte Freigaben und ihre
 menschlichen Aussagen bleiben im Audit erhalten. Das alte Paket bis zum
 abgeschlossenen Update behalten. Geänderte Regeln oder nicht belegbare Altstände
 werden nicht automatisch freigegeben.
+
+### Themenrepository nach einem PR-Merge aktualisieren
+
+Nach dem menschlichen Merge synchronisiert der Integrator beim Fortsetzen vor
+neuen externen Starts das konfigurierte Themenrepository. Für einen Abschluss ohne
+Publikation steht derselbe Schritt separat bereit:
+
+```sh
+./bin/datenportal-agent call sync_repository --json '{"run_id":"VORGANGS_ID","environment":"local"}'
+```
+
+Das Profil muss dem vorbereiteten PR entsprechen. Dieser Aufruf startet weder
+Jenkins noch einen Upload. `status` bleibt lesend und zeigt unter `repository_sync`
+den Abschluss oder einen Blockierungsgrund. Ein Merge auf GitHub allein verändert
+den lokalen Checkout weiterhin nicht. Details zu Konflikten und Wiederaufnahme:
+[Lieferung und Wiederaufnahme](agent/lieferung-und-wiederaufnahme.md#lokales-repository-nach-merge-synchronisieren).

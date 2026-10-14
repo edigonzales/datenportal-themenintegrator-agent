@@ -25,3 +25,10 @@ zeigen und als absoluten Dateilink im Chat anbieten. Grosse MCP-Ergebnisse
 verweisen mit `full_result_path` auf die vollständige Ausgabe; diese bei Bedarf
 über `read_file` und `next_offset` abschnittweise lesen. Keine erneute Prüfung
 zum Lesen auslösen und keine internen OpenCode-Ausgabedateien anfordern.
+
+Nach menschlichem PR-Merge beim Fortsetzen `sync_repository(run_id, environment)`
+aufrufen, auch für einen Abschluss ohne Veröffentlichung. Der Aufruf prüft Merge
+und Zielbytes und synchronisiert das lokale Themenrepository. `status` bleibt
+lesend. Bei `repository_sync` mit Phase `blocked` die Betreiberdiagnose zeigen und
+keine neue Veröffentlichung starten; keine lokalen Änderungen mit Reset/Clean
+verwerfen. Unterbrochene Synchronisierung mit demselben Vorgang wiederaufnehmen.

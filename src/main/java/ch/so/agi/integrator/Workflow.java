@@ -103,6 +103,8 @@ public final class Workflow implements AutoCloseable {
               case "apply_local_changes" -> apply(r);
               case "publication_plan" ->
                   new Deliveries(this).plan(r, Json.required(args, "environment"));
+              case "sync_repository" ->
+                  new Repository(this).sync(r, Json.required(args, "environment"));
               case "prepare_pr" ->
                   new Repository(this).prepare(r, Json.required(args, "environment"));
               case "deliver" ->
@@ -917,6 +919,13 @@ public final class Workflow implements AutoCloseable {
   }
 
   private Object apply(Map<String, Object> r) {
+    try (var lock = RepositorySync.lock(this)) {
+      RepositorySync.requireNoPending(this);
+      return applyLocked(r);
+    }
+  }
+
+  private Object applyLocked(Map<String, Object> r) {
     require(r, primaryGate(r));
     if (r.containsKey("model") && primaryGate(r).equals("metadata")) require(r, "model");
     var changes = Json.obj(r.get("changes"));

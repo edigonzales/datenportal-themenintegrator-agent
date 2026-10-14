@@ -1570,3 +1570,23 @@ Veröffentlichung und Aktualisierung des tatsächlichen Betriebsordners stehen
 zum Zeitpunkt dieses Eintrags noch aus; diese Prüfung löst keine erneute
 Publikation aus. Die inzwischen separat freigegebene lokale mfk-Publikation
 (Build 4) bleibt vom Update unberührt.
+
+## Lokale Repository-Synchronisierung nach PR-Merge (2026-10-14)
+
+Implementiert: `sync_repository(run_id, environment)` sowie Synchronisierung vor
+neuen Seed-/Lieferungsstarts mit PR; lesender Status mit `repository_sync`.
+Repositoryweite Sperre, dauerhaftes Wiederaufnahmejournal, gezielte Rücksicherung
+und Fast-forward ohne pauschales Reset, Clean oder Stash.
+
+**Automatisierte, isolierte Prüfung:** temporäre Git-Repositories und synthetische
+GitHub-/Jenkins-Antworten. Geprüft werden normaler Merge, Squash und Rebase,
+Übernahmenachweise, neue Dateien, fremde staged/unstaged/untracked Änderungen,
+Konflikte, abweichender Branch/HEAD, veränderte Zielbytes, Fehler-Rücksicherung,
+Prozessabbrüche vor/nach Fast-forward, Wiederholung, Sperren, blockierte neue
+externe Starts und weiter mögliche Abfrage bestehender Seeds. Hinzu kommen
+ignorierte Pfadkollisionen, versteckte Indexänderungen, ungewöhnliche Dateinamen
+und leere Dateien. Diese Tests stellen keine realen fachlichen Freigaben dar.
+
+**Noch offen:** Abnahme mit einem realen, menschlich gemergten PR im installierten
+Betriebspaket. Im Rahmen der Implementierung wurden keine realen Vorgänge
+synchronisiert, keine PRs gemergt und keine Checkouts gelöscht.

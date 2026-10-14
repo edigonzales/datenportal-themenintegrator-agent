@@ -78,3 +78,12 @@ Paket übereinstimmen. Es werden keine fehlenden oder veralteten Freigaben erzeu
 Aussage und Zeitpunkt der menschlichen Freigabe sowie historische Fingerprints
 bleiben protokolliert. Der Updatebericht nennt nicht überführbare Vorgänge;
 fehlende Belege oder geänderte Regeln erfordern eine neue Prüfung/Freigabe.
+
+## Nach dem PR-Merge
+
+Mit `sync_repository(run_id, environment)` den Merge prüfen und das konfigurierte
+Themenrepository synchronisieren; auch beim Abschluss ohne weitere Lieferung.
+Vor neuen Seed-/Lieferungsstarts mit vorhandenem PR erfolgt dies automatisch.
+`status` bleibt lesend und zeigt `repository_sync`. Bei Konflikten stoppt die
+Fortsetzung; lokale Änderungen nicht pauschal verwerfen. Einen unterbrochenen
+Aufruf mit derselben Vorgangs-ID wiederaufnehmen und das Journal erhalten.

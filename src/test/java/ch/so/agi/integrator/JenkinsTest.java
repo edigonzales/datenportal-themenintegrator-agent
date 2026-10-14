@@ -131,6 +131,31 @@ class JenkinsTest {
   }
 
   @Test
+  void existingSeedRemainsQueryableWithBlockedRepositorySync() throws Exception {
+    var f = workflow();
+    String id = f.topic(false, "Jahr\n2025\n");
+    f.workflow.store.edit(
+        id,
+        r -> {
+          r.put("repository_sync", Json.map("phase", "blocked"));
+          r.put(
+              "seeds",
+              Json.map(
+                  "local",
+                  Json.map(
+                      "phase",
+                      "seeding",
+                      "seed",
+                      Json.map("queue_url", base + "/jenkins/queue/item/seed/"))));
+          return null;
+        });
+    assertEquals("complete", f.call("seed", "run_id", id, "environment", "local").get("phase"));
+    assertEquals(0, uploads);
+    assertEquals(
+        "blocked", Json.obj(f.call("status", "run_id", id).get("repository_sync")).get("phase"));
+  }
+
+  @Test
   void PasswordAuthenticationKeepsTheCrumbSessionCookie() {
     requireSessionCookie = true;
     Path data = temp.resolve("synthetic.csv");

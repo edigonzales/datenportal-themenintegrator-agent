@@ -47,3 +47,20 @@ Vor PR-Erstellung wird die Zielidentität gespeichert. Nach einer unklaren Antwo
 Schema 3 beginnt neue Vorgänge. Schema 2 wird unverändert zurückgewiesen; Altvorgänge mit der alten Runtime abschliessen, insbesondere unklare Uploads dort aufklären. Keine automatische Konfigurations-, Freigabe- oder Vorgangsmigration. Alte Container und Volumes werden nicht automatisch gelöscht.
 
 Die alten Befehle setup-java, setup-tools, setup-mcps, setup-gretl und runtime-up melden, dass vollständiges Paket und init zu verwenden sind. Docker-Launcheroptionen werden zurückgewiesen. Das Integrator-Image und seine Pipeline entfallen; Docker bleibt ausschliesslich beim vorhandenen Publikationsstack und dessen optionalen Tests.
+
+### Repository-Synchronisierung
+
+`sync_repository(run_id, environment)` verwendet dieselbe Merge-/Byteprüfung wie
+die Lieferfortsetzung, aber ohne Jenkins. `RepositorySync` sperrt das gemeinsame
+Git-Verzeichnis auch gegenüber `apply_local_changes`. Es speichert vor Eingriffen
+ein atomisches Journal `datenportal-sync.json` mit Checkout-Identität, altem HEAD,
+Zielcommit, Indexeinträgen und Dateisicherungen. Nur belegte, ungestagte
+Vorgangsänderungen werden für ein Fast-forward gezielt zurückgeführt; fremde
+Änderungen werden vor und nach dem Update inklusive Indexzustand verglichen.
+Fehler vor dem Fast-forward werden bei unverändertem Zwischenstand zurückgesichert.
+Nach Prozessabbruch bleiben Journal und Sicherungen zur Wiederaufnahme erhalten.
+Keine automatische Rücksetzung eines bereits aktualisierten Branches.
+
+`repository_sync` ist eine optionale Erweiterung von Schema 3. Bestehende Vorgänge
+bleiben lesbar; ohne `applied.hashes` erfolgt keine Bereinigung lokaler Änderungen.
+Neue PR-Datensätze binden zusätzlich Quellcheckout, Repository und Zielbranch.

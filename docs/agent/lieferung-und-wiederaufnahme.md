@@ -9,3 +9,26 @@ Vor einer beauftragten Lieferung, einem Zielplan/PR oder bei Wiederaufnahme lese
 Bei `submission_unknown` zuerst den vorhandenen Lauf anhand Vorgangskennung und Parametern aufklären; `reconcile`/`reconcile_seed` ordnen zu. Bis zur eindeutigen Zuordnung keine weiteren `deliver`-/`seed`-Aufrufe und kein `retry_delivery`. Fehlen Job-/Queue-Kennung oder andere Zuordnungsbelege, gezielt danach fragen und stoppen. Niemals blind erneut hochladen. `publication=accepted` mit Reload-/RDF-/Downloadfehler ist eine erfolgte Publikation: getrennt reparieren und mit `verify_delivery` erneut prüfen. Ohne Bericht kein sicherer Retry. `retry_delivery` nur bei eindeutig fehlgeschlagener, nicht publizierter Lieferung.
 
 Bei Schnittstellen- oder Runtime-Grenzen konkrete Betreiberhandlung erklären; keine Komponentenänderung als Umgehung vornehmen. Tests und Abnahme immer als tatsächlich, simuliert oder offen kennzeichnen; Testfreigaben dürfen keine reale Lieferung autorisieren.
+
+## Lokales Repository nach Merge synchronisieren
+
+Nach menschlichem Merge `sync_repository(run_id, environment)` aufrufen, auch wenn
+keine weitere Veröffentlichung vorgesehen ist. Der Aufruf prüft den Merge und die
+freigegebenen Zielbytes und aktualisiert ausschliesslich das konfigurierte
+`topics_repo` per Fast-forward. Er benötigt keine Jenkins-Verbindung und startet
+keine Lieferung. `status` zeigt `repository_sync`, löst selbst aber kein Update aus.
+Vor neuen Seed-/Lieferungsstarts mit vorhandenem PR erfolgt dieselbe Prüfung und
+Synchronisierung automatisch. Bereits gestartete externe Läufe bleiben abfragbar.
+
+Nachweislich mit `apply_local_changes` übernommene Vorgangsdateien werden gezielt
+bereinigt. Andere lokale Änderungen und deren Staging-Zustand bleiben erhalten,
+sofern sie das Update nicht überschneiden. Fehlende Übernahmenachweise, eigene
+Staging-Änderungen, abweichende Dateien, falscher Branch oder divergierende lokale
+Commits blockieren die Fortsetzung. Nicht mit Reset, Clean, Stash oder erneuter
+Lieferung umgehen: betroffene Pfade und Git-Zustand durch den Betreiber klären.
+
+Eine unterbrochene Synchronisierung mit demselben Vorgang und Profil erneut
+aufrufen. Das Repository-Journal und seine Sicherungen erhalten; bei unbekannten
+zwischenzeitlichen Änderungen erfolgt keine automatische Überschreibung. Ein
+anderer Vorgang kann während einer offenen Synchronisierung keine lokalen
+Änderungen übernehmen. Es werden weder alte Checkouts noch PR-Arbeitskopien gelöscht.

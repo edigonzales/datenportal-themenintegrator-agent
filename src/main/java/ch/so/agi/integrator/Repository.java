@@ -80,7 +80,20 @@ public final class Repository {
     w.process.checked(add, clone, w.settings.timeout);
     command(clone, "git", "diff", "--cached", "--check");
     if (command(clone, "git", "diff", "--cached", "--name-only").isBlank()) {
-      var result = Json.map("required", false, "reason", "already_on_target");
+      var result =
+          Json.map(
+              "required",
+              false,
+              "reason",
+              "already_on_target",
+              "owner",
+              repo.owner(),
+              "repository",
+              repo.name(),
+              "base",
+              base,
+              "source_checkout",
+              w.settings.topics.toString());
       run.put("pull_request", result);
       return result;
     }
@@ -112,6 +125,8 @@ public final class Repository {
             head,
             "branch",
             branch,
+            "source_checkout",
+            w.settings.topics.toString(),
             "checkout",
             clone.toString(),
             "base",
@@ -130,6 +145,12 @@ public final class Repository {
             head,
             "branch",
             branch,
+            "source_checkout",
+            w.settings.topics.toString(),
+            "owner",
+            repo.owner(),
+            "repository",
+            repo.name(),
             "checkout",
             clone.toString(),
             "base",
@@ -157,9 +178,9 @@ public final class Repository {
     return result;
   }
 
-  public void requireMerged(Map<String, Object> r, Map<String, Object> env) {
+  public String requireMerged(Map<String, Object> r, Map<String, Object> env) {
     var changes = Json.obj(r.get("changes"));
-    if (changes.isEmpty()) return;
+    if (changes.isEmpty()) return null;
     var pr = Json.obj(r.get("pull_request"));
     if (pr.isEmpty())
       throw new Problem(
@@ -168,9 +189,23 @@ public final class Repository {
     String branch = Json.str(env, "git_branch", "main"),
         remote = Json.str(env, "git_remote", "origin");
     Path clone = w.settings.topics;
+    if (pr.containsKey("source_checkout")
+        && !Path.of(Json.required(pr, "source_checkout"))
+            .toAbsolutePath()
+            .normalize()
+            .equals(clone.toAbsolutePath().normalize()))
+      throw new Problem(
+          "repository_sync_conflict",
+          "Konfigurierter Checkout wurde seit der PR-Vorbereitung geändert.");
+    if (pr.containsKey("base") && !branch.equals(pr.get("base")))
+      throw new Problem(
+          "repository_sync_conflict", "Zielbranch wurde seit der PR-Vorbereitung geändert.");
+    if (pr.containsKey("owner")
+        && !new GitHub.Repo(Json.required(pr, "owner"), Json.required(pr, "repository"))
+            .equals(GitHub.repository(command(clone, "git", "remote", "get-url", remote))))
+      throw new Problem(
+          "repository_sync_conflict", "Repository wurde seit der PR-Vorbereitung geändert.");
     if (Json.bool(pr, "required", false)) {
-      clone = Path.of(Json.required(pr, "checkout"));
-      remote = "origin";
       if (github == null) github = w.github.get();
       var uri = java.net.URI.create(Json.required(pr, "url"));
       var parts = uri.getPath().split("/");
@@ -180,6 +215,9 @@ public final class Repository {
           || !"pull".equals(parts[3]))
         throw new Problem("github_pr_invalid", "Gespeicherte PR-Adresse ist ungültig.");
       var repo = GitHub.repository("https://github.com/" + parts[1] + "/" + parts[2]);
+      if (!repo.equals(GitHub.repository(command(clone, "git", "remote", "get-url", remote))))
+        throw new Problem(
+            "repository_sync_conflict", "Konfiguriertes Repository entspricht nicht dem PR.");
       var status = github.get(repo, Long.parseLong(parts[4]));
       if (!Json.bool(status, "merged", false)
           || !Objects.equals(Json.obj(status.get("base")).get("ref"), branch))
@@ -191,15 +229,12 @@ public final class Repository {
       if (!Objects.equals(Json.obj(status.get("head")).get("sha"), pr.get("head")))
         throw new Problem("pr_changed", "PR wurde seit der Freigabe verändert.");
     }
-    command(clone, "git", "fetch", remote, branch);
+    command(clone, "git", "fetch", remote, "refs/heads/" + branch);
+    String target = command(clone, "git", "rev-parse", "FETCH_HEAD^{commit}");
     for (String rel : changes.keySet()) {
       Path out = w.directory(r).resolve("merged-content.tmp");
       var result =
-          w.process.run(
-              List.of("git", "show", remote + "/" + branch + ":" + rel),
-              clone,
-              w.settings.timeout,
-              out);
+          w.process.run(List.of("git", "show", target + ":" + rel), clone, w.settings.timeout, out);
       if (result.exitCode() != 0
           || !Objects.equals(Json.sha(out), Json.obj(changes.get(rel)).get("sha256")))
         throw new Problem(
@@ -208,5 +243,10 @@ public final class Repository {
             "path",
             rel);
     }
+    return target;
+  }
+
+  public Object sync(Map<String, Object> run, String environment) {
+    return new RepositorySync(w).sync(run, w.settings.environment(environment));
   }
 }

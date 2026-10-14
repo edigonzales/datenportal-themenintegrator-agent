@@ -34,6 +34,7 @@ public final class Deliveries {
     // Resolve credentials before any stack changes or new external submission.
     var credentials = w.credentials.apply(name, env);
     if (Json.str(env, "kind", "").equals("local")) {
+      if (r.containsKey("pull_request")) new RepositorySync(w).sync(r, env);
       for (String rel : Json.obj(r.get("changes")).keySet()) {
         Path p = Json.inside(w.settings.topics, rel);
         if (!Files.isRegularFile(p)
@@ -51,7 +52,7 @@ public final class Deliveries {
       if (publication) stack.bootstrap(env, credentials);
     } else {
       w.require(r, "publish:" + name);
-      new Repository(w).requireMerged(r, env);
+      new RepositorySync(w).sync(r, env);
       target(r, name, env);
     }
   }
@@ -184,8 +185,10 @@ public final class Deliveries {
       approved(r);
       if (!Json.str(env, "kind", "").equals("local")) {
         w.require(r, "publish:" + name);
-        new Repository(w).requireMerged(r, env);
+        new RepositorySync(w).sync(r, env);
         target(r, name, env);
+      } else if (r.containsKey("pull_request")) {
+        new RepositorySync(w).sync(r, env);
       }
       Path metadata = w.store.file(r, "metadata"), data = w.store.file(r, "data");
       if (data != null && metadata == null) {

@@ -60,3 +60,10 @@ Nach einer Änderung `analyze`, `validate` und bei vorhandenem Modell
 `validate_model(scope=integration)` ausführen und die neuen Berichte zeigen.
 Identische Werte verändern keine Prüfstände; vorherige Prüfungen/Freigaben
 bleiben bei Änderungen in der Historie, sind aber nicht mehr gültig.
+
+Nach menschlichem PR-Merge beim Fortsetzen `sync_repository(run_id, environment)`
+aufrufen, auch für einen Abschluss ohne Veröffentlichung. Der Aufruf prüft Merge
+und Zielbytes und synchronisiert das lokale Themenrepository. `status` bleibt
+lesend. Bei `repository_sync` mit Phase `blocked` die Betreiberdiagnose zeigen und
+keine neue Veröffentlichung starten; keine lokalen Änderungen mit Reset/Clean
+verwerfen. Unterbrochene Synchronisierung mit demselben Vorgang wiederaufnehmen.

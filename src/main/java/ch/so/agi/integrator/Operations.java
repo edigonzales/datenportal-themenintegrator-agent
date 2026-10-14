@@ -95,6 +95,11 @@ public final class Operations {
         "run_id!",
         "environment!");
     add(
+        "sync_repository",
+        "Merge prüfen und lokales Themenrepository ohne Veröffentlichung synchronisieren.",
+        "run_id!",
+        "environment!");
+    add(
         "prepare_pr",
         "Isolierten fachlichen PR vorbereiten. Merge erfolgt durch einen Menschen.",
         "run_id!",

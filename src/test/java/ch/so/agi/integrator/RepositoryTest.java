@@ -6,12 +6,15 @@ import java.nio.file.*;
 import java.util.*;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class RepositoryTest {
   @TempDir Path temp;
 
-  @Test
-  void isolatedPrExactMergeAndConflicts() throws Exception {
+  @ParameterizedTest
+  @ValueSource(strings = {"merge", "squash", "rebase"})
+  void isolatedPrExactMergeAndConflicts(String mode) throws Exception {
     var system = new ProcessRunner();
     String[] state = {"OPEN"}, head = {""};
     ProcessRunner process =
@@ -151,22 +154,51 @@ class RepositoryTest {
           return null;
         });
     system.checked(List.of("git", "switch", "main"), clone, 60);
-    system.checked(
-        List.of(
-            "git",
-            "merge",
-            "--no-ff",
-            Json.required(result, "branch"),
-            "-m",
-            "Synthetic human merge fixture"),
-        clone,
-        60);
+    if (mode.equals("merge")) {
+      system.checked(
+          List.of(
+              "git",
+              "merge",
+              "--no-ff",
+              Json.required(result, "branch"),
+              "-m",
+              "Synthetic human merge fixture"),
+          clone,
+          60);
+    } else if (mode.equals("squash")) {
+      system.checked(
+          List.of("git", "merge", "--squash", Json.required(result, "branch")), clone, 60);
+      system.checked(List.of("git", "commit", "-m", "Synthetic squash fixture"), clone, 60);
+    } else {
+      Json.write(clone.resolve("unrelated.txt"), "synthetic target advancement\n");
+      system.checked(List.of("git", "add", "unrelated.txt"), clone, 60);
+      system.checked(List.of("git", "commit", "-m", "Synthetic target advancement"), clone, 60);
+      system.checked(List.of("git", "cherry-pick", head[0]), clone, 60);
+    }
     system.checked(List.of("git", "push", "origin", "main"), clone, 60);
     state[0] = "MERGED";
+    f.workflow.credentials =
+        (name, ignored) -> new Credentials.Value("synthetic", "synthetic", "fixture");
+    f.workflow.jenkins =
+        (name, ignored) -> {
+          throw new AssertionError("No external start before sync");
+        };
+    system.checked(List.of("git", "switch", "-c", "human-branch"), f.repo, 60);
+    assertEquals(
+        "repository_sync_conflict",
+        assertThrows(Problem.class, () -> f.call("seed", "run_id", id, "environment", "int")).code);
+    assertEquals(
+        "repository_sync_conflict",
+        assertThrows(Problem.class, () -> f.call("deliver", "run_id", id, "environment", "int"))
+            .code);
+    system.checked(List.of("git", "switch", "main"), f.repo, 60);
+    f.call("sync_repository", "run_id", id, "environment", "int");
     f.workflow.store.edit(
         id,
         r -> {
-          new Repository(f.workflow).requireMerged(r, env);
+          new RepositorySync(f.workflow).sync(r, env);
+          assertEquals(Json.sha(candidate), Json.sha(f.repo.resolve(rel)));
+          assertTrue(system.checked(List.of("git", "status", "--porcelain"), f.repo, 60).isBlank());
           return null;
         });
     head[0] = "changed-head";
