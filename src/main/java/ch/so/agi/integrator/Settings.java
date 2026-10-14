@@ -252,10 +252,14 @@ public final class Settings {
   }
 
   public String fingerprint() {
+    return ReviewPolicy.fingerprint(this, AgentResources.resolve(root, ""));
+  }
+
+  String legacyFingerprint(Path home) {
+
     var files = Json.map();
     files.put("runtime", "java21");
-    for (var directory :
-        List.of(AgentResources.resolve(root, "config"), AgentResources.resolve(root, "validation")))
+    for (var directory : List.of(home.resolve("config"), home.resolve("validation")))
       try (var paths = Files.list(directory)) {
         paths
             .filter(Files::isRegularFile)
@@ -266,10 +270,16 @@ public final class Settings {
         throw new Problem("configuration_missing", "Regeln oder Validierungsdateien fehlen.");
       }
     for (String service : List.of("datasheet", "interlis")) {
-      Path jar = JavaRuntime.mcp(this, service);
+      Path jar =
+          home.resolve(
+              "lib/" + (service.equals("datasheet") ? "datasheet-mcp" : "interlis-mcp") + ".jar");
       if (Files.isRegularFile(jar)) files.put(service + "_jar", Json.sha(jar));
     }
-    for (String directory : modelDirectories())
+    var directories = new ArrayList<String>();
+    if (Files.isDirectory(home.resolve("models")))
+      directories.add(home.resolve("models").toString());
+    directories.addAll(strings("model_dirs", List.of()));
+    for (String directory : directories)
       if (!directory.startsWith("https://"))
         try (var paths = Files.list(path(directory))) {
           paths
@@ -283,7 +293,7 @@ public final class Settings {
     for (String part : strings("validator_command", List.of()))
       if (part.endsWith(".jar") && Files.isRegularFile(path(part)))
         files.put(part, Json.sha(path(part)));
-    Path own = AgentResources.jar(root);
+    Path own = home.resolve("lib/datenportal-integrator.jar");
     if (Files.isRegularFile(own)) files.put("integrator_jar", Json.sha(own));
     return Json.digest(Json.map("settings", values, "dependencies", files));
   }

@@ -62,3 +62,19 @@ Die drei Skills führen durch Themenintegration, eigenständige Modellierung und
 Lokale CSV-Konverter sind fachliche Java-Arbeitsprodukte. Sie werden durch den Integrator mit JDK 21 kompiliert und getestet; keine Integrator-Quellen bearbeiten. CSV-/Modell-/Metadatenänderungen prüfen und nur tatsächliche menschliche Freigaben protokollieren.
 
 Bei bestehenden Modellvorgängen ersetzt `validate_model` einen unveränderten alten Integrator-Taskblock durch diese Konfiguration als Kandidat. Modell und Datenblatt bleiben unverändert. Anschliessend die vollständigen Prüfberichte aktualisieren und den geänderten Stand freigeben lassen; es erfolgt keine automatische Übernahme oder Lieferung.
+
+## Freigaben bei Paketupdates
+
+Freigaben beziehen sich auf die fachlichen Dateien und den Inhalt der Prüfregeln,
+Modelle und Validatoren. Paketversion, Installationspfad, JAR-Zeitstempel,
+Integrator-Oberfläche, Beispieldokumentation und Timeouts entwerten sie nicht.
+Änderungen an Daten, Modell, Metadaten, Prüfregeln oder Validator-Inhalten erfordern
+weiterhin die passende erneute Prüfung und menschliche Freigabe.
+
+`workspace update` überführt bisher aktuelle Freigaben aus Version 0.2.20 einmalig
+auf das inhaltsbasierte Format. Dafür muss das bisherige Paket noch vorhanden
+sein, sein alter Fingerprint zum Vorgang passen und sein Prüfinhalt mit dem neuen
+Paket übereinstimmen. Es werden keine fehlenden oder veralteten Freigaben erzeugt.
+Aussage und Zeitpunkt der menschlichen Freigabe sowie historische Fingerprints
+bleiben protokolliert. Der Updatebericht nennt nicht überführbare Vorgänge;
+fehlende Belege oder geänderte Regeln erfordern eine neue Prüfung/Freigabe.

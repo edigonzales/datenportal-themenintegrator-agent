@@ -142,13 +142,13 @@ class ExternalTest {
   }
 
   @Test
-  void changedRuntimeSettingsInvalidateApproval() throws Exception {
+  void changedTimeoutKeepsApproval() throws Exception {
     var f = new Fixtures(temp);
     String id = f.metadataOnly();
     f.approveAll(id);
     f.settings.values.put("timeout_seconds", 301);
     assertEquals(
-        false, Json.obj(f.call("status", "run_id", id).get("current_approvals")).get("metadata"));
+        true, Json.obj(f.call("status", "run_id", id).get("current_approvals")).get("metadata"));
   }
 
   @Test

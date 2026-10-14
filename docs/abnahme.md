@@ -1547,3 +1547,26 @@ abschliessende vollständige Integrationstestlauf war erfolgreich.
 Der tatsächliche mfk-Lauf (Build 3, Queue 590) wurde nur abgefragt und als
 fehlgeschlagen/nicht publiziert erfasst. Eine erneute fachliche Lieferung sowie
 Portal-/Download-Abnahme nach der Korrektur bleiben bis zur neuen Freigabe offen.
+
+## 2026-10-14: Paketpfadunabhängige Freigaben
+
+Freigabefingerprints verwenden logische Ressourcenpfade und Inhalte der
+Prüfregeln, Modelle und Validatoren. Paketpfad, Integrator-JAR und technische
+Laufzeiteinstellungen sind keine fachlichen Prüfeingaben. Änderungen an der
+Prüfsemantik erfordern eine neue Revision in `validation/review-policy.json`.
+
+Tatsächlich geprüft: 213 Java-Tests und Formatprüfung bestanden; 19
+Integrationstests mit den konfigurierten Werkzeugen bestanden. Paketinstallation,
+init, doctor, beide MCPs und Update mit Konfigurationserhalt bestanden.
+Eine isolierte Speicherkopie des bestehenden mfk-Vorgangs wurde vom bekannten
+Format aus Paket 0.2.20 überführt: acht Fingerprint-Felder wurden ersetzt,
+alle drei Freigaben und die abgeschlossene Lieferung blieben aktuell.
+Die Migration erzeugt keine Freigaben, erhält Aussagen/Zeitpunkte und
+protokolliert die bisherigen Freigaben. Veränderte Fachinhalte oder Prüfregeln
+werden nicht durch die Migration freigegeben. Folgeupdates benötigen nach
+vollständiger Migration kein altes Paket mehr.
+
+Veröffentlichung und Aktualisierung des tatsächlichen Betriebsordners stehen
+zum Zeitpunkt dieses Eintrags noch aus; diese Prüfung löst keine erneute
+Publikation aus. Die inzwischen separat freigegebene lokale mfk-Publikation
+(Build 4) bleibt vom Update unberührt.

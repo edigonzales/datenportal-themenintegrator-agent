@@ -36,6 +36,8 @@ public final class Store {
     String id = UUID.randomUUID().toString().replace("-", "");
     var data =
         Json.map(
+            "fingerprint_version",
+            2,
             "schema_version",
             VERSION,
             "workflow",

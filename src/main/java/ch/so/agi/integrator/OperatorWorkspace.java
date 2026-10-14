@@ -29,6 +29,8 @@ final class OperatorWorkspace {
       throw new Problem("invalid_arguments", "workspace install|update <absoluter Zielordner>");
     Path target = Path.of(args.get(1));
     if (!target.isAbsolute()) throw new Problem("unsafe_path", "Absoluten Zielordner angeben.");
+    Path previousHome =
+        args.getFirst().equals("update") ? ApprovalMigration.previousHome(target) : null;
     var result =
         install(bundle(Path.of("").toAbsolutePath()), target, args.getFirst().equals("update"));
     if (AgentResources.installed()) {
@@ -46,7 +48,13 @@ final class OperatorWorkspace {
       Json.obj(manifest.get("managed_files")).put("bin/datenportal-agent", Json.sha(launcher));
       manifest.put("package_sha256", Json.digest(manifest.get("managed_files")));
       result.put("package_sha256", manifest.get("package_sha256"));
+      manifest.put("package_home", AgentResources.resolve(target, "").toString());
+      if (previousHome != null) manifest.put("legacy_package_home", previousHome.toString());
       Json.atomic(target.resolve(MANIFEST), manifest);
+      if (previousHome != null)
+        result.put(
+            "approval_migration",
+            ApprovalMigration.update(target, previousHome, AgentResources.resolve(target, "")));
     }
     return result;
   }

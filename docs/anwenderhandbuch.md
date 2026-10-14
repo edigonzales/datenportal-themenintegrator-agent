@@ -723,3 +723,13 @@ Eine unbestätigte letzte Änderung blockiert weitere Bearbeitung mit `metadata_
 | `unsupported_state_version` | Nicht unterstützten Altstand erhalten und bestehende externe Läufe klären; keine automatische Übernahme. |
 
 `retry_delivery` ist nur für eindeutig fehlgeschlagene, nicht publizierte Versuche vorgesehen. Bei unklarer Publikation wird es abgewiesen. Freigaben sichern den Arbeitsablauf ab; sie sind keine unabhängige menschliche Authentisierung gegenüber einem Agenten mit vollständigem Dateizugriff.
+
+### Freigaben und Paketupdates
+
+Freigaben sind an fachliche Inhalte und relevante Prüfregeln gebunden, nicht an
+Paketpfad oder Integrator-JAR. Ein unveränderter Prüfstand bleibt bei einem
+Paketupdate gültig. `workspace update` kann noch aktuelle Fingerprints aus 0.2.20
+bei identischem Prüfinhalt kontrolliert überführen; alte Freigaben und ihre
+menschlichen Aussagen bleiben im Audit erhalten. Das alte Paket bis zum
+abgeschlossenen Update behalten. Geänderte Regeln oder nicht belegbare Altstände
+werden nicht automatisch freigegeben.

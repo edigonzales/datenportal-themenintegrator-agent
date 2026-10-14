@@ -31,3 +31,13 @@ bash bin/package-smoke build/java-distribution
 ```
 
 [Entwicklerhandbuch](docs/entwicklerhandbuch.md), [Abnahmenachweise](docs/abnahme.md).
+
+### Review compatibility
+
+`validation/review-policy.json` versions the integrator's validation semantics.
+Increment its revision when a code change alters CSV/model/metadata validation,
+contract interpretation or approval safety rules. Do not increment it for UI,
+packaging, logging or installation-path changes. Review fingerprints include
+this policy, validation resources, models and executable validator contents;
+they deliberately exclude the integrator JAR and ZIP packaging metadata.
+Changes to external validator code are detected through their content hashes.

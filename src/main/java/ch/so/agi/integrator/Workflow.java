@@ -222,6 +222,11 @@ public final class Workflow implements AutoCloseable {
   }
 
   public String fingerprint(Map<String, Object> r, String gate) {
+    return fingerprint(r, gate, settings.fingerprint());
+  }
+
+  String fingerprint(Map<String, Object> r, String gate, String policy) {
+
     var context = Json.map();
     Path shared = settings.topics.resolve("shared");
     if (Files.isDirectory(shared))
@@ -301,7 +306,7 @@ public final class Workflow implements AutoCloseable {
             "files",
             files,
             "settings",
-            settings.fingerprint(),
+            policy,
             "context",
             context,
             "offices",
