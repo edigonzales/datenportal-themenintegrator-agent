@@ -106,7 +106,7 @@ class RepositoryDatasheetsTest {
           return null;
         });
     Json.write(source, xml + "\n");
-    f.error("metadata_source_conflict", () -> f.call("repository_datasheet", "run_id", id));
+    f.error("metadata_source_active", () -> f.call("repository_datasheet", "run_id", id));
   }
 
   @Test

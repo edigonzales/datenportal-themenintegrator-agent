@@ -100,3 +100,7 @@ und Zielbytes und synchronisiert das lokale Themenrepository. `status` bleibt
 lesend. Bei `repository_sync` mit Phase `blocked` die Betreiberdiagnose zeigen und
 keine neue Veröffentlichung starten; keine lokalen Änderungen mit Reset/Clean
 verwerfen. Unterbrochene Synchronisierung mit demselben Vorgang wiederaufnehmen.
+
+## Verbindlicher Metadaten-Kandidat
+
+XLSX dient zur Erstellung des Datenblatts; das Modell verwendet die aktuelle exportierte XTF plus CSV-Beobachtungen und bestätigte Fachregeln. `metadata(export_xtf)` verwaltet den Repository-Zielpfad und genau einen Kandidaten automatisch. Gewünschte Dateinamen über `arguments.repository_filename` angeben, kein manuelles `stage_change` für diese XTF. Erst nach fachlicher Freigabe mit `apply_local_changes` übernehmen. Aktive Quelle und nächsten Schritt aus `status.metadata_source` lesen; keine Repository-Suche oder erneutes Anhängen des Exports. Bei identischem Fehler ohne Zustandsänderung Diagnose als Blocker melden, keine Pfadvarianten oder Diagnose-Kopien anlegen.

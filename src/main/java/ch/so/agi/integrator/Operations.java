@@ -34,13 +34,13 @@ public final class Operations {
         "human_statement!");
     add(
         "attach",
-        "Neue Datei aufnehmen und abhängige Freigaben entwerten.",
+        "Neue Datei aufnehmen und abhängige Freigaben entwerten. Identische metadata-Bytes erhalten den Entwurf; andere Metadatenquelle bei aktivem Entwurf gesperrt.",
         "run_id!",
         "path!",
         "role!");
     add(
         "repository_datasheet",
-        "Datenblatt im Themenordner anhand Modell und Identifier finden und unverändert als Quelle sichern; kein Entwurf. Bei mehreren Kandidaten relative_path wählen.",
+        "Nur ohne aktive Datenblattquelle: Datenblatt im Themenordner anhand Modell und Identifier finden und unverändert sichern. Aktuellen Export direkt verwenden; status.metadata_source zeigt Quelle und nächsten Schritt. Bei mehreren Repository-Kandidaten relative_path wählen.",
         "run_id!",
         "relative_path");
     add(
@@ -165,7 +165,7 @@ public final class Operations {
     add("validate_organization", "Office-XTF, YAML, Teamreferenzen und Gradle prüfen.", "run_id!");
     add(
         "derive_model",
-        "Explizit angefordertes Modell ableiten oder ändern. Vor Änderungen operation_schema(derive_model.changes) lesen; nur neue CSV mit validate_model prüfen.",
+        "Explizit angefordertes Modell aus der aktuellen gesicherten XTF, CSV-Beobachtungen und bestätigten Fachregeln ableiten oder ändern; XLSX dient nur zur Datenblatterstellung. Kein erneutes attach oder Repository-Suchen für einen aktiven Export. Vor Änderungen operation_schema(derive_model.changes) lesen; nur neue CSV mit validate_model prüfen.",
         "run_id!",
         "identity:object!",
         "confirmations:object",

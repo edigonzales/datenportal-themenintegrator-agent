@@ -88,7 +88,14 @@ final class RepositoryDatasheets {
   }
 
   Object select(Map<String, Object> r, String relative) {
+    if (r.containsKey("draft") || r.containsKey("metadata_target"))
+      throw new Problem(
+          "metadata_source_active",
+          "Aktive Datenblattquelle im Vorgang verwenden; keine Repository-Suche oder erneutes attach erforderlich.",
+          "metadata_source",
+          MetadataArtifacts.source(w, r));
     var selected = choose(r, relative);
+
     var prior = Json.obj(r.get("repository_datasheet"));
     boolean same =
         Objects.equals(prior.get("relative_path"), selected.get("relative_path"))

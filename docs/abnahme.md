@@ -1963,3 +1963,54 @@ INTERLIS-Änderungsvertrag über den eingebundenen INTERLIS-MCP.
 Keine fachlichen Schreiboperationen oder Freigaben im Test.
 Nachweise: `build/maven-release-032/operator-{update,init,doctor}.json`
 und `build/maven-release-032/opencode-read-test.jsonl`.
+
+## Verbindlicher XTF-Vertrag und verwalteter Metadaten-Export (15.10.2026)
+
+Der Export prüft Themen-Identifier und unterstützte Attributtypen und verwaltet
+exakt einen Repository-Kandidaten. Zielordner stammen aus Konfiguration und
+Vorgang; neue Dateien heissen standardmässig `meta-<identifier>.xtf`, ausgewählte
+Bestandsdateien behalten ihren Pfad. `repository_filename` erlaubt einen expliziten
+Dateinamen. Wiederholte Exporte und Umbenennungen ersetzen die Vormerkung.
+Die tatsächliche Übernahme bleibt hinter den bestehenden fachlichen Freigaben
+und prüft die Zielbytes nach dem Kopieren. Mehrdeutige Altvormerkungen blockieren
+Export, Prüfung und Übernahme mit einer konkreten Diagnose.
+
+Die aktuelle exportierte XTF ist die Modellquelle. XLSX liefert ausschliesslich
+Ausgangsinformationen zur Datenblatterstellung; CSV-Beobachtungen und bestätigte
+Fachregeln ergänzen den Vertrag. Identisches `attach(metadata)` erhält den
+Entwurf, eine andere Quelle bei aktivem Entwurf wird zurückgewiesen. Status und
+Exportantwort nennen Quelle, Prüfsumme, Aktualität, Repository-Pfad und nächsten
+Schritt. Skills untersagen wiederholtes Pfadraten und Diagnose-Kopien.
+
+**Synthetische Regressionen:** Exportwiederholung, Zielnamenwechsel,
+Identifier-Konflikt und Korrektur, frühe Typdiagnose, idempotentes Anhängen,
+Quellenkonflikt, mehrdeutige Altvormerkungen, Repository-Konflikte und
+freigabegebundene Übernahme werden in isolierten temporären Repositories geprüft.
+Ein widersprüchlicher XLSX-Quellenmarker beeinflusst den Modellauftrag nicht;
+ein nicht exportierter geänderter Entwurf blockiert die erneute Modellableitung.
+Alle dortigen Freigaben sind ausdrücklich synthetische Testantworten.
+
+**Umgebungsdiagnose:** Der erste Integrationstestlauf mit der historischen
+Office-Testkonfiguration scheiterte an fehlenden Paket-JARs und Testrepo.
+Temporäre Runtime-Verknüpfungen im Entwicklungsroot führten ausserdem zu
+doppelten Office-Modellquellen in den Unit-Fixtures. Diese Umgebungsfehler sind
+kein erfolgreicher Fachnachweis; für die abschliessende Prüfung werden
+Paketlaufzeit und isolierte Unit-Fixtures getrennt verwendet.
+
+**Offen:** Reale fachliche Abnahme des Hotellerie-Themas sowie Lieferung,
+Portal und Downloads. Die aktive OpenCode-Session und ihre Freigaben wurden
+nicht verändert. Keine Installation oder Veröffentlichung des neuen Pakets
+im Betriebsworkspace durch diesen Entwicklungsauftrag.
+
+**Abschliessend tatsächlich ausgeführt:** `./bin/datenportal-agent gradle
+spotlessApply test jar spotlessCheck javaDistribution` erfolgreich: 274 Unit-/
+Regressionstests, keine Fehler oder Auslassungen. Das vollständige Entwicklungspaket
+liegt unter `build/distributions/datenportal-themenintegrator-agent-0.1.0-dev-bin.tar.gz`.
+Die Integration lief anschliessend erfolgreich mit
+`DATENPORTAL_AGENT_HOME=$PWD/build/java-distribution ./bin/datenportal-agent gradle
+integrationTest -PintegrationConfig=build/xtf-contract-integration/integration.toml`:
+21 Tests bestanden, 1 optionaler Docker-/Jenkins-Abnahmetest übersprungen, keine Fehler.
+Die temporären Runtime-Verknüpfungen im Entwicklungsroot wurden entfernt.
+Die explizite Testkonfiguration nutzt ausschliesslich synthetisches Testrepo und
+Testzustand unter `build/xtf-contract-integration`; Fach-MCPs und Validator stammen
+aus dem neu gebauten Paket. Kein Betriebsworkspace wurde aktualisiert.

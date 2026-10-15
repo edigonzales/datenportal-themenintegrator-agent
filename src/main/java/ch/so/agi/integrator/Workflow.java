@@ -69,8 +69,13 @@ public final class Workflow implements AutoCloseable {
             Offices.operation(r, operation);
             return null;
           });
-    if (operation.equals("metadata") && Json.str(args, "operation", "").equals("describe_schema"))
-      return datasheets.call("describe_schema", Json.obj(args.get("arguments")));
+    if (operation.equals("metadata") && Json.str(args, "operation", "").equals("describe_schema")) {
+      var schema =
+          new LinkedHashMap<>(datasheets.call("describe_schema", Json.obj(args.get("arguments"))));
+      schema.put("supported_data_types", MetadataArtifacts.TYPES);
+      return schema;
+    }
+
     if (operation.equals("office_schema")) return new Offices(this).schema(args);
     if (operation.equals("organization_schema")) return new Organizations(this).schema(args);
     if (operation.equals("repository_plan"))
@@ -532,6 +537,8 @@ public final class Workflow implements AutoCloseable {
       }
     }
     result.put("current_approvals", valid);
+    if (r.get("identifier") != null)
+      result.put("metadata_source", MetadataArtifacts.source(this, r));
     result.put("check_states", CheckStates.overview(this, r));
     if (r.containsKey("model"))
       result.put(
@@ -554,7 +561,18 @@ public final class Workflow implements AutoCloseable {
     String role = Json.required(a, "role");
     if (!Set.of("data", "metadata", "metadata_source", "model").contains(role))
       throw new Problem("invalid_role", "Erlaubt: data, metadata, metadata_source, model.");
+    if (role.equals("metadata")) {
+      Path incoming = Path.of(Json.required(a, "path"));
+      Path active = store.file(r, "metadata");
+      if (active != null && Objects.equals(Json.sha(active), Json.sha(incoming)))
+        return Json.obj(Json.obj(r.get("files")).get("metadata"));
+      if (r.containsKey("draft") || r.containsKey("pending_metadata"))
+        throw new Problem(
+            "metadata_source_conflict",
+            "Bestehenden Entwurf über metadata bearbeiten; andere Quelle nicht anhängen.");
+    }
     var result = store.attach(r, Path.of(Json.required(a, "path")), role);
+
     if (role.equals("data")) store.attach(r, Path.of(Json.required(a, "path")), "original_data");
     if (role.equals("metadata")) {
       r.remove("draft");
@@ -702,6 +720,18 @@ public final class Workflow implements AutoCloseable {
       throw new Problem(
           "model_artifact_managed",
           "Modell und Task werden gemeinsam vorbereitet. derive_model für Änderungen; validate_model(refresh_evidence=true) für neue Nachweise verwenden.");
+    String managed = Json.str(r, "metadata_target", null);
+    if (managed != null
+        && rel.startsWith(topic(r) + "/")
+        && rel.toLowerCase(Locale.ROOT).matches(".*[.](xtf|xml)")) {
+      if (!managed.equals(rel)
+          || !Objects.equals(Json.sha(source), Json.sha(requiredFile(r, "metadata"))))
+        throw new Problem(
+            "metadata_artifact_managed",
+            "Metadaten über metadata(export_xtf, repository_filename) verwalten; keine Diagnose-Kopie registrieren.",
+            "repository_path",
+            managed);
+    }
     return stage(r, rel, source);
   }
 
@@ -710,6 +740,7 @@ public final class Workflow implements AutoCloseable {
     if (Json.str(r, "workflow", "topic").equals("organization"))
       return new Organizations(this).validate(r);
     exportRequired(r);
+    MetadataArtifacts.target(this, r, Json.map());
     var manifest = CheckStates.manifest(this, r, "metadata");
     var sheet = describe(r);
     Path data = store.file(r, "data");
@@ -903,6 +934,15 @@ public final class Workflow implements AutoCloseable {
             "restore")
         .contains(op))
       throw new Problem("unknown_operation", "Nicht unterstützte Datenblattoperation.");
+    input = new LinkedHashMap<>(input);
+    if (Set.of("create_datasheet", "update_metadata").contains(op)) {
+      var values = new LinkedHashMap<>(Json.obj(input.get("values")));
+      if (op.equals("create_datasheet")) values.putIfAbsent("identifier", r.get("identifier"));
+      if (values.containsKey("identifier"))
+        MetadataArtifacts.identifier(r, values.get("identifier"));
+      input.put("values", values);
+    }
+    String exportTarget = op.equals("export_xtf") ? MetadataArtifacts.target(this, r, input) : null;
     if (store.file(r, "data") != null) require(r, "data");
     if (r.containsKey("pending_metadata") && !op.equals("restore"))
       throw new Problem(
@@ -988,7 +1028,10 @@ public final class Workflow implements AutoCloseable {
                 .getOrDefault(args.get(key).toString(), args.get(key)));
     args.put("draft_id", current.get("draft_id"));
     if (!op.equals("read_datasheet")) args.put("expected_revision", current.get("revision"));
-    if (op.equals("export_xtf")) args.put("include_xml", true);
+    if (op.equals("export_xtf")) {
+      args.remove("repository_filename");
+      args.put("include_xml", true);
+    }
     boolean mutation = !Set.of("read_datasheet", "validate_datasheet", "export_xtf").contains(op);
     if (mutation) {
       r.put("pending_metadata", Json.map("operation", op, "arguments", input, "at", Json.now()));
@@ -1015,11 +1058,14 @@ public final class Workflow implements AutoCloseable {
     if (op.equals("export_xtf")) {
       Path out = directory(r).resolve("export.xtf");
       Json.write(out, Json.required(result, "xml"));
+      MetadataArtifacts.validate(out, r);
+      MetadataArtifacts.stage(this, r, exportTarget, out);
       r.put("draft_base", result.remove("xml"));
       result.put("artifact", store.attach(r, out, "metadata"));
       r.put("exported_revision", current.get("revision"));
       r.put("exported_content_sha256", contentHash(Json.obj(r.get("draft"))));
       r.put("exported_artifact_sha256", Json.sha(store.file(r, "metadata")));
+      result.put("metadata_source", MetadataArtifacts.source(this, r));
     }
     return result;
   }
@@ -1033,6 +1079,7 @@ public final class Workflow implements AutoCloseable {
 
   private Object applyLocked(Map<String, Object> r) {
     Offices.scope(r);
+    if (r.get("identifier") != null) MetadataArtifacts.target(this, r, Json.map());
     require(r, primaryGate(r));
     if (r.containsKey("model") && primaryGate(r).equals("metadata")) require(r, "model");
     var changes = Json.obj(r.get("changes"));
@@ -1057,6 +1104,8 @@ public final class Workflow implements AutoCloseable {
         originals.put(dest, Files.exists(dest) ? Files.readAllBytes(dest) : null);
         Files.createDirectories(dest.getParent());
         Files.copy(repoFile(r, rel), dest, StandardCopyOption.REPLACE_EXISTING);
+        if (!Objects.equals(Json.sha(dest), Json.obj(changes.get(rel)).get("sha256")))
+          throw new java.io.IOException("Prüfsumme nach Übernahme abweichend: " + rel);
       }
     } catch (java.io.IOException e) {
       originals.forEach(

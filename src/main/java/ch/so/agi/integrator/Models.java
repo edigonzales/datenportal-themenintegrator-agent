@@ -66,6 +66,7 @@ public final class Models {
     Path csv = w.requiredFile(r, "data");
     w.require(r, "data");
     w.exportRequired(r);
+    MetadataArtifacts.validate(w.sheet(r), r);
     var sheet = w.describe(r);
     var identity = new LinkedHashMap<>(Json.obj(args.get("identity")));
 
@@ -536,12 +537,7 @@ public final class Models {
 
   String metadataRelative(Map<String, Object> r) {
 
-    var selected = Json.obj(r.get("repository_datasheet"));
-    if (!selected.isEmpty()) return Json.required(selected, "relative_path");
-    var resolver = new RepositoryDatasheets(w);
-    if (!Json.list(resolver.discover(r).get("candidates")).isEmpty())
-      return Json.required(resolver.choose(r, null), "relative_path");
-    return w.topic(r) + "/datasheet.xtf";
+    return MetadataArtifacts.target(w, r, Json.map());
   }
 
   public Object prepareReference(Map<String, Object> r) {

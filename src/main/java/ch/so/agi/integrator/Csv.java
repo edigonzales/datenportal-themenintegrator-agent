@@ -116,8 +116,8 @@ public final class Csv {
                   "message",
                   "Spalten und Reihenfolge passen nicht zum Datenblatt."));
         for (Object a : attributes)
-          if (!Json.strings(rules.get("supported_types"))
-              .contains(Json.str(Json.obj(a), "data_type", "").toUpperCase(Locale.ROOT)))
+          if (!MetadataArtifacts.TYPES.contains(
+              Json.str(Json.obj(a), "data_type", "").toUpperCase(Locale.ROOT)))
             error.accept(
                 Json.map(
                     "code",
@@ -125,7 +125,9 @@ public final class Csv {
                     "column",
                     Json.obj(a).get("name"),
                     "message",
-                    "Nicht unterstützter Datentyp."));
+                    "Nicht unterstützter Datentyp.",
+                    "supported_types",
+                    MetadataArtifacts.TYPES));
       }
       while (iter.hasNext()) {
         CSVRecord row = iter.next();

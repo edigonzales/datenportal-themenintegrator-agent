@@ -154,6 +154,33 @@ class ModelsTest {
   }
 
   @Test
+  void currentExportIsModelContractEvenWithContradictoryXlsxSource() {
+    // Synthetic source sentinel: derive_model must never parse or derive from this attachment.
+    Path source = temp.resolve("conflicting.xlsx");
+    Json.write(source, "XLSX proposal: other_identifier; other_column; Ganzzahl");
+    f.call("attach", "run_id", id, "role", "metadata_source", "path", source.toString());
+    f.approve(id, "data", f.call("analyze", "run_id", id));
+    f.call("metadata", "run_id", id, "operation", "import_xtf");
+    f.call("metadata", "run_id", id, "operation", "export_xtf");
+    f.call("derive_model", "run_id", id, "identity", identity(), "range_proposals", proposals());
+    String request = Json.text(requests.getFirst());
+    assertTrue(request.contains("Jahr"));
+    assertFalse(request.contains("other_column"));
+    f.call(
+        "metadata",
+        "run_id",
+        id,
+        "operation",
+        "update_metadata",
+        "arguments",
+        Json.map("values", Json.map("title", "Changed")));
+    int calls = requests.size();
+    f.error(
+        "draft_not_exported", () -> f.call("derive_model", "run_id", id, "identity", identity()));
+    assertEquals(calls, requests.size());
+  }
+
+  @Test
   void missingIdentityIsQuestionNotInvention() {
     var r = f.call("derive_model", "run_id", id, "identity", Json.map());
     assertEquals("NEEDS_INPUT", r.get("status"));

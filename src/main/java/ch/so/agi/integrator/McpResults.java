@@ -39,6 +39,7 @@ final class McpResults {
               "issue",
               "model",
               "files",
+              "metadata_source",
               "pending_metadata",
               "pending_model",
               "valid",

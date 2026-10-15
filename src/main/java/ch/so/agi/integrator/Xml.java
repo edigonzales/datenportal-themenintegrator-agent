@@ -113,6 +113,18 @@ public final class Xml {
         datasets(parse(p)).stream()
             .filter(n -> id == null || id.equals(text(n, "identifier")))
             .toList();
+    if (nodes.isEmpty() && id != null)
+      throw new Problem(
+          "datasheet_identifier_mismatch",
+          "Datenblatt-Identifier stimmt nicht mit dem Vorgang überein; Datenblatt korrigieren und erneut exportieren.",
+          "expected_identifier",
+          id,
+          "found_identifiers",
+          datasets(parse(p)).stream().map(n -> text(n, "identifier")).toList(),
+          "path",
+          p.toString(),
+          "next_operation",
+          "metadata(update_metadata); metadata(export_xtf)");
     if (nodes.size() != 1)
       throw new Problem(
           "ambiguous_datasheet",

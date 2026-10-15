@@ -212,3 +212,7 @@ wiederverwendet, Schätzungen bleiben unbestätigt. Eine neu beobachtete Eindeut
 darf vorgeschlagen, aber erst nach menschlicher Bestätigung als UNIQUE eingebaut
 werden. Das vollständige Beispiel steht in der Modellskill-Referenz
 `skills/datenportal-validierungsmodell/references/typableitung-und-reparatur.md`.
+
+## Datenblatt, Modellquelle und Repository-Ziel
+
+XLSX → Datenblatt → aktuelle exportierte XTF → Modell. CSV-Beobachtungen und bestätigte Fachregeln ergänzen den XTF-Vertrag. `metadata(export_xtf)` prüft Identifier und Datentypen und merkt die XTF automatisch unter `<organisation>/<identifier>/meta-<identifier>.xtf` im konfigurierten Themenrepo vor. Bei ausgewähltem Repository-Datenblatt bleibt der Pfad erhalten; einen gewünschten Dateinamen über `arguments.repository_filename` angeben. Wiederholte Exporte ersetzen den Kandidaten. Kein manuelles Registrieren, erneutes Anhängen oder Suchen des aktuellen Exports. `status.metadata_source` zeigt Quelle und nächsten Schritt. Erst nach Freigabe mit `apply_local_changes` übernehmen. Unveränderte Fehler als konkrete Blocker melden; keine Diagnose-Kopien oder Pfadvarianten ausprobieren.

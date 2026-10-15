@@ -572,7 +572,7 @@ XLSX als `metadata_source` aufnehmen; `xlsx` ohne `sheet` zeigt die Blätter, mi
 
 `validate` prüft genau die Liefer-XTF mit ilivalidator, validiert `offices.xtf` separat und verwendet es als Referenzbestand für den EXISTENCE-Constraint gegen `Office.identifier`. CSV-Spalten, Reihenfolge, Typen und Pflichtwerte müssen mit dem Datenblatt zusammenpassen. Die lokale HTML-Datei zeigt Metadaten, Serienausgaben, Prüfmeldungen, Herkunft und Dateivergleiche.
 
-Notwendige fachliche Repository-Dateien vor der Freigabe mit `stage_change` registrieren. Beispielargumente: `relative_path: statistikdienst/ch.so.bevoelkerung.altersstruktur/datasheet.xtf`, `source_path: /…/export.xtf`. Liefer-XTF und geplante Repository-XTF müssen dieselben Bytes haben.
+Metadaten-XTF werden beim `metadata(export_xtf)` automatisch im konfigurierten Themenordner vorgemerkt; optional `arguments.repository_filename` angeben. Neue Datenblätter verwenden `meta-<identifier>.xtf`, ausgewählte Bestandsdateien behalten ihren Pfad. Andere fachliche Dateien weiterhin mit `stage_change` registrieren. Erst nach fachlicher Freigabe übernimmt `apply_local_changes` die geprüften Bytes.
 
 **Zweiter menschlicher Stopp:** Datenblatt, Dienststellen- und Organisationsänderungen prüfen. Korrekturauftrag bedeutet weiter bearbeiten, exportieren, validieren und erneut zeigen. Das OK mit `gate: metadata` und der Prüfsumme aus `validate` protokollieren. Bei zusätzlichem Modell werden Datenblatt und Modell gemeinsam gezeigt und beide konkreten Gates bestätigt.
 

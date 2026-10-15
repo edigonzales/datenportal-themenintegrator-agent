@@ -39,6 +39,15 @@ final class MetadataContracts {
               .filter(v -> !managed.contains(v.toString()))
               .toList());
     }
+    if (name.equals("export_xtf"))
+      Json.obj(arguments.get("properties"))
+          .put(
+              "repository_filename",
+              Json.map(
+                  "type",
+                  "string",
+                  "description",
+                  "Optionaler XTF-Dateiname ohne Verzeichnis. Export verwaltet genau einen Kandidaten im konfigurierten Themenordner; Übernahme erst nach Freigabe."));
     var schema = new LinkedHashMap<>(Operations.ALL.get("metadata").schema());
     var props = new LinkedHashMap<>(Json.obj(schema.get("properties")));
     props.put("operation", Json.map("type", "string", "enum", List.of(name)));
@@ -51,6 +60,10 @@ final class MetadataContracts {
         "metadata." + name,
         "inputSchema",
         schema,
+        "supported_data_types",
+        MetadataArtifacts.TYPES,
+        "model_source",
+        "Aktuelle exportierte XTF; XLSX dient nur zur Datenblatterstellung. CSV-Beobachtungen und bestätigte Fachregeln ergänzen die XTF.",
         "managed_by_integrator",
         List.of("draft_id", "expected_revision", "import source", "export destination"),
         "description",
