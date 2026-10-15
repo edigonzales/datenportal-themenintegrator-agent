@@ -32,6 +32,14 @@ bash bin/package-smoke build/java-distribution
 
 Repository: `https://jars.interlis.guru/snapshots/`. Zugang über `MAVEN_USERNAME` und `MAVEN_PASSWORD`. Die GitHub-Actions-Pipeline `java-package.yml` prüft auf Linux und macOS; explizite Workflow-Dispatch-Eingaben wählen die veröffentlichten MCP-Versionen für ein Betriebspaket.
 
+Reine Dokumentationsänderungen unter `docs/**`, an `README.md`, `DEMO.md` sowie
+an `templates/operator/README.md` und `templates/operator/anwenderhandbuch.md`
+starten bei Push und Pull Request keinen Workflow. Gemischte Änderungen mit
+Code, Konfiguration, Skills oder `AGENTS.md` werden weiterhin geprüft.
+Paketbau und Publikation erfolgen ausschliesslich durch einen ausdrücklichen
+manuellen Workflow-Start (`workflow_dispatch`), auch nach Dokumentationsänderungen.
+Die Pfadfilter entsprechen der [GitHub-Actions-Syntax](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#onpushpull_requestpull_request_targetpathspaths-ignore).
+
 `distribution.json` dokumentiert Versionen und SHA-256 aller Paketdateien. Datenblatt-Modelle stammen aus dem eingebundenen bootJar. Das Paket enthält keine Quellcheckouts und baut beim Betreiber nichts. Fachliche Konverter werden weiterhin mit dem JDK kompiliert.
 
 Nur für lokale Entwicklung kann `-PmcpArtifactDirectory=/pfad/zu/test-jars` anstelle veröffentlichter Versionen verwendet werden. Dort liegen `datasheet-mcp.jar` und `interlis-mcp.jar`. Solche Pakete sind ausdrücklich als Entwicklungsartefakte gekennzeichnet und von der Maven-Publikation ausgeschlossen.

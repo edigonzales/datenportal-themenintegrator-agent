@@ -28,17 +28,35 @@ Den Betriebsordner im Client öffnen. Der Fachagent arbeitet ausschliesslich mit
 
 GitHub-PRs werden direkt über die REST-API erstellt und geprüft. `GH_TOKEN` hat Vorrang vor `GITHUB_TOKEN`; ohne nichtleere Env-Variable wird der Credential Store des Workspace verwendet. Für das gewählte Repository werden Pull-Request-Schreibrechte und bei HTTPS-Push zusätzlich Contents-Schreibrechte benötigt. Git nutzt den vom Integrator gestarteten Credential-Helper; `gh auth login` ist nicht erforderlich. Tokens nicht in Konfigurationsdateien oder Chatnachrichten eintragen. Git-Autorenidentität wie üblich konfigurieren. Nur bei Verwendung von Env-Tokens muss der Client diese an den Integrator weitergeben.
 
-GitHub-Token einmalig im bestehenden dateibasierten Store hinterlegen:
+GitHub-Token einmalig im bestehenden dateibasierten Store hinterlegen, ohne ihn
+in der Shell-History zu speichern: Im Operator-Workspace folgenden Block in
+**zsh** ausführen und den Token erst bei der verdeckten Abfrage eingeben:
 
-```sh
-bin/datenportal-agent credentials github set --token-stdin
+```zsh
+(
+  read -rs 'github_token?GitHub-Token: ' || exit 1
+  printf '\n'
+  printf '%s' "$github_token" |
+    bin/datenportal-agent credentials github set --token-stdin
+)
 ```
 
-Der Befehl liest bis EOF. Den Token über eine geschützte stdin-Zuführung übergeben;
-bei manueller Terminaleingabe vorher das Terminal-Echo abschalten und danach
-wiederherstellen. Keine Tokens als Argument, in der Shell-History oder im Chat
-hinterlegen. Alternativ übernimmt `credentials github set --from-env` ausdrücklich
+`read -s` unterdrückt die Anzeige der Eingabe. Der Token wird über stdin
+übergeben, nicht als Prozessargument oder Shell-Befehl. Die Variable verschwindet
+beim Ende der Subshell. Keine Tokens direkt in Befehle oder Chatnachrichten
+eintragen. Der CLI-Befehl liest stdin bis EOF; die Pipe beendet die Eingabe
+automatisch. Alternativ übernimmt `credentials github set --from-env` ausdrücklich
 die erste nichtleere Variable (`GH_TOKEN`, dann `GITHUB_TOKEN`).
+
+Anschliessend ohne Ausgabe des Tokens prüfen:
+
+```sh
+bin/datenportal-agent credentials github status
+```
+
+Erwartet wird `"stored": true`. Ohne gesetzte Env-Tokens erscheint zusätzlich
+`"credentials_source": "local_store"`. Sind `GH_TOKEN` oder `GITHUB_TOKEN` noch
+gesetzt, haben sie weiterhin Vorrang vor dem gespeicherten Token.
 
 `credentials github status` zeigt die aktive Quelle und mit `stored`, ob ein
 Store-Eintrag existiert; bei unlesbarem Store erscheint stattdessen `store_error`.

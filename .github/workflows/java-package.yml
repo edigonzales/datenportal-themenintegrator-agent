@@ -1,8 +1,20 @@
 name: Java operator package
 on:
   pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'DEMO.md'
+      - 'templates/operator/README.md'
+      - 'templates/operator/anwenderhandbuch.md'
   push:
     branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'DEMO.md'
+      - 'templates/operator/README.md'
+      - 'templates/operator/anwenderhandbuch.md'
   workflow_dispatch:
     inputs:
       datasheet_version:
