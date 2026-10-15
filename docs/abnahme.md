@@ -1943,3 +1943,23 @@ Die Installationsprüfung verwendet ausschliesslich synthetische Fachdateien.
 Keine realen Office-Daten, Fachvorgänge, Freigaben oder Publikationen verändert.
 Die bestehende Betriebsinstallation bleibt bei dem zuvor geprüften lokalen Paket;
 dieser Nachweis betrifft ausdrücklich die Neuinstallation des Maven-Releases.
+
+## Lokale Betriebsinstallation auf Maven 0.2.32 (15.10.2026)
+
+Auf ausdrücklichen Auftrag wurde auch `/Users/stefan/datenportal/datenportal-betrieb`
+mit `workspace update` auf das veröffentlichte Paket `0.2.32` aktualisiert.
+Paketpfad: `/Users/stefan/datenportal/pakete/datenportal-themenintegrator-agent-0.2.32`.
+Vorher vollständige private Workspace-Sicherung; `config/local.toml` blieb bytegleich.
+`init` und `doctor` erfolgreich, Java 21 und Laufzeitpfade gültig,
+Initialisierungsnachweis `ready=true`, `smoke_current=true`, beide MCPs gültig.
+Das installierte Maven-Paket enthält INTERLIS-MCP `0.0.579-1`.
+
+OpenCode-Konfiguration neu geladen. Tatsächlich geprüft: `mcp list` meldet
+`datenportal_integrator` und `datenportal_workspace` als `connected`.
+Ein separater technischer OpenCode-Lesetest mit `deepseek/deepseek-flash#high`
+rief `operation_schema` für `start`, `office` und `derive_model.changes`
+erfolgreich auf (jeweils `completed`). Der letzte Abruf lieferte den vollständigen
+INTERLIS-Änderungsvertrag über den eingebundenen INTERLIS-MCP.
+Keine fachlichen Schreiboperationen oder Freigaben im Test.
+Nachweise: `build/maven-release-032/operator-{update,init,doctor}.json`
+und `build/maven-release-032/opencode-read-test.jsonl`.
