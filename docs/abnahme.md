@@ -2014,3 +2014,27 @@ Die temporären Runtime-Verknüpfungen im Entwicklungsroot wurden entfernt.
 Die explizite Testkonfiguration nutzt ausschliesslich synthetisches Testrepo und
 Testzustand unter `build/xtf-contract-integration`; Fach-MCPs und Validator stammen
 aus dem neu gebauten Paket. Kein Betriebsworkspace wurde aktualisiert.
+
+## Lokales Update auf XTF-Vertragspaket (15.10.2026)
+
+Auf ausdrücklichen Auftrag wurde Implementierungscommit `3964e20` nach
+`origin/main` gepusht und das Paket `0.2.33-local-xtf-contract` gebaut.
+Der isolierte Paket-Smoke mit Neuinstallation, beiden MCPs, positiver/negativer
+Validierung und Workspace-Update war erfolgreich.
+
+Vor dem Betriebsupdate wurde der vollständige Workspace privat unter
+`build/operator-backups/before-xtf-contract-3964e20/workspace` gesichert.
+`workspace update` installiert das Paket aus
+`/Users/stefan/datenportal/pakete/datenportal-themenintegrator-agent-0.2.33-local-xtf-contract`
+in `/Users/stefan/datenportal/datenportal-betrieb`.
+Alle 16 erfassten Konfigurations-/Fachzustandsdateien sind danach SHA-256-identisch.
+Keine Fachfreigaben wurden übertragen: Legacy-Migration `already_current`,
+CSV-Freigabemigration `csv_rules_changed_or_unknown`.
+
+`init` meldet `ready=true`; `doctor` bestätigt `ready=true`, `smoke_current=true`
+und beide Fach-MCPs als gültig. OpenCode wurde mit `reload` neu verbunden;
+`mcp list` bestätigt Integrator und Workspace-MCP als `connected`.
+Die beiden laufenden MCP-JVMs des OpenCode-Servers verwenden nachweislich
+`0.2.33-local-xtf-contract`. Keine Fachsession fortgesetzt und keine Lieferung
+oder Publikation ausgelöst. Technische Nachweise liegen unter
+`build/xtf-contract-install/` und `build/xtf-contract-package-smoke.log`.
