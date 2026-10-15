@@ -33,7 +33,7 @@ bash bin/package-smoke build/java-distribution
 Repository: `https://jars.interlis.guru/snapshots/`. Zugang über `MAVEN_USERNAME` und `MAVEN_PASSWORD`. Die GitHub-Actions-Pipeline `java-package.yml` prüft auf Linux und macOS; explizite Workflow-Dispatch-Eingaben wählen die veröffentlichten MCP-Versionen für ein Betriebspaket.
 
 Die getesteten Standardversionen in `gradle.properties` sind Datenblatt-MCP
-`0.2.3` und INTERLIS-MCP `0.0.579-1`. Die `-P`-Argumente überschreiben diese
+`0.2.3` und INTERLIS-MCP `0.0.580-1`. Die `-P`-Argumente überschreiben diese
 Defaults bei einer gezielten Aktualisierung; Workflow-Dispatch bietet dieselben
 Versionen als Vorgabe an.
 
@@ -77,3 +77,17 @@ Keine automatische Rücksetzung eines bereits aktualisierten Branches.
 `repository_sync` ist eine optionale Erweiterung von Schema 3. Bestehende Vorgänge
 bleiben lesbar; ohne `applied.hashes` erfolgt keine Bereinigung lokaler Änderungen.
 Neue PR-Datensätze binden zusätzlich Quellcheckout, Repository und Zielbranch.
+
+### Verlustfreier numerischer Modellvertrag
+
+`NUM_RANGE.min/max` werden im Integrator als Dezimalstrings gespeichert und auch
+so an den INTERLIS-MCP gesendet. Der öffentliche MCP-Eingabevertrag signalisiert
+`x-interlis-decimal-bounds: strings-v1`; ohne diese Fähigkeit blockiert der
+Integrator die Modellgenerierung mit einer Aktualisierungsaufforderung.
+Der MCP akzeptiert weiterhin JSON-Zahlen. Für fachlich relevante Nachkommastellen
+sind Strings verbindlich: `"0.00"` und `"100.00"` müssen `0.00 .. 100.00` ergeben.
+
+Der Integrator prüft vor Übernahme eines erfolgreichen Kandidaten anhand der
+kompilierten Attribute sowohl Grenzwerte als auch Genauigkeit. Ein unveränderter
+fehlerhafter Aufruf wird anhand von Argumenten und Komponentenprüfsumme gesperrt.
+Ein Komponentenwechsel erlaubt eine erneute Prüfung, ersetzt aber keine Freigabe.

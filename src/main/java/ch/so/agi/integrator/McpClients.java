@@ -146,7 +146,11 @@ public final class McpClients {
     public synchronized Map<String, Object> call(String name, Map<String, Object> args) {
       connect();
       try {
+        if (service.equals("interlis")
+            && Set.of("authorIliModel", "applyIliModelChanges").contains(name))
+          NumericModelContract.requireCapability(schema(name));
         return result(client.callTool(new McpSchema.CallToolRequest(name, args)));
+
       } catch (Problem p) {
         throw p;
       } catch (Exception e) {

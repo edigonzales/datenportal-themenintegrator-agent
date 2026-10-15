@@ -209,7 +209,12 @@ public final class Models {
       if (!Json.str(a, "code_list", "").isBlank() && !confirmation.containsKey("type_spec"))
         questions.add(column + ": Codeliste ist belegt, aber Werte/Domain noch nicht bestätigt.");
       var typeSpec = Json.obj(confirmation.get("type_spec"));
+      if (Json.bool(confirmation, "confirmed", false)) {
+        String conflict = NumericModelContract.observationConflict(typeSpec, observed, type);
+        if (conflict != null) questions.add(column + ": " + conflict);
+      }
       Map<String, Object> proposal = Json.map();
+
       if (proposals.containsKey(column)) {
         proposal = ModelRanges.proposal(column, Json.obj(proposals.get(column)), observed, type);
         if (!typeSpec.isEmpty()
@@ -374,6 +379,16 @@ public final class Models {
       operation = "authorIliModel";
       callArgs.put("spec", spec);
     }
+    var numericExpectations = NumericModelContract.expectations(mappings, args.get("changes"));
+    String numericAttempt =
+        Json.digest(Json.map("arguments", callArgs, "component", w.interlis.identity()));
+    var blockedNumeric = Json.obj(r.get("numeric_contract_blocker"));
+    if (numericAttempt.equals(blockedNumeric.get("attempt")))
+      throw new Problem(
+          "model_numeric_contract_violation",
+          "Unveränderter technischer Vertragsfehler. MCP-Komponente reparieren; keine weiteren Wertebereichsvarianten.",
+          "blocker",
+          blockedNumeric);
     var priorRepair = Json.read(Json.text(Json.obj(r.get("model_repair"))));
     ModelRepairs.reserve(w, r, args);
     r.put(
@@ -407,6 +422,12 @@ public final class Models {
             "check_inputs_changed",
             "Eingangsdateien oder Prüfkomponenten während Modellableitung verändert; Kandidat nicht übernommen.");
     } catch (Problem error) {
+      if (error.code.equals("model_component_upgrade_required")) {
+        r.remove("pending_model");
+        if (priorRepair.isEmpty()) r.remove("model_repair");
+        else r.put("model_repair", priorRepair);
+        throw error;
+      }
       if (Json.str(Json.obj(error.details.get("response")), "message", "")
           .contains("input validation failed")) {
         r.remove("pending_model");
@@ -442,13 +463,33 @@ public final class Models {
           "next",
           "Argumente gemäss operation_schema(derive_model) korrigieren; bestätigte Fachwerte erhalten. Kein reset_model_repair.");
     }
-    Diagnostics.record(
-        w, r, "ili2c", compilerStatus(Json.obj(result.get("afterReview")), result), result, true);
 
     r.remove("pending_model");
     String text =
         Json.str(result, "updatedModelText", Json.str(result, "candidateModelText", null));
-    if (text != null && authoringValid(result)) ModelIdentity.verify(text, identity);
+    if (text != null && authoringValid(result)) {
+      ModelIdentity.verify(text, identity);
+      try {
+        NumericModelContract.verify(
+            text,
+            numericExpectations,
+            w.settings.modelDirectories().stream()
+                .map(p -> p.startsWith("https://") ? p : w.settings.path(p).toString())
+                .toList());
+        r.remove("numeric_contract_blocker");
+      } catch (Problem error) {
+        r.put(
+            "numeric_contract_blocker",
+            Json.map("attempt", numericAttempt, "error", error.result()));
+        if (priorRepair.isEmpty()) r.remove("model_repair");
+        else r.put("model_repair", priorRepair);
+        w.persist(r);
+        throw error;
+      }
+    }
+
+    Diagnostics.record(
+        w, r, "ili2c", compilerStatus(Json.obj(result.get("afterReview")), result), result, true);
     var model =
         Json.map(
             "identity",
@@ -471,6 +512,7 @@ public final class Models {
             authoringValid(result),
             "task_configuration",
             Json.map("header", true, "encoding", "UTF-8", "separator", ";", "quote", "\""));
+    model.put("numeric_expectations", numericExpectations);
     model.put("derivation", Json.map("operation", operation, "arguments", callArgs));
     model.put("evidence_component_identity", w.interlis.identity());
     model.put("package_ready", false);
@@ -609,7 +651,18 @@ public final class Models {
         && Json.list(result.get("openQuestions")).isEmpty();
   }
 
+  private void verifyNumericModel(Map<String, Object> model, Path ili) {
+    NumericModelContract.verify(
+        Json.contents(ili),
+        Json.list(model.getOrDefault("numeric_expectations", model.get("mapping"))),
+        w.settings.modelDirectories().stream()
+            .map(p -> p.startsWith("https://") ? p : w.settings.path(p).toString())
+            .toList());
+  }
+
   private void preparePackage(Map<String, Object> r, Map<String, Object> model, Path ili) {
+    verifyNumericModel(model, ili);
+
     String name = Json.required(Json.obj(model.get("identity")), "name");
     String relative = w.topic(r) + "/dataset.gradle";
     Path old = w.repoFile(r, relative);
@@ -712,6 +765,7 @@ public final class Models {
     Path data = w.store.file(r, "data");
     if (data != null) w.require(r, "data");
     ModelIdentity.verify(Json.contents(ili), Json.obj(model.get("identity")));
+    if (Json.bool(model, "authoring_valid", false)) verifyNumericModel(model, ili);
     if (refreshEvidence) {
       var beforeVerification = CheckStates.manifest(w, r, "model");
       String text = Json.contents(ili);

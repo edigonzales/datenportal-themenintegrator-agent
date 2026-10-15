@@ -72,6 +72,39 @@ class ModelRepairIntegrationTest {
               "2026-10-10",
               "uri",
               "https://example.org/repair");
+      if (fault.equals("csv")) {
+        f.error(
+            "model_numeric_contract_violation",
+            () ->
+                f.call(
+                    "derive_model",
+                    "run_id",
+                    id,
+                    "identity",
+                    identity,
+                    "range_proposals",
+                    ModelsTest.proposals()));
+        f.error(
+            "model_numeric_contract_violation",
+            () ->
+                f.call(
+                    "derive_model",
+                    "run_id",
+                    id,
+                    "identity",
+                    identity,
+                    "range_proposals",
+                    ModelsTest.proposals()));
+        assertEquals(1, calls[0], "Unchanged generator fault must not be retried");
+        f.workflow.store.edit(
+            id,
+            run -> {
+              assertNull(f.workflow.store.file(run, "model"));
+              assertTrue(Json.obj(run.get("model_repair")).isEmpty());
+              return null;
+            });
+        return;
+      }
       var first =
           f.call(
               "derive_model",
@@ -81,11 +114,7 @@ class ModelRepairIntegrationTest {
               identity,
               "range_proposals",
               ModelsTest.proposals());
-      if (fault.equals("csv")) {
-        assertFalse(Json.bool(first, "candidate", true), Json.pretty(first));
-        assertFalse(
-            Json.bool(f.call("validate_model", "run_id", id, "scope", "model"), "valid", true));
-      } else assertTrue(Json.bool(first, "candidate", false), Json.pretty(first));
+      assertTrue(Json.bool(first, "candidate", false), Json.pretty(first));
       int repairs = fault.equals("limit") ? 3 : 1;
       for (int attempt = 1; attempt <= repairs; attempt++) {
         var series = Json.obj(f.call("status", "run_id", id).get("model_repair"));
@@ -101,24 +130,6 @@ class ModelRepairIntegrationTest {
                 series.get("last_failure"),
                 "repair_reason",
                 "Synthetische Korrektur " + attempt + ": " + fault);
-        if (fault.equals("csv")) {
-          args.put(
-              "allow_breaking", true); // Explicit synthetic fixture, never a business approval.
-          args.put(
-              "changes",
-              List.of(
-                  Json.map(
-                      "operation",
-                      "UPDATE_ATTRIBUTE",
-                      "updateAttribute",
-                      Json.map(
-                          "attributeFqn",
-                          "SO_Repair_20261010.Data.Observation.Jahr",
-                          "patch",
-                          Json.map(
-                              "typeSpec",
-                              Json.obj(ModelsTest.proposals().get("Jahr")).get("type_spec"))))));
-        }
         f.workflow.call("derive_model", args);
       }
       if (fault.equals("limit")) {

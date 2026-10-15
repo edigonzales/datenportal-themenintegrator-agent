@@ -66,7 +66,15 @@ final class ModelArguments {
         if (min.compareTo(max) >= 0 || min.scale() != max.scale())
           throw invalid(
               p,
-              "min muss kleiner als max sein; beide Grenzen müssen dieselbe Dezimalstellenzahl besitzen.");
+              "min muss kleiner als max sein; gleiche Dezimalstellenzahl erforderlich: min="
+                  + min.toPlainString()
+                  + " (scale="
+                  + min.scale()
+                  + "), max="
+                  + max.toPlainString()
+                  + " (scale="
+                  + max.scale()
+                  + ").");
         if (base.containsKey("precision")
             && decimal(base.get("precision"), p + ".precision").compareTo(BigDecimal.valueOf(scale))
                 != 0)
@@ -105,16 +113,9 @@ final class ModelArguments {
     return Json.map("baseType", base);
   }
 
-  // Store decimal scale losslessly as strings; the MCP wire contract requires JSON numbers.
+  // Decimal strings are part of the public MCP contract: scale is model semantics.
   static Map<String, Object> mcpSpec(Map<String, Object> value) {
-    var result = new LinkedHashMap<>(value);
-    var base = new LinkedHashMap<>(Json.obj(value.get("baseType")));
-    if ("NUM_RANGE".equals(base.get("kind"))) {
-      base.put("min", decimal(base.get("min"), "min"));
-      base.put("max", decimal(base.get("max"), "max"));
-      result.put("baseType", base);
-    }
-    return result;
+    return new LinkedHashMap<>(value);
   }
 
   static Map<String, Object> confirmation(Object value, String path) {
@@ -219,7 +220,7 @@ final class ModelArguments {
             "additionalProperties",
             false,
             "description",
-            "NUM_RANGE: min/max mit gleicher Dezimalstellenzahl (z.B. Strings -9999.99 und 9999.99); TEXT/MTEXT: length. NUMERIC mit Grenzen und maxLength werden als gleichwertige Altform normalisiert.");
+            "NUM_RANGE: min/max als Dezimalstrings mit gleicher Dezimalstellenzahl; 0 .. 100 ist ganzzahlig, 0.0 .. 100.0 erlaubt eine Nachkommastelle. Nullgrenzen und Endnullen erhalten; TEXT/MTEXT: length. NUMERIC mit Grenzen und maxLength werden als gleichwertige Altform normalisiert.");
     var type =
         Json.map(
             "type",

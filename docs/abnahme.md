@@ -2038,3 +2038,52 @@ Die beiden laufenden MCP-JVMs des OpenCode-Servers verwenden nachweislich
 `0.2.33-local-xtf-contract`. Keine Fachsession fortgesetzt und keine Lieferung
 oder Publikation ausgelöst. Technische Nachweise liegen unter
 `build/xtf-contract-install/` und `build/xtf-contract-package-smoke.log`.
+
+## Dezimalgenauigkeit bis zum kompilierten Modell (2026-10-15)
+
+Implementiert: Dezimalstrings im MCP-Vertrag und unveränderte Übergabe durch den
+Integrator; Rendering ohne Entfernen der Endnullen; frühe Prüfung gleicher
+Genauigkeit; Soll/Ist-Vergleich numerischer Attribute anhand der kompilierten
+Modellstruktur vor Kandidatenübernahme und bei erneuter Validierung.
+Bestätigte Bereiche werden zusätzlich gegen CSV-Beobachtungen geprüft. Ein
+unveränderter technischer Generatorfehler wird ohne erneuten MCP-Aufruf blockiert.
+
+Tatsächlich lokal geprüft (synthetische, isolierte Daten):
+- Integrator: 280 Java-Unit-Tests erfolgreich; JAR und `spotlessCheck` erfolgreich.
+- INTERLIS-MCP: vollständige Java-Tests erfolgreich; anschließend erweiterter
+  Tool-Vertragstest (26 Tests), `check` und 24 End-to-End-Tests erfolgreich.
+- Tatsächlicher stdio-Rundlauf für ein/zwei Nachkommastellen, Nullgrenzen, negative
+  Bereiche, Ganzzahlen und große Dezimalgrenzen; typisierte Änderung geprüft.
+- CSV-Adapter akzeptiert `3.4`, `3.40` und `0.00` gegen das erzeugte Modell.
+- Verfälschte Generatorantwort wird vor Übernahme abgelehnt; identische Wiederholung
+  führt zu keinem weiteren Generatoraufruf. Abweichende Nullgrenze bleibt geschützt.
+
+Die ersten Läufe enthielten zwei MCP-Testfehler mit inzwischen gelöschten
+Temporärpfaden sowie Integrator-Fingerprintfehler bei gleichzeitigem Paketbau.
+Isolierte und anschließend vollständige Wiederholungen bestanden. Die zusätzliche
+XTF-Testdatei war als Datenfixture ungeeignet; die fachlich relevante Prüfung
+verwendet den integrierten CSV-Adapter. Der bisherige synthetische CSV-Reparaturfall
+prüft nun die bewusst frühere Abweisung des verfälschten Generatormodells.
+
+Vollständiger Integrationstest mit expliziter Konfiguration
+`build/xtf-contract-integration/integration.toml`: 23 Tests, 22 bestanden, ein
+optionaler Docker-/Publikationsfall übersprungen. Die Prüfung verwendete das
+isolierte Paket und keine Betriebs-Konfiguration.
+
+Lokale Auslieferung auf ausdrücklichen Wunsch mit beiden lokalen Builds:
+`0.2.34-local-decimal-contract`, INTERLIS-MCP aus Commit `fcf4e9f`
+(`0.0.LOCALBUILD`, SHA-256
+`bd050dadc0a77e09df498d69b1caf927313f383b24add500c70c9fc9104f6f80`).
+Paket-Smoke, Installation, `init` und `doctor` erfolgreich; OpenCode neu geladen,
+Integrator und Workspace-MCP verbunden. Die gestarteten Java-Prozesse verwenden
+das neue Paket. Konfiguration plus 16 Vorgangsdateien: 17/17 SHA-256 unverändert.
+Die automatische CSV-Freigabemigration des Updaters wurde anhand des gesicherten
+Originalzustands vollständig zurückgenommen, damit keine bestehende Freigabe auf
+den neuen Prüfstand übertragen wird. Die ursprünglichen Vorgangsbytes sind erhalten.
+
+Die zusätzliche Feldzuordnung bei MCP-Präzisionsfehlern und das Zurücknehmen eines
+nur vorgemerkten Aufrufs bei veralteter Komponente wurden gezielt nachgetestet.
+Der öffentliche Build-Default verwendet die bereits veröffentlichte Version
+`0.0.580-1` mit dem Dezimalstring-Vertrag; das lokale Paket enthält zusätzlich die
+präzisere Attributdiagnose aus `fcf4e9f`. Die CI-Veröffentlichung `0.0.581-1` läuft
+separat weiter und war keine Voraussetzung für diese lokale Installation. Keine reale Fachfreigabe oder Themenrepo-Übernahme durchgeführt.

@@ -124,3 +124,21 @@ Berichte bleiben Historie, sind aber kein Nachweis für neue Dateien. Fehlende
 Manifeste alter Modellprüfungen verlangen erneute Prüfung. Bestehende echte
 CSV-Freigaben werden nur bei weiterhin passendem Fingerprint wiederverwendet.
 Repository-Konflikte gezielt klären, keine fremden Änderungen überschreiben.
+
+### Dezimalgenauigkeit und technische Vertragsfehler
+
+INTERLIS-Grenzen legen auch die Nachkommastellen fest: `0 .. 100` ist ganzzahlig,
+`0.0 .. 100.0` hat eine und `0.00 .. 100.00` zwei Nachkommastellen. Grenzen als
+Dezimalstrings übergeben, auch in `changes`; beide Grenzen benötigen dieselbe
+Genauigkeit. Das gilt auch ohne Einheit und für Nullgrenzen.
+
+CSV-Beobachtungen bestimmen die mindestens benötigte Genauigkeit (`3.40` benötigt
+numerisch eine Stelle), keine zusätzliche fachliche Vorgabe. Bestätigte zwei
+Stellen bleiben erhalten. Widersprüche zwischen bestätigten Grenzen, XTF-Typ und
+CSV-Werten gezielt fachlich klären. XLSX überschreibt keine XTF-Felder.
+
+`model_numeric_contract_violation` bezeichnet einen technischen Generatorfehler:
+Soll/Ist prüfen und die Komponente reparieren lassen. Nicht wiederholt ableiten,
+keine Diagnose-Dateivarianten und insbesondere nicht `0.00` durch `0.01` ersetzen.
+`model_component_upgrade_required` verlangt einen aktualisierten INTERLIS-MCP
+mit dem Dezimalstring-Vertrag. Keine verlustbehafteten Zahlen-Fallbacks verwenden.

@@ -14,6 +14,7 @@ class ModelsTest {
   final List<Map<String, Object>> requests = new ArrayList<>();
   Map<String, Object> reply;
   boolean reviewUnavailable;
+  boolean componentOutdated;
 
   static class Datasheet implements McpClients.ToolClient {
     final List<String> calls = new ArrayList<>();
@@ -123,6 +124,7 @@ class ModelsTest {
             new Fixtures.FakeProcess(),
             new Datasheet(),
             (name, args) -> {
+              if (componentOutdated) NumericModelContract.requireCapability(Map.of());
               requests.add(Json.map("name", name, "arguments", args));
               if (name.equals("reviewIliModel") && reviewUnavailable)
                 throw new Problem("mcp_unavailable", "Synthetischer Verbindungsfehler");
@@ -1069,5 +1071,69 @@ class ModelsTest {
         "Technical correction");
     assertEquals(before, f.workflow.store.edit(id, r -> Json.digest(r.get("model_repair"))));
     assertFalse(f.workflow.store.<Boolean>edit(id, r -> r.containsKey("pending_model")));
+  }
+
+  @Test
+  void corruptNumericGeneratorIsBlockedWithoutRepeatedCalls() {
+    reply.put(
+        "updatedModelText",
+        Json.required(reply, "updatedModelText").replace("1900..2100", "1900..2099"));
+    f.error(
+        "model_numeric_contract_violation",
+        () ->
+            f.call(
+                "derive_model",
+                "run_id",
+                id,
+                "identity",
+                identity(),
+                "range_proposals",
+                proposals()));
+    assertEquals(1, requests.size());
+    f.error(
+        "model_numeric_contract_violation",
+        () ->
+            f.call(
+                "derive_model",
+                "run_id",
+                id,
+                "identity",
+                identity(),
+                "range_proposals",
+                proposals()));
+    assertEquals(1, requests.size());
+    f.workflow.store.edit(
+        id,
+        run -> {
+          assertNull(f.workflow.store.file(run, "model"));
+          assertTrue(Json.obj(run.get("changes")).isEmpty());
+          return null;
+        });
+  }
+
+  @Test
+  void outdatedComponentDoesNotLeavePendingWorkOrDiagnostics() {
+    componentOutdated = true;
+    for (int attempt = 0; attempt < 2; attempt++) {
+      f.error(
+          "model_component_upgrade_required",
+          () ->
+              f.call(
+                  "derive_model",
+                  "run_id",
+                  id,
+                  "identity",
+                  identity(),
+                  "range_proposals",
+                  proposals()));
+    }
+    assertTrue(requests.isEmpty());
+    f.workflow.store.edit(
+        id,
+        run -> {
+          assertFalse(run.containsKey("pending_model"));
+          assertTrue(Json.obj(run.get("model_repair")).isEmpty());
+          return null;
+        });
   }
 }

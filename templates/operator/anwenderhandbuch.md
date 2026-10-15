@@ -216,3 +216,17 @@ werden. Das vollständige Beispiel steht in der Modellskill-Referenz
 ## Datenblatt, Modellquelle und Repository-Ziel
 
 XLSX → Datenblatt → aktuelle exportierte XTF → Modell. CSV-Beobachtungen und bestätigte Fachregeln ergänzen den XTF-Vertrag. `metadata(export_xtf)` prüft Identifier und Datentypen und merkt die XTF automatisch unter `<organisation>/<identifier>/meta-<identifier>.xtf` im konfigurierten Themenrepo vor. Bei ausgewähltem Repository-Datenblatt bleibt der Pfad erhalten; einen gewünschten Dateinamen über `arguments.repository_filename` angeben. Wiederholte Exporte ersetzen den Kandidaten. Kein manuelles Registrieren, erneutes Anhängen oder Suchen des aktuellen Exports. `status.metadata_source` zeigt Quelle und nächsten Schritt. Erst nach Freigabe mit `apply_local_changes` übernehmen. Unveränderte Fehler als konkrete Blocker melden; keine Diagnose-Kopien oder Pfadvarianten ausprobieren.
+
+### Numerische Genauigkeit im Validierungsmodell
+
+Grenzen als Dezimalstrings angeben: `"0.0"` / `"100.0"` bedeutet eine,
+`"0.00"` / `"100.00"` zwei Nachkommastellen. `0 .. 100` ist ganzzahlig.
+Beide Grenzen müssen dieselbe Genauigkeit haben; die Nullgrenze bleibt erhalten.
+CSV-Werte zeigen die mindestens erforderliche Genauigkeit, ersetzen aber keine
+bestätigte Fachregel. Widersprüche werden als offene Fachfrage zurückgegeben.
+
+Bei `model_numeric_contract_violation` wurde eine Abweichung zwischen gewünschtem
+Bereich und kompiliertem Modell festgestellt. Keine alternativen Grenzen oder
+Dateipfade versuchen; die MCP-Komponente muss korrigiert werden. Bei
+`model_component_upgrade_required` das Betriebspaket mit aktuellem INTERLIS-MCP
+installieren. Paketwechsel übertragen keine fachlichen Freigaben auf neue Prüfstände.

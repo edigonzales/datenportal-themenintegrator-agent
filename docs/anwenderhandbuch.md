@@ -875,3 +875,17 @@ wiederverwendet, Schätzungen bleiben unbestätigt. Eine neu beobachtete Eindeut
 darf vorgeschlagen, aber erst nach menschlicher Bestätigung als UNIQUE eingebaut
 werden. Das vollständige Beispiel steht in der Modellskill-Referenz
 `skills/datenportal-validierungsmodell/references/typableitung-und-reparatur.md`.
+
+### Numerische Genauigkeit im Validierungsmodell
+
+Grenzen als Dezimalstrings angeben: `"0.0"` / `"100.0"` bedeutet eine,
+`"0.00"` / `"100.00"` zwei Nachkommastellen. `0 .. 100` ist ganzzahlig.
+Beide Grenzen müssen dieselbe Genauigkeit haben; die Nullgrenze bleibt erhalten.
+CSV-Werte zeigen die mindestens erforderliche Genauigkeit, ersetzen aber keine
+bestätigte Fachregel. Widersprüche werden als offene Fachfrage zurückgegeben.
+
+Bei `model_numeric_contract_violation` wurde eine Abweichung zwischen gewünschtem
+Bereich und kompiliertem Modell festgestellt. Keine alternativen Grenzen oder
+Dateipfade versuchen; die MCP-Komponente muss korrigiert werden. Bei
+`model_component_upgrade_required` das Betriebspaket mit aktuellem INTERLIS-MCP
+installieren. Paketwechsel übertragen keine fachlichen Freigaben auf neue Prüfstände.
