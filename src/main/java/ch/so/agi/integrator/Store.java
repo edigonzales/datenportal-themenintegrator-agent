@@ -80,6 +80,14 @@ public final class Store {
   }
 
   public <T> T edit(String id, Function<Map<String, Object>, T> fn) {
+    return access(id, fn, true);
+  }
+
+  public <T> T read(String id, Function<Map<String, Object>, T> fn) {
+    return access(id, fn, false);
+  }
+
+  private <T> T access(String id, Function<Map<String, Object>, T> fn, boolean write) {
     Path p = directory(id);
     try (var ch =
         FileChannel.open(p.resolve(".lock"), StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
@@ -102,7 +110,7 @@ public final class Store {
         try {
           return fn.apply(data);
         } finally {
-          Json.atomic(p.resolve("state.json"), data);
+          if (write) Json.atomic(p.resolve("state.json"), data);
         }
       }
     } catch (java.io.IOException e) {

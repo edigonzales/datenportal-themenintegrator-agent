@@ -1676,3 +1676,83 @@ und ihre Paketpfade auf 0.2.28 geprüft. Tokenwerte wurden nicht ausgegeben.
 Simuliert: Regressionstests verwenden synthetische Tokens; die lokale
 Initialisierungsprüfung verwendet synthetische Fachdaten. Offen: echte
 GitHub-Authentifizierung und Publikation; kein GitHub-Schreibzugriff durchgeführt.
+
+## Eindeutiger lokaler Lieferablauf (2026-10-15)
+
+`approve` lehnt zusätzliche Publikationsfreigaben für Profile mit `kind=local`
+mit `local_publication_approval_not_required` ab. Die lokale Lieferung bleibt an
+fachliche Freigaben und die Übernahme vorhandener Änderungen gebunden. Für
+INT/PROD bleibt der aktuelle lokale Liefernachweis erforderlich; die Meldung
+nennt nun den „lokalen Liefer- und Publikationstest“. MCP-Beschreibungen, Skill
+und Betriebsanleitungen erklären dieselbe Reihenfolge.
+
+Tatsächlich ausgeführt: `./bin/datenportal-agent gradle test jar spotlessCheck`
+(zusammen mit `spotlessApply`), erfolgreich mit 241 Tests. `git diff --check`
+ist ebenfalls erfolgreich.
+
+Simuliert: neue isolierte Regressionstests für lokale Profilnamen, Ablehnung ohne
+neuen Freigabeeintrag, fehlende/veraltete/unverifizierte und aktuelle lokale
+Liefernachweise bei INT/PROD sowie lokale Voraussetzungen vor und nach der
+Dateiübernahme. Der bestehende HTTP-Fixture-Test bestätigt die lokale Lieferung
+ohne `publish:local`. Sämtliche Freigaben und externen Dienste dieser Tests sind
+synthetisch.
+
+Nicht ausgeführt: reale lokale Testpublikation, INT-/PROD-Lieferung und erneute
+Fachdialog-Abnahme. Vorhandene fachliche Vorgänge und historische Freigaben wurden
+nicht migriert.
+
+### Übernahme ins installierte Betriebspaket
+
+Lokal gebaut und separat installiert als `0.2.28-local-delivery-flow` unter
+`/Users/stefan/datenportal/pakete/datenportal-themenintegrator-agent-0.2.28-local-delivery-flow`,
+mit unveränderten Fachwerkzeug-Versionen Datenblatt-MCP 0.2.3 und INTERLIS-MCP
+0.0.577-1. Dies ist ein lokaler Build, kein veröffentlichtes Release.
+
+Tatsächlich bestanden: isolierter Paket-Smoke (Installation, beide MCPs,
+Validierung und Update), `workspace update` für
+`/Users/stefan/datenportal/datenportal-betrieb`, danach `init` und `doctor` mit
+`initialization.ready=true` und `smoke_current=true`. Konfiguration und alle 21
+vorhandenen Vorgangsdateien sind laut SHA-256-Vergleich unverändert. Die
+installierten Anleitungen stimmen bytegleich mit den Quellen überein; das
+öffentliche `approve`-Schema enthält die neue lokale Freigaberegel.
+
+Nachweise liegen unter `build/operator-update-*`. Bestehende MCP-Verbindungen
+wurden nicht beendet; sie müssen neu verbunden werden, um das neue JAR zu laden.
+Keine fachliche Lieferung oder Publikation ausgelöst.
+
+## Repository-Abschluss nach lokalem Liefernachweis (2026-10-15)
+
+Implementiert: `repository_plan` zeigt lesend das konfigurierte Git-Ziel und
+fehlende Voraussetzungen. `prepare_pr` verlangt fachliche Freigaben und bei
+Themenänderungen den aktuellen verifizierten lokalen Liefernachweis, aber keine
+Publikationsfreigabe. INT-/PROD-Seed und -Anlieferung behalten ihre eigenen
+Publikationsfreigaben. Bestehende Profilparameter bleiben kompatibel.
+
+Tatsächlich geprüft:
+
+- Vollständige Java-Testsuite, JAR-Build und `spotlessCheck` erfolgreich
+  (`./bin/datenportal-agent gradle test jar spotlessCheck`; Abschlusslauf zusätzlich
+  mit `spotlessApply`).
+- Die gezielten Java-Tests `RepositoryTest`, `RepositoryPlanTest` und
+  `PublicationApprovalTest` sind erfolgreich.
+- Der Repository-Plan lässt Inhalt und Änderungszeit der Vorgangsdatei unverändert;
+  fehlende Freigaben und Liefernachweise werden angezeigt. Zugangsdaten in einer
+  Remote-Adresse werden ohne Offenlegung abgewiesen.
+- Fehlende fachliche Freigaben und fehlende, fehlgeschlagene oder veraltete lokale
+  Nachweise blockieren den PR. Nach Datenänderungen genügt eine erneute fachliche
+  Freigabe ohne erneuten lokalen Liefernachweis nicht.
+
+Isoliert simuliert:
+
+- Lokale Dateiübernahme, Fortsetzung eines gespeicherten Seed-Laufs, HTTP-Upload
+  und Publikationsprüfung gegen einen Loopback-Jenkins-/Portal-Testserver.
+- Anschliessend PR ohne `publish:*`, Git-Push ausschliesslich in ein temporäres
+  Bare-Repository, simulierte GitHub-Antworten und menschliche Übernahme als Merge,
+  Squash oder Rebase; danach echte lokale Git-Synchronisierung.
+- Wiederholte PR-Vorbereitung verwendet denselben PR. Fehlende Publikationsfreigabe
+  blockiert weiterhin externe Starts trotz gemergtem PR. Modell-/Organisations-
+  voraussetzungen werden mit synthetischen fachlichen Freigaben geprüft.
+
+Offen: reale Ende-zu-Ende-Abnahme mit lokalem Docker/Jenkins, echtem GitHub-PR und
+menschlichem Merge. Keine reale INT-/PROD-Anlieferung und keine produktiven
+Freigaben oder Pushes wurden durch diese Implementierungsprüfung ausgeführt.

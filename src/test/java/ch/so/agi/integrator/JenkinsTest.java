@@ -230,6 +230,8 @@ class JenkinsTest {
                       Json.map("queue_url", base + "/jenkins/queue/item/seed/")));
           return null;
         });
+    assertFalse(
+        Json.obj(f.workflow.store.edit(id, r -> r).get("approvals")).containsKey("publish:local"));
     assertEquals("running", f.call("deliver", "run_id", id).get("phase"));
     assertEquals(1, uploads);
     Path changed = temp.resolve("changed.csv");

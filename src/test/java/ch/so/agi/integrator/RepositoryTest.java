@@ -112,118 +112,155 @@ class RepositoryTest {
             "git_branch",
             "main");
     Json.obj(f.settings.values.get("environments")).put("int", env);
-    String id = f.metadataOnly();
-    Path candidate = temp.resolve("candidate.xtf");
-    Json.write(
-        candidate,
-        Json.contents(Fixtures.FIXTURES.resolve("dataset.xtf"))
-            .replace("Wasserqualität Grundwasser", "Revidierte Wasserqualität Grundwasser"));
-    f.call("attach", "run_id", id, "role", "metadata", "path", candidate.toString());
-    f.call("stage_change", "run_id", id, "relative_path", rel, "source_path", candidate.toString());
-    f.approveAll(id);
-    // Synthetic fixture injects an explicit reviewed plan without a production endpoint.
-    f.workflow.store.edit(
-        id,
-        r -> {
-          r.put(
-              "publication_plans",
-              Json.map("int", Json.map("environment", "int", "branch", "main")));
-          Json.obj(r.get("approvals"))
-              .put(
-                  "publish:int",
-                  Json.map(
-                      "fingerprint",
-                      f.workflow.fingerprint(r, "publish:int"),
-                      "human_statement",
-                      "AUTOMATISIERTE ISOLIERTE PR-TESTFIXTURE"));
-          return null;
-        });
-    String before = Json.sha(f.repo.resolve(rel));
-    var result = f.call("prepare_pr", "run_id", id, "environment", "int");
-    assertEquals(before, Json.sha(f.repo.resolve(rel)));
-    Path clone = Path.of(Json.required(result, "checkout"));
-    head[0] = Json.required(result, "head");
-    assertEquals(Json.sha(candidate), Json.sha(clone.resolve(rel)));
-    f.workflow.store.edit(
-        id,
-        r -> {
-          assertEquals(
-              "human_merge_required",
-              assertThrows(Problem.class, () -> new Repository(f.workflow).requireMerged(r, env))
-                  .code);
-          return null;
-        });
-    system.checked(List.of("git", "switch", "main"), clone, 60);
-    if (mode.equals("merge")) {
-      system.checked(
-          List.of(
-              "git",
-              "merge",
-              "--no-ff",
-              Json.required(result, "branch"),
-              "-m",
-              "Synthetic human merge fixture"),
-          clone,
-          60);
-    } else if (mode.equals("squash")) {
-      system.checked(
-          List.of("git", "merge", "--squash", Json.required(result, "branch")), clone, 60);
-      system.checked(List.of("git", "commit", "-m", "Synthetic squash fixture"), clone, 60);
-    } else {
-      Json.write(clone.resolve("unrelated.txt"), "synthetic target advancement\n");
-      system.checked(List.of("git", "add", "unrelated.txt"), clone, 60);
-      system.checked(List.of("git", "commit", "-m", "Synthetic target advancement"), clone, 60);
-      system.checked(List.of("git", "cherry-pick", head[0]), clone, 60);
+    var prod = new LinkedHashMap<>(env);
+    prod.put("kind", "prod");
+    Json.obj(f.settings.values.get("environments")).put("prod", prod);
+    var deliveryServer = new JenkinsTest();
+    deliveryServer.setup();
+    try {
+      Json.obj(f.settings.values.get("environments")).put("local", deliveryServer.env);
+      f.workflow.jenkins = (name, ignored) -> deliveryServer.client();
+      String id = f.metadataOnly();
+
+      Path candidate = temp.resolve("candidate.xtf");
+      Json.write(
+          candidate,
+          Json.contents(Fixtures.FIXTURES.resolve("dataset.xtf"))
+              .replace("Wasserqualität Grundwasser", "Revidierte Wasserqualität Grundwasser"));
+      f.call("attach", "run_id", id, "role", "metadata", "path", candidate.toString());
+      f.call(
+          "stage_change", "run_id", id, "relative_path", rel, "source_path", candidate.toString());
+      f.approveAll(id);
+      // Resume a synthetic seed; exercise upload and publication verification over loopback HTTP.
+      deliveryServer.metadata = Json.contents(candidate);
+      f.call("apply_local_changes", "run_id", id);
+      f.workflow.store.edit(
+          id,
+          r -> {
+            Json.obj(r.get("deliveries"))
+                .put(
+                    "local",
+                    Json.map(
+                        "phase",
+                        "seeding",
+                        "fingerprint",
+                        f.workflow.fingerprint(r, "metadata"),
+                        "seed",
+                        Json.map("queue_url", deliveryServer.base + "/jenkins/queue/item/seed/")));
+            return null;
+          });
+      assertEquals("running", f.call("deliver", "run_id", id, "environment", "local").get("phase"));
+      assertEquals(
+          "complete", f.call("deliver", "run_id", id, "environment", "local").get("phase"));
+      assertEquals(1, deliveryServer.uploads);
+      assertTrue(
+          f.workflow.store.<Boolean>read(
+              id,
+              r ->
+                  Json.obj(r.get("approvals")).keySet().stream()
+                      .noneMatch(k -> k.startsWith("publish:"))));
+      String before = Json.sha(f.repo.resolve(rel));
+      var result = f.call("prepare_pr", "run_id", id, "environment", "local");
+      assertEquals(result, f.call("prepare_pr", "run_id", id, "environment", "local"));
+      assertEquals(before, Json.sha(f.repo.resolve(rel)));
+      Path clone = Path.of(Json.required(result, "checkout"));
+      head[0] = Json.required(result, "head");
+      assertEquals(Json.sha(candidate), Json.sha(clone.resolve(rel)));
+      f.workflow.store.edit(
+          id,
+          r -> {
+            assertEquals(
+                "human_merge_required",
+                assertThrows(Problem.class, () -> new Repository(f.workflow).requireMerged(r, env))
+                    .code);
+            return null;
+          });
+      system.checked(List.of("git", "switch", "main"), clone, 60);
+      if (mode.equals("merge")) {
+        system.checked(
+            List.of(
+                "git",
+                "merge",
+                "--no-ff",
+                Json.required(result, "branch"),
+                "-m",
+                "Synthetic human merge fixture"),
+            clone,
+            60);
+      } else if (mode.equals("squash")) {
+        system.checked(
+            List.of("git", "merge", "--squash", Json.required(result, "branch")), clone, 60);
+        system.checked(List.of("git", "commit", "-m", "Synthetic squash fixture"), clone, 60);
+      } else {
+        Json.write(clone.resolve("unrelated.txt"), "synthetic target advancement\n");
+        system.checked(List.of("git", "add", "unrelated.txt"), clone, 60);
+        system.checked(List.of("git", "commit", "-m", "Synthetic target advancement"), clone, 60);
+        system.checked(List.of("git", "cherry-pick", head[0]), clone, 60);
+      }
+      system.checked(List.of("git", "push", "origin", "main"), clone, 60);
+      state[0] = "MERGED";
+      f.workflow.credentials =
+          (name, ignored) -> new Credentials.Value("synthetic", "synthetic", "fixture");
+      f.workflow.jenkins =
+          (name, ignored) -> {
+            throw new AssertionError("No external start before sync");
+          };
+      system.checked(List.of("git", "switch", "-c", "human-branch"), f.repo, 60);
+      assertEquals(
+          "approval_required",
+          assertThrows(Problem.class, () -> f.call("seed", "run_id", id, "environment", "int"))
+              .code);
+      assertEquals(
+          "approval_required",
+          assertThrows(Problem.class, () -> f.call("deliver", "run_id", id, "environment", "int"))
+              .code);
+      f.error(
+          "repository_sync_conflict",
+          () -> f.call("sync_repository", "run_id", id, "environment", "local"));
+      system.checked(List.of("git", "switch", "main"), f.repo, 60);
+
+      f.call("sync_repository", "run_id", id, "environment", "local");
+      for (String target : List.of("int", "prod")) {
+        for (String operation : List.of("seed", "deliver")) {
+          f.error(
+              "approval_required", () -> f.call(operation, "run_id", id, "environment", target));
+        }
+      }
+      f.workflow.store.edit(
+          id,
+          r -> {
+            new RepositorySync(f.workflow).sync(r, env);
+            assertEquals(Json.sha(candidate), Json.sha(f.repo.resolve(rel)));
+            assertTrue(
+                system.checked(List.of("git", "status", "--porcelain"), f.repo, 60).isBlank());
+            return null;
+          });
+      head[0] = "changed-head";
+      f.workflow.store.edit(
+          id,
+          r -> {
+            assertEquals(
+                "pr_changed",
+                assertThrows(Problem.class, () -> new Repository(f.workflow).requireMerged(r, env))
+                    .code);
+            return null;
+          });
+      head[0] = Json.required(result, "head");
+      Json.write(clone.resolve(rel), "changed after merge\n");
+      system.checked(List.of("git", "add", rel), clone, 60);
+      system.checked(List.of("git", "commit", "-m", "Synthetic conflicting follow-up"), clone, 60);
+      system.checked(List.of("git", "push", "origin", "main"), clone, 60);
+      f.workflow.store.edit(
+          id,
+          r -> {
+            assertEquals(
+                "merged_content_changed",
+                assertThrows(Problem.class, () -> new Repository(f.workflow).requireMerged(r, env))
+                    .code);
+            return null;
+          });
+    } finally {
+      deliveryServer.close();
     }
-    system.checked(List.of("git", "push", "origin", "main"), clone, 60);
-    state[0] = "MERGED";
-    f.workflow.credentials =
-        (name, ignored) -> new Credentials.Value("synthetic", "synthetic", "fixture");
-    f.workflow.jenkins =
-        (name, ignored) -> {
-          throw new AssertionError("No external start before sync");
-        };
-    system.checked(List.of("git", "switch", "-c", "human-branch"), f.repo, 60);
-    assertEquals(
-        "repository_sync_conflict",
-        assertThrows(Problem.class, () -> f.call("seed", "run_id", id, "environment", "int")).code);
-    assertEquals(
-        "repository_sync_conflict",
-        assertThrows(Problem.class, () -> f.call("deliver", "run_id", id, "environment", "int"))
-            .code);
-    system.checked(List.of("git", "switch", "main"), f.repo, 60);
-    f.call("sync_repository", "run_id", id, "environment", "int");
-    f.workflow.store.edit(
-        id,
-        r -> {
-          new RepositorySync(f.workflow).sync(r, env);
-          assertEquals(Json.sha(candidate), Json.sha(f.repo.resolve(rel)));
-          assertTrue(system.checked(List.of("git", "status", "--porcelain"), f.repo, 60).isBlank());
-          return null;
-        });
-    head[0] = "changed-head";
-    f.workflow.store.edit(
-        id,
-        r -> {
-          assertEquals(
-              "pr_changed",
-              assertThrows(Problem.class, () -> new Repository(f.workflow).requireMerged(r, env))
-                  .code);
-          return null;
-        });
-    head[0] = Json.required(result, "head");
-    Json.write(clone.resolve(rel), "changed after merge\n");
-    system.checked(List.of("git", "add", rel), clone, 60);
-    system.checked(List.of("git", "commit", "-m", "Synthetic conflicting follow-up"), clone, 60);
-    system.checked(List.of("git", "push", "origin", "main"), clone, 60);
-    f.workflow.store.edit(
-        id,
-        r -> {
-          assertEquals(
-              "merged_content_changed",
-              assertThrows(Problem.class, () -> new Repository(f.workflow).requireMerged(r, env))
-                  .code);
-          return null;
-        });
   }
 }

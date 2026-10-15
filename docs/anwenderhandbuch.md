@@ -591,9 +591,45 @@ Seed, pausierten administrativen Erstaufbau und Portalstart. Bei vorhandenem
 Bestand prüft `--check-only` lesend, ohne Seed oder Container-Neuerstellung.
 Ein vorhandenes oder beschädigtes Manifest wird niemals durch einen Erstaufbau ersetzt. Anschliessend Seed, Lieferung, Publikationsbericht, Reload, Metadaten und Downloads prüfen. Erneute Aufrufe fragen gespeicherte Läufe ab. Bei Erfolg erscheint der konkrete `portal_url`.
 
-**Dritter menschlicher Stopp:** lokal belassen oder INT/PROD wählen. `publication_plan` zeigt Zieladressen, Branch, Dateien und Ausgangsstand. Erst nach ausdrücklichem OK `gate: publish:int` beziehungsweise `publish:prod` freigeben. `prepare_pr` erstellt notwendige fachliche Änderungen in einer isolierten Git-Arbeitskopie. Ein Mensch übernimmt den PR; danach überprüft der Integrator Merge und exakte Zielbytes. Es folgt `deliver` in der freigegebenen Umgebung. Reine Datenlieferungen ohne Repository-Änderung brauchen keinen PR.
+**Abschluss wählen:** lokal abschliessen, lokal testen und anschliessend einen fachlichen PR erstellen oder ausdrücklich INT/PROD beliefern. Der PR benötigt keine Publikationsfreigabe. `repository_plan` zeigt zuvor Git-Repository, Remote, Zielbranch, Änderungen und offene Voraussetzungen. Ein Mensch übernimmt den PR; danach prüft `sync_repository` Merge und Zielbytes und aktualisiert das lokale Themenrepo. Reine Datenlieferungen ohne Repository-Änderung brauchen keinen PR. INT/PROD benötigen für eine beauftragte Anlieferung zusätzlich den konkreten `publication_plan` und eine echte Freigabe `publish:<Profil>`.
 
 INT/PROD sind nur mit passenden Zugängen und bestehendem `managed-git`-Betrieb ohne Git-Rückschreiben nutzbar. Der Integrator stellt bestehende Runtime-Konfigurationen nicht um.
+
+## Lokaler Lieferablauf und Publikationsfreigaben
+
+Nach den fachlichen Freigaben für Daten, Metadaten und gegebenenfalls Modell
+zuerst vorhandene Änderungen mit `apply_local_changes` lokal übernehmen. Nur bei
+beauftragter lokaler Lieferung anschliessend `deliver(environment="local")`
+phasenweise fortsetzen. Eine fachliche Freigabe erweitert den Auftrag nicht
+automatisch um eine lokale Publikation.
+
+Für Profile mit `kind=local` ist keine zusätzliche Publikationsfreigabe vorgesehen.
+`approve(gate="publish:local")` wird mit
+`local_publication_approval_not_required` abgelehnt; dies gilt auch für anders
+benannte lokale Profile. Der lokale Liefer- und Publikationstest umfasst die
+Lieferung über Jenkins und die Prüfung von Publikationsbericht, Portal-Reload,
+Metadaten und Downloads. Die Dateiübernahme allein erfüllt diesen Nachweis nicht.
+
+Danach kann der lokal geprüfte Stand ins echte Themenrepository übernommen werden:
+
+1. `repository_plan(run_id, environment="local")` zeigt das Git-Ziel und offene Voraussetzungen, ohne Jenkins-/Portal-Zugriff, Arbeitskopie oder Push. Zugangsdaten in Remote-Adressen sind unzulässig und werden nicht ausgegeben.
+2. Die beauftragte PR-Erstellung mit `prepare_pr(run_id, environment="local")` prüft alle fachlichen Freigaben und den aktuellen erfolgreichen lokalen Liefernachweis erneut, pusht einen separaten Branch und erstellt den PR. Weder `publish:local` noch eine INT-/PROD-Freigabe ist dafür erforderlich.
+3. Ein Mensch mergt. Anschliessend `sync_repository(run_id, environment="local")` ausführen. Dies startet keine Anlieferung. INT und PROD können weiterhin manuell beliefert werden.
+
+Bei diesen drei Repository-Operationen bestimmt das bestehende Profil Git-Remote
+(Standard `origin`) und Zielbranch (Standard `main`). Lieferumgebung und Git-Ziel
+werden getrennt angezeigt; es gibt keine neue Git-Konfiguration. Ein bereits
+erteilter PR-Auftrag benötigt keine erneute Bestätigung. Fachliche Freigaben
+allein erteilen jedoch keinen neuen Push- oder Lieferauftrag.
+
+Eigenständige Modell- und Organisations-PRs benötigen ihre fachlichen Freigaben,
+aber keinen Themen-Liefernachweis. Ohne Repository-Änderungen ist kein PR nötig.
+
+Nur für eine ausdrücklich beauftragte INT-/PROD-Anlieferung den konkreten
+`publication_plan` zeigen und nach menschlichem OK `approve(gate="publish:<Profil>")`
+protokollieren. Beim Themenvorgang setzt dies weiterhin einen erfolgreichen
+lokalen Liefer- und Publikationstest für den aktuellen Stand voraus. Ein
+vorhandener oder gemergter PR ersetzt diese Publikationsfreigabe nicht.
 
 ## INTERLIS-Modellierung
 

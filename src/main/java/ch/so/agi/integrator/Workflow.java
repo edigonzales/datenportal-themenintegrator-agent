@@ -65,6 +65,10 @@ public final class Workflow implements AutoCloseable {
     if (operation.equals("metadata") && Json.str(args, "operation", "").equals("describe_schema"))
       return datasheets.call("describe_schema", Json.obj(args.get("arguments")));
     if (operation.equals("organization_schema")) return new Organizations(this).schema(args);
+    if (operation.equals("repository_plan"))
+      return store.read(
+          Json.required(args, "run_id"),
+          r -> new Repository(this).plan(r, Json.required(args, "environment")));
     return store.edit(
         Json.required(args, "run_id"),
         r -> {
@@ -435,6 +439,20 @@ public final class Workflow implements AutoCloseable {
           gate);
   }
 
+  void requireLocalTest(Map<String, Object> r) {
+    if (!Json.str(r, "workflow", "topic").equals("topic")) return;
+    String fingerprint = fingerprint(r, "metadata");
+    if (!Json.obj(r.get("deliveries")).entrySet().stream()
+        .anyMatch(
+            e ->
+                Json.bool(Json.obj(e.getValue()), "verified", false)
+                    && Objects.equals(Json.obj(e.getValue()).get("fingerprint"), fingerprint)
+                    && Json.str(settings.environment(e.getKey()), "kind", "").equals("local")))
+      throw new Problem(
+          "local_test_required",
+          "Erfolgreicher lokaler Liefer- und Publikationstest für diesen Stand fehlt.");
+  }
+
   Map<String, Object> validateXtf(Map<String, Object> r, Path xtf, String name) {
     try {
       var result = validator.validate(xtf, offices(r), directory(r).resolve(name));
@@ -760,22 +778,15 @@ public final class Workflow implements AutoCloseable {
     if (gate.startsWith("publish:")) {
       require(r, primaryGate(r));
       String env = gate.substring(8);
-      settings.environment(env);
+      if (Json.required(settings.environment(env), "kind").equals("local"))
+        throw new Problem(
+            "local_publication_approval_not_required",
+            "Für lokale Lieferungen ist keine zusätzliche Publikationsfreigabe vorgesehen. Nach den fachlichen Freigaben zuerst vorhandene Änderungen mit apply_local_changes übernehmen und die beauftragte lokale Lieferung mit deliver fortsetzen.");
       var plan = Json.obj(Json.obj(r.get("publication_plans")).get(env));
       if (!Objects.equals(plan.get("fingerprint"), fp))
         throw new Problem(
             "publication_review_required", "Konkreten Publikationsplan zuerst anzeigen.");
-      if (primaryGate(r).equals("metadata")
-          && !Json.obj(r.get("deliveries")).entrySet().stream()
-              .anyMatch(
-                  e ->
-                      Json.bool(Json.obj(e.getValue()), "verified", false)
-                          && Objects.equals(
-                              Json.obj(e.getValue()).get("fingerprint"), fingerprint(r, "metadata"))
-                          && Json.str(settings.environment(e.getKey()), "kind", "")
-                              .equals("local")))
-        throw new Problem(
-            "local_test_required", "Erfolgreicher lokaler Gesamttest für diesen Stand fehlt.");
+      requireLocalTest(r);
     }
     var record = Json.map("at", Json.now(), "fingerprint", fp, "human_statement", statement);
     Json.obj(r.get("approvals")).put(gate, record);

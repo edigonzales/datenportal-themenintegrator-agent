@@ -11,9 +11,14 @@ public final class Deliveries {
   }
 
   void approved(Map<String, Object> r) {
-    w.require(r, w.primaryGate(r));
-    if (w.store.file(r, "data") != null) w.require(r, "data");
-    if (r.containsKey("model") && w.primaryGate(r).equals("metadata")) w.require(r, "model");
+    for (String gate : approvalGates(r)) w.require(r, gate);
+  }
+
+  List<String> approvalGates(Map<String, Object> r) {
+    var gates = new ArrayList<>(List.of(w.primaryGate(r)));
+    if (w.store.file(r, "data") != null) gates.add("data");
+    if (r.containsKey("model") && w.primaryGate(r).equals("metadata")) gates.add("model");
+    return gates;
   }
 
   void target(Map<String, Object> r, String name, Map<String, Object> env) {

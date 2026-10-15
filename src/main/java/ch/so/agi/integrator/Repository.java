@@ -25,11 +25,53 @@ public final class Repository {
     return result.output().strip();
   }
 
+  public Object plan(Map<String, Object> run, String environment) {
+    var env = w.settings.environment(environment);
+    String remote = Json.str(env, "git_remote", "origin");
+    // Parse before displaying: credential-bearing or ambiguous URLs are rejected without echoing
+    // them.
+    var repo = GitHub.repository(command(w.settings.topics, "git", "remote", "get-url", remote));
+    var blockers = new ArrayList<Map<String, Object>>();
+    boolean required = !Json.obj(run.get("changes")).isEmpty();
+    if (required) {
+      for (String gate : new Deliveries(w).approvalGates(run)) {
+        try {
+          w.require(run, gate);
+        } catch (Problem error) {
+          blockers.add(error.result());
+        }
+      }
+      try {
+        w.requireLocalTest(run);
+      } catch (Problem error) {
+        blockers.add(error.result());
+      }
+    }
+    return Json.map(
+        "environment",
+        environment,
+        "remote",
+        remote,
+        "repository",
+        "https://github.com/" + repo.owner() + "/" + repo.name(),
+        "base",
+        Json.str(env, "git_branch", "main"),
+        "changes",
+        new ArrayList<>(Json.obj(run.get("changes")).keySet()),
+        "required",
+        required,
+        "ready",
+        blockers.isEmpty(),
+        "blockers",
+        blockers);
+  }
+
   public Object prepare(Map<String, Object> run, String environment) {
     var env = w.settings.environment(environment);
-    w.require(run, "publish:" + environment);
     var changes = Json.obj(run.get("changes"));
     if (changes.isEmpty()) return Json.map("required", false);
+    new Deliveries(w).approved(run);
+    w.requireLocalTest(run);
     if (run.containsKey("pull_request")) return run.get("pull_request");
     if (github == null) github = w.github.get();
     if (run.containsKey("pr_submission")) return recover(run);
@@ -117,7 +159,7 @@ public final class Repository {
             + String.join(", ", changes.keySet())
             + ".\n\nPrüfstand: `"
             + w.fingerprint(run, w.primaryGate(run))
-            + "`. Prüfdetails liegen in der lokalen HTML-Vorschau.\n\nEin Mensch übernimmt den PR. Anschliessend prüft der Integrator den Zielstand und führt den ausdrücklich freigegebenen Seed beziehungsweise die Lieferung aus.\n");
+            + "`. Prüfdetails liegen in der lokalen HTML-Vorschau.\n\nEin Mensch übernimmt den PR. Anschliessend prüft der Integrator den Zielstand und synchronisiert das lokale Themenrepository. Dieser PR startet keine Anlieferung; INT/PROD benötigen einen separaten Auftrag und eine Publikationsfreigabe.\n");
     run.put(
         "pr_submission",
         Json.map(

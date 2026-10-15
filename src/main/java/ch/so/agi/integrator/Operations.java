@@ -66,7 +66,7 @@ public final class Operations {
     add("validate", "XTF, Dienststellen, CSV-Vertrag und allfälliges Modell prüfen.", "run_id!");
     add(
         "approve",
-        "Tatsächliches menschliches OK für einen konkreten Prüfstand protokollieren.",
+        "Tatsächliches menschliches OK für einen konkreten Prüfstand protokollieren; zusätzliche Publikationsfreigaben nur für INT/PROD, nicht für lokale Profile.",
         "run_id!",
         "gate!",
         "fingerprint!",
@@ -95,18 +95,23 @@ public final class Operations {
         "run_id!",
         "environment!");
     add(
+        "repository_plan",
+        "Git-Ziel, Änderungen und fehlende Freigaben/Liefernachweise lesend anzeigen; kein Push und kein Jenkins-Aufruf.",
+        "run_id!",
+        "environment!");
+    add(
         "sync_repository",
         "Merge prüfen und lokales Themenrepository ohne Veröffentlichung synchronisieren.",
         "run_id!",
         "environment!");
     add(
         "prepare_pr",
-        "Isolierten fachlichen PR vorbereiten. Merge erfolgt durch einen Menschen.",
+        "Isolierten fachlichen PR nach fachlichen Freigaben vorbereiten; Themenänderungen benötigen einen aktuellen lokalen Liefernachweis, keine Publikationsfreigabe. Merge erfolgt durch einen Menschen.",
         "run_id!",
         "environment!");
     add(
         "deliver",
-        "Lieferung um eine Phase weiterführen; bestehende Läufe weiter aufklären.",
+        "Beauftragte Lieferung um eine Phase weiterführen; lokal nach fachlichen Freigaben und Übernahme vorhandener Änderungen, für INT/PROD zusätzlich nach Publikationsfreigabe. Bestehende Läufe weiter aufklären.",
         "run_id!",
         "environment");
     add(
@@ -258,7 +263,7 @@ public final class Operations {
       case "metadata_path" ->
           "Absolute vorhandene Datenblatt-XTF; vorhandenen Stand aus dem Themenrepo verwenden.";
       case "source_environment", "environment" ->
-          "Name eines eingerichteten Zielprofils; lokales Profil heisst local. Lieferung benötigt passende echte Freigabe.";
+          "Name eines eingerichteten Profils, z.B. local. repository_plan, prepare_pr und sync_repository verwenden dessen Git-Remote und Zielbranch ohne Publikationsfreigabe. Lokale Lieferung benötigt fachliche Freigaben; INT/PROD zusätzlich publish:<Profil>. Die Profilart kind bestimmt den Lieferablauf.";
       case "role" ->
           "data=CSV, metadata=Datenblatt-XTF, metadata_source=XLSX, model=ILI. Neue Datei entwertet abhängige Freigaben.";
       case "path" ->
@@ -268,7 +273,7 @@ public final class Operations {
       case "arguments" ->
           "Argumentobjekt gemäss operation_schema(metadata.<operation>); Entwurfs-IDs und Revisionen verwaltet der Integrator.";
       case "gate" ->
-          "data, metadata, model, organization oder publish:<Profil>, passend zum tatsächlich gezeigten Prüfstand.";
+          "data, metadata, model, organization oder publish:<Profil> für INT/PROD, passend zum tatsächlich gezeigten Prüfstand. Für Profile mit kind=local ist keine zusätzliche Publikationsfreigabe vorgesehen.";
       case "fingerprint" ->
           "Exakter Fingerprint des gezeigten aktuellen Prüfstands; status.current_approvals enthält nur derzeit gültige Freigaben.";
       case "human_statement" ->

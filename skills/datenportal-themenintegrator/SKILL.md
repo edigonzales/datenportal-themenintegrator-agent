@@ -33,7 +33,7 @@ Vor dem ersten Integrator-Aufruf mit angehängten CSV/XTF/XLSX die [verbindliche
    Nach erfolgreicher Modellprüfung bereitet `prepare_model_reference` die Modellreferenz vor; anschliessend das vollständige Paket mit `validate_model(scope="integration")` prüfen. Keinen zweiten Vorgang starten.
 6. Geplante Repository-XTF, Modell, Task und notwendige Katalog-/Org-Änderungen vor dem Review registrieren. `validate` prüft XTF, Offices, CSV-Vertrag und allfälliges Modell. HTML mit Feldern, Ausgaben, Änderungen, Herkunft und Prüfmeldungen zeigen.
 7. **Metadaten-/Modell-Stopp:** echte Antwort abwarten; Korrekturen bearbeiten, exportieren und erneut prüfen. Beim Thema mit Modell beide Gates `metadata` und `model` für die gemeinsam gezeigten Prüfstände bestätigen.
-8. Nur die beauftragte Übernahme beziehungsweise Lieferung nach passenden Freigaben fortsetzen. Vorher [Lieferung und Wiederaufnahme](../../docs/agent/lieferung-und-wiederaufnahme.md) lesen. Je Lieferaufruf eine Phase; bei Erfolg den geprüften Portal-Link zeigen.
+8. Nur die beauftragte Übernahme beziehungsweise Lieferung nach passenden Freigaben fortsetzen. Vorher [Lieferung und Wiederaufnahme](../../docs/agent/lieferung-und-wiederaufnahme.md) lesen. Lokal nach fachlichen Freigaben zuerst vorhandene Änderungen mit `apply_local_changes` übernehmen, dann die beauftragte Lieferung mit `deliver` phasenweise fortsetzen. Kein `approve(publish:local)`; lokal abschliessen benötigt keine zusätzliche Publikationsfreigabe. Erst für INT/PROD nach erfolgreichem lokalem Liefer- und Publikationstest Zielplan zeigen und zusätzliche Publikationsfreigabe einholen. Fachliche Freigaben erweitern den Auftrag nicht um eine Publikation. Je Lieferaufruf eine Phase; bei Erfolg den geprüften Portal-Link zeigen.
 
 ## Modell ableiten
 
@@ -60,6 +60,8 @@ Nach einer Änderung `analyze`, `validate` und bei vorhandenem Modell
 `validate_model(scope=integration)` ausführen und die neuen Berichte zeigen.
 Identische Werte verändern keine Prüfstände; vorherige Prüfungen/Freigaben
 bleiben bei Änderungen in der Historie, sind aber nicht mehr gültig.
+
+Vor einem beauftragten fachlichen PR `repository_plan(run_id, environment)` zeigen: konkretes Git-Repository, Remote, Zielbranch und offene Voraussetzungen. Das Profil wählt die Git-Zuordnung; `prepare_pr` benötigt keine Publikationsfreigabe. Themenvorgänge mit Repository-Änderungen benötigen aktuelle fachliche Freigaben und einen erfolgreichen lokalen Liefernachweis; eigenständige Modell-/Organisationsvorgänge nur ihre fachlichen Freigaben. Bereits erteilte PR-Aufträge nicht erneut bestätigen lassen. Lokal testen, PR erstellen und nach menschlichem Merge synchronisieren ist ein vollständiger Abschluss; INT/PROD werden dabei nicht angeliefert.
 
 Nach menschlichem PR-Merge beim Fortsetzen `sync_repository(run_id, environment)`
 aufrufen, auch für einen Abschluss ohne Veröffentlichung. Der Aufruf prüft Merge

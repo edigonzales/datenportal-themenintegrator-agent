@@ -112,7 +112,6 @@ Arbeitsdateien und lokale Konfiguration bleiben erhalten. Individuell verändert
 
 `jdk_required` verlangt ein vollständiges JDK 21. `package_incomplete` verlangt ein vollständiges Paket; der Fachagent baut keine fehlenden Programme selbst. `configuration_upgrade_required` verweist auf die neue Konfigurationsvorlage. `unsupported_state_version` verlangt die bisherige Version für den alten Vorgang. `github_credentials_missing`, `github_access_denied` und `github_rate_limited` unterscheiden fehlende Zugänge, Berechtigungen und Wartezeiten.
 
-
 ## Fachliche Arbeit
 
 Die drei Skills führen durch Themenintegration, eigenständige Modellierung und Organisationsanlage. Öffentliche Argumente mit `operation_schema` erfragen. Chat-Anhänge mit `datenportal_workspace.import_attachment` unverändert übernehmen; nur drei gleiche SHA-256-Prüfsummen bestätigen die Kopie.
@@ -120,6 +119,42 @@ Die drei Skills führen durch Themenintegration, eigenständige Modellierung und
 Lokale CSV-Konverter sind fachliche Java-Arbeitsprodukte. Sie werden durch den Integrator mit JDK 21 kompiliert und getestet; keine Integrator-Quellen bearbeiten. CSV-/Modell-/Metadatenänderungen prüfen und nur tatsächliche menschliche Freigaben protokollieren.
 
 Bei bestehenden Modellvorgängen ersetzt `validate_model` einen unveränderten alten Integrator-Taskblock durch diese Konfiguration als Kandidat. Modell und Datenblatt bleiben unverändert. Anschliessend die vollständigen Prüfberichte aktualisieren und den geänderten Stand freigeben lassen; es erfolgt keine automatische Übernahme oder Lieferung.
+
+## Lokaler Lieferablauf und Publikationsfreigaben
+
+Nach den fachlichen Freigaben für Daten, Metadaten und gegebenenfalls Modell
+zuerst vorhandene Änderungen mit `apply_local_changes` lokal übernehmen. Nur bei
+beauftragter lokaler Lieferung anschliessend `deliver(environment="local")`
+phasenweise fortsetzen. Eine fachliche Freigabe erweitert den Auftrag nicht
+automatisch um eine lokale Publikation.
+
+Für Profile mit `kind=local` ist keine zusätzliche Publikationsfreigabe vorgesehen.
+`approve(gate="publish:local")` wird mit
+`local_publication_approval_not_required` abgelehnt; dies gilt auch für anders
+benannte lokale Profile. Der lokale Liefer- und Publikationstest umfasst die
+Lieferung über Jenkins und die Prüfung von Publikationsbericht, Portal-Reload,
+Metadaten und Downloads. Die Dateiübernahme allein erfüllt diesen Nachweis nicht.
+
+Danach kann der lokal geprüfte Stand ins echte Themenrepository übernommen werden:
+
+1. `repository_plan(run_id, environment="local")` zeigt das Git-Ziel und offene Voraussetzungen, ohne Jenkins-/Portal-Zugriff, Arbeitskopie oder Push. Zugangsdaten in Remote-Adressen sind unzulässig und werden nicht ausgegeben.
+2. Die beauftragte PR-Erstellung mit `prepare_pr(run_id, environment="local")` prüft alle fachlichen Freigaben und den aktuellen erfolgreichen lokalen Liefernachweis erneut, pusht einen separaten Branch und erstellt den PR. Weder `publish:local` noch eine INT-/PROD-Freigabe ist dafür erforderlich.
+3. Ein Mensch mergt. Anschliessend `sync_repository(run_id, environment="local")` ausführen. Dies startet keine Anlieferung. INT und PROD können weiterhin manuell beliefert werden.
+
+Bei diesen drei Repository-Operationen bestimmt das bestehende Profil Git-Remote
+(Standard `origin`) und Zielbranch (Standard `main`). Lieferumgebung und Git-Ziel
+werden getrennt angezeigt; es gibt keine neue Git-Konfiguration. Ein bereits
+erteilter PR-Auftrag benötigt keine erneute Bestätigung. Fachliche Freigaben
+allein erteilen jedoch keinen neuen Push- oder Lieferauftrag.
+
+Eigenständige Modell- und Organisations-PRs benötigen ihre fachlichen Freigaben,
+aber keinen Themen-Liefernachweis. Ohne Repository-Änderungen ist kein PR nötig.
+
+Nur für eine ausdrücklich beauftragte INT-/PROD-Anlieferung den konkreten
+`publication_plan` zeigen und nach menschlichem OK `approve(gate="publish:<Profil>")`
+protokollieren. Beim Themenvorgang setzt dies weiterhin einen erfolgreichen
+lokalen Liefer- und Publikationstest für den aktuellen Stand voraus. Ein
+vorhandener oder gemergter PR ersetzt diese Publikationsfreigabe nicht.
 
 ## Freigaben bei Paketupdates
 

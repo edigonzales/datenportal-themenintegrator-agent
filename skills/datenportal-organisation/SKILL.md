@@ -26,6 +26,8 @@ verweisen mit `full_result_path` auf die vollständige Ausgabe; diese bei Bedarf
 über `read_file` und `next_offset` abschnittweise lesen. Keine erneute Prüfung
 zum Lesen auslösen und keine internen OpenCode-Ausgabedateien anfordern.
 
+Vor einem beauftragten fachlichen PR `repository_plan(run_id, environment)` zeigen: konkretes Git-Repository, Remote, Zielbranch und offene Voraussetzungen. Das Profil wählt die Git-Zuordnung; `prepare_pr` benötigt keine Publikationsfreigabe. Themenvorgänge mit Repository-Änderungen benötigen aktuelle fachliche Freigaben und einen erfolgreichen lokalen Liefernachweis; eigenständige Modell-/Organisationsvorgänge nur ihre fachlichen Freigaben. Bereits erteilte PR-Aufträge nicht erneut bestätigen lassen. Lokal testen, PR erstellen und nach menschlichem Merge synchronisieren ist ein vollständiger Abschluss; INT/PROD werden dabei nicht angeliefert.
+
 Nach menschlichem PR-Merge beim Fortsetzen `sync_repository(run_id, environment)`
 aufrufen, auch für einen Abschluss ohne Veröffentlichung. Der Aufruf prüft Merge
 und Zielbytes und synchronisiert das lokale Themenrepository. `status` bleibt
