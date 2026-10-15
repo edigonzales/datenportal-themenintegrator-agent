@@ -220,28 +220,37 @@ public final class McpClients {
     return m;
   }
 
-  public static Map<String, Object> create(
-      ToolClient client, String kind, Map<String, Object> values, Map<String, Object> run) {
+  static String shell(String kind, String basketId, String objectId) {
+    if (!basketId.matches("[A-Za-z0-9_.:-]+") || !objectId.matches("[A-Za-z0-9_.:-]+"))
+      throw new Problem("draft_identity_invalid", "Gesicherte XTF-Identitäten sind ungültig.");
     String tag =
         switch (kind) {
           case "dataset" -> "Dataset";
           case "series" -> "DatasetSeries";
           default -> throw new Problem("invalid_kind", "kind muss dataset oder series sein.");
         };
+    return "<transfer xmlns=\""
+        + Xml.ILI
+        + "\" xmlns:i=\""
+        + Xml.ILI
+        + "\" xmlns:d=\""
+        + Xml.SHEET
+        + "\"><headersection><models><model>SO_AGI_DataCatalog_Datasheet_20260523</model><model>SO_AGI_DataCatalog_Base_20260529</model></models><sender>datenportal-integrator</sender></headersection><datasection><d:Metadata i:bid=\""
+        + basketId
+        + "\"><d:"
+        + tag
+        + " i:tid=\""
+        + objectId
+        + "\"/></d:Metadata></datasection></transfer>";
+  }
+
+  public static Map<String, Object> create(
+      ToolClient client, String kind, Map<String, Object> values, Map<String, Object> run) {
     String shell =
-        "<transfer xmlns=\""
-            + Xml.ILI
-            + "\" xmlns:i=\""
-            + Xml.ILI
-            + "\" xmlns:d=\""
-            + Xml.SHEET
-            + "\"><headersection><models><model>SO_AGI_DataCatalog_Datasheet_20260523</model><model>SO_AGI_DataCatalog_Base_20260529</model></models><sender>datenportal-integrator</sender></headersection><datasection><d:Metadata i:bid=\"b"
-            + UUID.randomUUID().toString().replace("-", "")
-            + "\"><d:"
-            + tag
-            + " i:tid=\"o"
-            + UUID.randomUUID().toString().replace("-", "")
-            + "\"/></d:Metadata></datasection></transfer>";
+        shell(
+            kind,
+            "b" + UUID.randomUUID().toString().replace("-", ""),
+            "o" + UUID.randomUUID().toString().replace("-", ""));
     run.put("draft_base", shell);
     var current = client.call("import_xtf", Json.map("xml", shell));
     if (!values.isEmpty())

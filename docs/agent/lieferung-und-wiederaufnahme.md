@@ -64,3 +64,28 @@ Datenliefernachweis und Publikationsfreigaben sind hierfür nicht erforderlich.
 `repository_plan`, `prepare_pr` und nach menschlichem Merge `sync_repository`
 verwenden; keinen Seed und keine Lieferung starten. Ein bereits vorbereiteter
 PR wird fortgesetzt; weitere Office-Änderungen benötigen einen neuen Vorgang.
+
+## Bestätigter Wiederherstellungspunkt
+
+Erstellung und Import werden separat vorbereitet. Erst nach vollständigem Erfolg
+speichert der Integrator Basis, Snapshot, Identitäten und Prüfsumme gemeinsam.
+Eindeutige fachliche Ablehnung hinterlässt keinen `pending_metadata`-Auftrag;
+ein Transportabbruch mit unbekanntem Ausgang blockiert weitere Bearbeitung.
+`restore` verwendet ausschließlich den letzten bestätigten Stand und zeigt den
+unbestätigten Auftrag separat, ohne ihn auszuführen.
+
+Der Vergleich unterscheidet `identity_fields` (Basket-/Objektidentität) und
+`content_fields` (fachliche Feldpfade). Neue interne Entwurfs-/Kind-IDs werden
+nach erfolgreichem Vergleich zugeordnet. `draft_restore_blocked` verhindert
+weitere MCP-Mutationen bei identischem fehlgeschlagenem Wiederherstellungsversuch.
+Ursache beziehungsweise Komponente korrigieren; keine alternativen Pfade oder
+Diagnosedatenblätter erzeugen und keine Zustandsdateien manuell bearbeiten.
+
+Für den Altfehler einer überschriebenen Erstellungsbasis kann `restore` eine
+leere Basis mit den ursprünglichen Identitäten aus dem bestätigten Snapshot
+rekonstruieren. Das ist nur bei nachgewiesener Integrator-Erstellungsbasis,
+passendem unbestätigtem Erstellungsauftrag und ohne importierte/exportierte
+Quelle zulässig. Anschließend gelten dieselben vollständigen Inhalts- und
+Identitätsprüfungen. Fehlende Evidenz führt zu
+`draft_recovery_evidence_missing`, nicht zu einer gelockerten Prüfung.
+Freigaben und Repository-Dateien werden durch Wiederherstellung nicht verändert.

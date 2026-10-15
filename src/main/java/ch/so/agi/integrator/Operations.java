@@ -59,7 +59,7 @@ public final class Operations {
         "limit:integer");
     add(
         "metadata",
-        "Bestehenden Datenblatt-MCP über seine öffentlichen Werkzeuge verwenden.",
+        "Datenblatt bearbeiten. Neue Serienausgabe: upsert_issue(values=…) ohne issue_id; fachlichen Ausgabe-Identifier und issue_label getrennt bestätigen. Bestehende Ausgabe über zurückgelieferte interne issue_id oder denselben fachlichen Identifier bearbeiten. create_datasheet/import_xtf nur ohne bestehenden Entwurf. restore verwendet den bestätigten Wiederherstellungspunkt.",
         "run_id!",
         "operation!",
         "arguments:object");

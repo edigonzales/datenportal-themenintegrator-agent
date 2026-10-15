@@ -25,8 +25,14 @@ final class OperatorWorkspace {
   }
 
   static Object command(List<String> args) {
-    if (args.size() != 2 || !Set.of("install", "update").contains(args.getFirst()))
-      throw new Problem("invalid_arguments", "workspace install|update <absoluter Zielordner>");
+    boolean preserve =
+        args.size() == 3
+            && args.getFirst().equals("update")
+            && args.get(2).equals("--preserve-run-state");
+    if ((!preserve && args.size() != 2) || !Set.of("install", "update").contains(args.getFirst()))
+      throw new Problem(
+          "invalid_arguments",
+          "workspace install|update <absoluter Zielordner> [--preserve-run-state nur bei update]");
     Path target = Path.of(args.get(1));
     if (!target.isAbsolute()) throw new Problem("unsafe_path", "Absoluten Zielordner angeben.");
     Path previousHome =
@@ -55,16 +61,17 @@ final class OperatorWorkspace {
       manifest.put("package_home", AgentResources.resolve(target, "").toString());
       if (previousHome != null) manifest.put("legacy_package_home", previousHome.toString());
       Json.atomic(target.resolve(MANIFEST), manifest);
-      if (previousHome != null)
+      if (previousHome != null && !preserve)
         result.put(
             "approval_migration",
             ApprovalMigration.update(target, previousHome, AgentResources.resolve(target, "")));
-      if (currentHome != null)
+      if (currentHome != null && !preserve)
         result.put(
             "data_approval_migration",
             DataApprovalMigration.update(
                 target, Path.of(currentHome), AgentResources.resolve(target, "")));
     }
+    if (preserve) result.put("run_state_preserved", true);
     return result;
   }
 

@@ -29,3 +29,25 @@ wirkungslos; der Identifier bleibt bestehen.
 Für ein fehlendes Office im Themenvorgang zuerst `organization_schema` lesen und vorhandene Offices prüfen. Mit `office` bestätigte Pflichtangaben ergänzen; Organisation und Office-Identifier unterscheiden. Diese Ergänzung bleibt beim vorhandenen `run_id` und wird gemeinsam mit den Themenänderungen geprüft.
 
 Ein Auftrag zur vollständigen neuen Organisation verwendet dagegen [datenportal-organisation](../../skills/datenportal-organisation/SKILL.md). Dafür bestätigte Kontakte und Berechtigungszuordnungen klären; fehlende Offices allein sind keine solche Beauftragung.
+
+## Serien und Ausgaben
+
+Der Themenidentifier bezeichnet die Serie. Der fachliche Ausgabe-Identifier
+(`values.identifier`), die Bezeichnung (`values.issue_label`, etwa `2025`) und
+die interne, vom MCP zurückgelieferte `issue_id` sind verschiedene Angaben.
+Vorgangs-`issue` bezeichnet die Ausgabe für Lieferung und Auswahl; daraus wird
+kein fachlicher Identifier abgeleitet. Fehlende Fachangaben gezielt erfragen.
+
+Neue Ausgabe mit `metadata(operation=upsert_issue, arguments={values: …})`
+ohne `issue_id` anlegen. Für erneutes Upsert denselben bestätigten fachlichen
+Identifier verwenden; dadurch entsteht keine zweite Ausgabe. Bestehende
+Ausgaben alternativ über die zurückgelieferte interne `issue_id` bearbeiten.
+`update_metadata(issue_id=…)` prüft den Identifier dieser Ausgabe, nicht den
+Themenidentifier. Vorhandene Identifier bleiben erhalten. Bei unbekannter
+interner ID die vorhandenen Ausgaben lesen; `issue_id="2025"` ist keine
+Abkürzung für eine neue Ausgabe. `issue_label` und `is_current_issue` gehören
+zu `upsert_issue`, nicht auf die Serienebene.
+
+`create_datasheet` und `import_xtf` sind nur ohne bestehenden Entwurf zulässig.
+Bei vorhandenem Entwurf lesen, bearbeiten oder ausdrücklich `restore` verwenden.
+Keine zweite Erstellung als Fehlerumgehung versuchen.

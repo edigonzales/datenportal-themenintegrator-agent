@@ -423,18 +423,41 @@ public final class Workflow implements AutoCloseable {
   void restoreDraft(Map<String, Object> r) {
     inheritExport(r);
     var old = Json.obj(r.get("draft"));
-    var restored = McpClients.restore(datasheets, r);
-    if (!contentHash(old).equals(contentHash(restored)))
+    var recovery = MetadataDrafts.recovery(r);
+    String attempt =
+        Json.digest(
+            Json.map(
+                "checkpoint",
+                recovery.get("draft"),
+                "base",
+                recovery.get("draft_base"),
+                "integrator",
+                MetadataDrafts.implementationIdentity(),
+                "component",
+                datasheets.identity()));
+    if (attempt.equals(Json.obj(r.get("draft_restore_blocker")).get("attempt")))
       throw new Problem(
-          "draft_restore_mismatch",
-          "Wiederhergestellter Entwurf weicht vom bestätigten Snapshot ab.");
+          "draft_restore_blocked",
+          "Identische Wiederherstellung ist bereits fehlgeschlagen. Ursache/Komponente korrigieren; keine weiteren Entwürfe erzeugen.",
+          "blocker",
+          r.get("draft_restore_blocker"));
+    Map<String, Object> restored;
+    try {
+      restored = McpClients.restore(datasheets, recovery);
+      MetadataDrafts.compare(old, restored);
+    } catch (Problem error) {
+      r.put("draft_restore_blocker", Json.map("attempt", attempt, "error", error.result()));
+      throw error;
+    }
     var aliases = new LinkedHashMap<>(Json.obj(r.get("draft_id_aliases")));
     var translations = Json.map();
     mapIds(Json.obj(old.get("data")), Json.obj(restored.get("data")), translations);
     aliases.replaceAll((k, v) -> translations.getOrDefault(v.toString(), v));
     translations.forEach(aliases::put);
     r.put("draft_id_aliases", aliases);
+    r.put("draft_base", recovery.get("draft_base"));
     r.put("draft", restored);
+    MetadataDrafts.checkpoint(r);
     r.put("draft_session", datasheets.sessionKey());
     Store.event(r, "restore_draft", Json.map("content_sha256", contentHash(restored)));
   }
@@ -935,10 +958,11 @@ public final class Workflow implements AutoCloseable {
         .contains(op))
       throw new Problem("unknown_operation", "Nicht unterstützte Datenblattoperation.");
     input = new LinkedHashMap<>(input);
+    MetadataDrafts.preflight(r, op, input);
     if (Set.of("create_datasheet", "update_metadata").contains(op)) {
       var values = new LinkedHashMap<>(Json.obj(input.get("values")));
       if (op.equals("create_datasheet")) values.putIfAbsent("identifier", r.get("identifier"));
-      if (values.containsKey("identifier"))
+      if (values.containsKey("identifier") && !input.containsKey("issue_id"))
         MetadataArtifacts.identifier(r, values.get("identifier"));
       input.put("values", values);
     }
@@ -980,16 +1004,30 @@ public final class Workflow implements AutoCloseable {
       r.put("pending_metadata", Json.map("operation", op, "arguments", input, "at", Json.now()));
       persist(r);
       Map<String, Object> result;
-      if (op.equals("create_datasheet"))
-        result =
-            McpClients.create(
-                datasheets, Json.required(input, "kind"), Json.obj(input.get("values")), r);
-      else {
-        String xml = Json.contents(sheet(r));
-        result = datasheets.call(op, Json.map("xml", xml));
-        r.put("draft_base", xml);
+      var candidate = Json.read(Json.text(r));
+      try {
+        if (op.equals("create_datasheet"))
+          result =
+              McpClients.create(
+                  datasheets,
+                  Json.required(input, "kind"),
+                  Json.obj(input.get("values")),
+                  candidate);
+        else {
+          String xml = Json.contents(sheet(r));
+          result = datasheets.call(op, Json.map("xml", xml));
+          candidate.put("draft_base", xml);
+        }
+      } catch (Problem error) {
+        if (error.details.containsKey("response")) {
+          r.remove("pending_metadata");
+          Store.event(r, "metadata_rejected", Json.map("operation", op, "code", error.code));
+        }
+        throw error;
       }
+      r.put("draft_base", candidate.get("draft_base"));
       r.put("draft", result);
+      MetadataDrafts.checkpoint(r);
       r.put("draft_session", datasheets.sessionKey());
       r.remove("draft_id_aliases");
       r.remove("exported_content_sha256");
@@ -1049,6 +1087,7 @@ public final class Workflow implements AutoCloseable {
     }
     if (mutation) {
       r.put("draft", result);
+      MetadataDrafts.checkpoint(r);
       r.remove("pending_metadata");
       Json.obj(r.get("files")).remove("metadata");
       Json.obj(r.get("checks")).remove("metadata");
@@ -1061,6 +1100,7 @@ public final class Workflow implements AutoCloseable {
       MetadataArtifacts.validate(out, r);
       MetadataArtifacts.stage(this, r, exportTarget, out);
       r.put("draft_base", result.remove("xml"));
+      MetadataDrafts.checkpoint(r);
       result.put("artifact", store.attach(r, out, "metadata"));
       r.put("exported_revision", current.get("revision"));
       r.put("exported_content_sha256", contentHash(Json.obj(r.get("draft"))));

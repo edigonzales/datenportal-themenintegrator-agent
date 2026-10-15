@@ -2087,3 +2087,46 @@ Der öffentliche Build-Default verwendet die bereits veröffentlichte Version
 `0.0.580-1` mit dem Dezimalstring-Vertrag; das lokale Paket enthält zusätzlich die
 präzisere Attributdiagnose aus `fcf4e9f`. Die CI-Veröffentlichung `0.0.581-1` läuft
 separat weiter und war keine Voraussetzung für diese lokale Installation. Keine reale Fachfreigabe oder Themenrepo-Übernahme durchgeführt.
+
+## Serienvertrag und Wiederherstellung (2026-10-15)
+
+Implementiert ausschließlich im Integrator: getrennte Themen-/Ausgabe-Identifier,
+interne IDs und Bezeichnungen; Vorprüfung von Ausgabeoperationen; Schutz vor
+erneuter Erstellung/Import; atomare Übernahme von Erstellungsbasis und Snapshot;
+geprüfte Wiederherstellungspunkte; gezielte Rekonstruktion des belegbaren
+Altfehlers mit ursprünglicher Basket-/Objektidentität. Abweichungen nennen
+Identitäts- und Inhaltsfelder; unveränderte fehlgeschlagene Wiederherstellungen
+führen vor weiteren MCP-Mutationen zu einem Blocker. Ein neuer Integrator- oder
+Fach-MCP-Implementierungsstand erlaubt eine erneute Prüfung.
+
+Tatsächlich durchgeführt: 287 Java-Tests erfolgreich, JAR-Bau und Formatprüfung
+erfolgreich. Isolierte Tests unterscheiden eindeutige Ablehnung und unklaren
+Transportabbruch; bestätigte Checkpoints bleiben erhalten. Manipulierte
+Checkpoints und unzureichende Altfall-Evidenz werden abgewiesen. Absichtlich
+veränderte Restore-Inhalte/Identitäten werden nicht übernommen; ein erneuter
+identischer Versuch ruft den MCP nicht auf.
+
+Der reale MCP-Regressionsfall erstellt eine Serie, legt eine Ausgabe ohne interne
+ID an, aktualisiert sie über Identifier sowie interne ID und prüft genau eine
+Ausgabe. Er reproduziert die überschriebenen Basisidentitäten und das Scheitern
+des bisherigen Restore-Wegs isoliert. Der reparierte Restore erhält alle
+fachlichen Inhalte und ursprünglichen Identitäten; Export und weiterer
+MCP-Neustart sind Bestandteil der Prüfung. Keine Geschäftssession wird als
+Testfixture verwendet.
+
+Offene fachliche Abnahme: ausdrückliches `restore` des realen Vorgangs
+`11ff1aa4f8b7463f9fbe06f503e72698` und dessen fachliche Fortsetzung.
+Keine Freigabe, Repository-Übernahme oder Publikation wird hierfür simuliert.
+Die optionale Docker-/Publikationsabnahme gehört nicht zu diesem lokalen Update.
+
+Vollständige Integration mit expliziter Konfiguration
+`build/xtf-contract-integration/integration.toml` und isoliertem Paket erfolgreich:
+24 Tests, davon 23 erfolgreich und ein optionaler Docker-/Publikationsfall
+übersprungen. Der Serienfall läuft gegen den realen Datenblatt-MCP, inklusive
+Prozessneustarts. Paketbau mit den lokalen MCP-Artefakten; keine Änderung am
+Datenblatt-MCP erforderlich.
+
+Paket `0.2.35-local-series-recovery` gebaut und synthetischer Paket-Smoke
+bestanden: Installation, beide MCPs, positive/negative Validierung, Update und
+explizites `--preserve-run-state` mit byteidentischer Zustandsfixture.
+Der öffentliche Updatepfad kann damit ohne Freigabemigration verwendet werden.

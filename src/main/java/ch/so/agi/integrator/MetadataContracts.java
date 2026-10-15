@@ -48,6 +48,17 @@ final class MetadataContracts {
                   "string",
                   "description",
                   "Optionaler XTF-Dateiname ohne Verzeichnis. Export verwaltet genau einen Kandidaten im konfigurierten Themenordner; Übernahme erst nach Freigabe."));
+    var argumentProps = Json.obj(arguments.get("properties"));
+    if (argumentProps.containsKey("issue_id")) {
+      var issueId = new LinkedHashMap<>(Json.obj(argumentProps.get("issue_id")));
+      issueId.put(
+          "description",
+          "Interne zurückgelieferte Kennung einer vorhandenen Ausgabe. Weder Themenidentifier noch fachlicher Ausgabe-Identifier oder Bezeichnung. Für neue Ausgaben bei upsert_issue weglassen.");
+      argumentProps.put("issue_id", issueId);
+    }
+    arguments.put(
+        "description",
+        "Neue Ausgabe: upsert_issue(values={identifier: bestätigter fachlicher Ausgabe-Identifier, issue_label: bestätigte Bezeichnung, …}) ohne issue_id. Vorhandene Ausgabe: upsert_issue über denselben values.identifier oder interne issue_id; update_metadata(issue_id=…) bearbeitet diese Ausgabe. Vorgangs-issue (z.B. 2025) wird niemals als Identifier geraten. create_datasheet/import_xtf sind nur ohne bestehenden Entwurf zulässig; Ausgabefelder gehören nicht auf Serienebene.");
     var schema = new LinkedHashMap<>(Operations.ALL.get("metadata").schema());
     var props = new LinkedHashMap<>(Json.obj(schema.get("properties")));
     props.put("operation", Json.map("type", "string", "enum", List.of(name)));

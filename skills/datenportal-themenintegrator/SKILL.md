@@ -104,3 +104,19 @@ verwerfen. Unterbrochene Synchronisierung mit demselben Vorgang wiederaufnehmen.
 ## Verbindlicher Metadaten-Kandidat
 
 XLSX dient zur Erstellung des Datenblatts; das Modell verwendet die aktuelle exportierte XTF plus CSV-Beobachtungen und bestätigte Fachregeln. `metadata(export_xtf)` verwaltet den Repository-Zielpfad und genau einen Kandidaten automatisch. Gewünschte Dateinamen über `arguments.repository_filename` angeben, kein manuelles `stage_change` für diese XTF. Erst nach fachlicher Freigabe mit `apply_local_changes` übernehmen. Aktive Quelle und nächsten Schritt aus `status.metadata_source` lesen; keine Repository-Suche oder erneutes Anhängen des Exports. Bei identischem Fehler ohne Zustandsänderung Diagnose als Blocker melden, keine Pfadvarianten oder Diagnose-Kopien anlegen.
+
+### Serienausgaben bearbeiten
+
+Themenidentifier, fachlichen Ausgabe-Identifier (`values.identifier`),
+Ausgabebezeichnung (`issue_label`) und interne `issue_id` getrennt behandeln.
+Neue Ausgabe mit `upsert_issue(values=…)` ohne `issue_id` anlegen; fehlenden
+fachlichen Identifier erfragen, niemals aus Vorgangs-`issue="2025"` ableiten.
+Bestehende Ausgabe über denselben fachlichen Identifier oder die zurückgelieferte
+interne ID aktualisieren. Ausgabefelder nicht per `update_metadata` auf die
+Serie schreiben. `update_metadata(issue_id=…)` adressiert eine vorhandene Ausgabe.
+Bei bestehendem Entwurf weder `create_datasheet` noch `import_xtf` wiederholen.
+Nach unklarem Aufruf ausschließlich den bestätigten Stand mit `restore`
+wiederherstellen; einen identischen Restore-Blocker mit seinen Feldpfaden melden,
+keine weitere Versuchsschleife beginnen. Details stehen in den Referenzen
+[Metadaten](../../docs/agent/metadaten-und-xlsx.md) und
+[Wiederaufnahme](../../docs/agent/lieferung-und-wiederaufnahme.md).

@@ -230,3 +230,14 @@ Bereich und kompiliertem Modell festgestellt. Keine alternativen Grenzen oder
 Dateipfade versuchen; die MCP-Komponente muss korrigiert werden. Bei
 `model_component_upgrade_required` das Betriebspaket mit aktuellem INTERLIS-MCP
 installieren. Paketwechsel übertragen keine fachlichen Freigaben auf neue Prüfstände.
+
+### Paketwechsel ohne Vorgangsmigration
+
+`/pfad/zum/neuen-paket/bin/datenportal-agent workspace update /absoluter/pfad/betrieb --preserve-run-state`
+aktualisiert ausschließlich die verwalteten Betriebsdateien und den Paketverweis.
+Die automatischen Freigabemigrationen werden dabei ausgelassen; sämtliche
+Vorgangszustände bleiben unverändert. Vor einem Neuladen der MCP-Verbindungen
+laufende Aufrufe auslaufen lassen. Ein Paketwechsel führt weder `restore` aus
+noch repariert oder genehmigt er fachliche Vorgänge. Serienausgaben und die
+Diagnose gesperrter Wiederherstellungen sind in den ausgelieferten Referenzen
+zu Metadaten und Wiederaufnahme beschrieben.

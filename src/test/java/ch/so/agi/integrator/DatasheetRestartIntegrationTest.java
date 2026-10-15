@@ -36,6 +36,16 @@ class DatasheetRestartIntegrationTest {
       assertFalse(properties.containsKey("draft_id"));
       assertFalse(properties.containsKey("expected_revision"));
       assertTrue(Json.list(schema.get("required")).contains("arguments"));
+      var issueContract = Json.obj(MetadataContracts.schema(client, "upsert_issue"));
+      var issueArgs =
+          Json.obj(
+              Json.obj(Json.obj(issueContract.get("inputSchema")).get("properties"))
+                  .get("arguments"));
+      assertTrue(Json.required(issueArgs, "description").contains("ohne issue_id"));
+      assertTrue(
+          Json.required(
+                  Json.obj(Json.obj(issueArgs.get("properties")).get("issue_id")), "description")
+              .contains("Interne"));
     }
   }
 
@@ -167,6 +177,125 @@ class DatasheetRestartIntegrationTest {
       assertNotNull(restored.get("unconfirmed_operation"));
       assertEquals("Incomplete", Json.obj(restored.get("data")).get("title"));
       assertFalse(Json.bool(op(f.workflow, id, "validate_datasheet", Json.map()), "valid", true));
+    }
+  }
+
+  @Test
+  void seriesCreationIssueUpsertExportAndLegacyRecovery() throws Exception {
+    var s = source();
+    String id;
+    Map<String, Object> confirmed;
+    try (var client = McpClients.datasheet(s)) {
+      var f = fixture(s, client);
+      id =
+          Json.required(
+              f.call(
+                  "start",
+                  "organization",
+                  "agi",
+                  "identifier",
+                  "ch.so.bevoelkerung.altersstruktur",
+                  "issue",
+                  "2025"),
+              "id");
+      var reference =
+          client.call(
+              "import_xtf",
+              Json.map("xml", Json.contents(Fixtures.FIXTURES.resolve("series.xtf"))));
+      var values = new LinkedHashMap<>(Json.obj(reference.get("data")));
+      var attributes = Json.list(values.remove("attributes"));
+      var issues = Json.list(values.remove("issues"));
+      op(f.workflow, id, "create_datasheet", Json.map("kind", "series", "values", values));
+      for (var a : attributes) {
+        var attribute = new LinkedHashMap<>(Json.obj(a));
+        attribute.remove("attribute_id");
+        op(f.workflow, id, "upsert_attribute", Json.map("values", attribute));
+      }
+      var issue = new LinkedHashMap<>(Json.obj(issues.getFirst()));
+      issue.remove("issue_id");
+      issue.remove("attributes");
+      op(f.workflow, id, "upsert_issue", Json.map("values", issue));
+      var repeated = op(f.workflow, id, "upsert_issue", Json.map("values", issue));
+      assertEquals(1, Json.list(Json.obj(repeated.get("data")).get("issues")).size());
+      String issueId =
+          Json.required(
+              Json.obj(Json.list(Json.obj(repeated.get("data")).get("issues")).getFirst()),
+              "issue_id");
+      op(
+          f.workflow,
+          id,
+          "update_metadata",
+          Json.map(
+              "issue_id",
+              issueId,
+              "values",
+              Json.map("identifier", issue.get("identifier"), "title", "Updated issue")));
+      var checkpoint = f.workflow.store.edit(id, r -> r.get("draft_checkpoint"));
+      f.error(
+          "metadata_issue_not_found",
+          () -> op(f.workflow, id, "upsert_issue", Json.map("issue_id", "2025", "values", issue)));
+      f.error(
+          "metadata_field_scope",
+          () ->
+              op(
+                  f.workflow,
+                  id,
+                  "update_metadata",
+                  Json.map("values", Json.map("issue_label", "2025"))));
+      f.error(
+          "draft_exists", () -> op(f.workflow, id, "create_datasheet", Json.map("kind", "series")));
+      f.error("draft_exists", () -> op(f.workflow, id, "import_xtf", Json.map()));
+      f.error(
+          "mcp_error",
+          () ->
+              op(
+                  f.workflow,
+                  id,
+                  "update_metadata",
+                  Json.map("values", Json.map("unknown_field", true))));
+      assertEquals(checkpoint, f.workflow.store.edit(id, r -> r.get("draft_checkpoint")));
+      assertFalse(f.call("status", "run_id", id).containsKey("pending_metadata"));
+      confirmed = f.workflow.store.edit(id, r -> Json.read(Json.text(Json.obj(r.get("draft")))));
+      // Isolated reconstruction of the historical bug, never the actual business run.
+      f.workflow.store.edit(
+          id,
+          r -> {
+            r.remove("draft_checkpoint");
+            r.put("draft_base", McpClients.shell("series", "wrongBasket", "wrongObject"));
+            r.put(
+                "pending_metadata",
+                Json.map(
+                    "operation",
+                    "create_datasheet",
+                    "arguments",
+                    Json.map("kind", "series", "values", Json.map("issue_label", "2025"))));
+            // The former restore path imports the overwritten base and must fail identity checks.
+            var wrong = McpClients.restore(client, r);
+            var mismatch =
+                assertThrows(Problem.class, () -> MetadataDrafts.compare(confirmed, wrong));
+            assertEquals("draft_restore_mismatch", mismatch.code);
+            assertEquals(
+                List.of("basket_id", "object_id"), mismatch.details.get("identity_fields"));
+            assertEquals(confirmed, r.get("draft"));
+            return null;
+          });
+    }
+    try (var client = McpClients.datasheet(s)) {
+      var f = fixture(s, client);
+      var restored = op(f.workflow, id, "restore", Json.map());
+      MetadataDrafts.compare(confirmed, restored);
+      assertNotNull(restored.get("unconfirmed_operation"));
+      assertFalse(f.call("status", "run_id", id).containsKey("pending_metadata"));
+      op(f.workflow, id, "export_xtf", Json.map());
+      assertEquals(
+          (Object) f.workflow.store.edit(id, r -> r.get("draft_base")),
+          f.workflow.store.edit(
+              id, r -> Json.obj(Json.obj(r.get("draft_checkpoint")).get("value")).get("base")));
+    }
+    try (var client = McpClients.datasheet(s)) {
+      var f = fixture(s, client);
+      MetadataDrafts.compare(confirmed, op(f.workflow, id, "read_datasheet", Json.map()));
+      op(f.workflow, id, "export_xtf", Json.map());
     }
   }
 

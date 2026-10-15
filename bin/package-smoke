@@ -27,3 +27,10 @@ cp "$fixture/work space/config/local.toml" "$fixture/config-before-update.toml"
 cmp "$fixture/config-before-update.toml" "$fixture/work space/config/local.toml"
 "$fixture/work space/bin/datenportal-agent" init > "$fixture/reinit.json"
 printf 'Package installation, both MCPs, validation and update passed: %s\n' "$fixture"
+# Explicitly preserve business-state bytes, including an intentionally opaque fixture.
+mkdir -p "$fixture/work space/.datenportal-integrator/runs/synthetic-preserve"
+printf '%s\n' '{"fixture":"synthetic-only","approvals":{"data":"must remain unchanged"}}' > "$fixture/preserve.json"
+cp "$fixture/preserve.json" "$fixture/work space/.datenportal-integrator/runs/synthetic-preserve/state.json"
+"$package/bin/datenportal-agent" workspace update "$fixture/work space" --preserve-run-state > "$fixture/preserve-update.json"
+cmp "$fixture/preserve.json" "$fixture/work space/.datenportal-integrator/runs/synthetic-preserve/state.json"
+printf 'Explicit run-state preservation passed\n'
