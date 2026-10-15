@@ -1897,3 +1897,25 @@ Die vollständige Integrationstestsuite gegen das neue Paket bestand ebenfalls
 `DATENPORTAL_AGENT_HOME=build/java-distribution`). Der optionale Docker-/Jenkins-Test
 bleibt ausdrücklich übersprungen; Modellnachweiserneuerung und Office-MCP wurden
 mit den tatsächlich veröffentlichten Laufzeitkomponenten geprüft.
+
+Lokale Installation abgeschlossen unter
+`/Users/stefan/datenportal/pakete/datenportal-themenintegrator-agent-0.2.28-local-office-interlis579`.
+Der Betriebsordner `/Users/stefan/datenportal/datenportal-betrieb` wurde mit
+`workspace update` aktualisiert und mit `init` erneut geprüft. Seine lokale
+Konfiguration blieb bytegleich; vor dem Update wurde eine private Sicherung
+angelegt. `doctor` bestätigt beide MCPs und den aktuellen Initialisierungsnachweis.
+
+OpenCode wurde über `reload` neu verbunden; `mcp list` meldet beide Server als
+`connected`. Ein tatsächlicher OpenCode-Lesetest mit dem bereits verwendeten
+DeepSeek-Modell rief erfolgreich die Schemas für `start`, `office` und
+`derive_model.changes` ab. Letzteres liest den Vertrag des INTERLIS-MCP.
+Der vorherige Versuch mit dem CLI-Standardmodell scheiterte am OpenRouter-
+Guthabenlimit (HTTP 402); die MCP-Anbindung war nicht die Ursache. Keine Provider-
+oder Guthabeneinstellungen geändert. Die beiden technischen Testchats verändern
+keine Fachvorgänge; keine neue fachliche Freigabe oder Veröffentlichung ausgelöst.
+
+Abschlusszahlen: 265 Unit-/Regressionstests erfolgreich; vollständige
+Integrationstestsuite 22 Tests, davon 21 erfolgreich und eine optionale
+Docker-/Jenkins-Abnahme übersprungen. Agentenänderungen auf `main` gepusht
+(Implementierungscommit `d1d8a78`). Das Agentenpaket ist lokal gebaut und
+installiert, nicht als neuer Maven-Agentenrelease veröffentlicht.
