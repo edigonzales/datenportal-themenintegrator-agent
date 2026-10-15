@@ -36,11 +36,11 @@ public final class Main {
       }
       if (args.isEmpty() || args.getFirst().equals("--help")) {
         System.out.println(
-            "Java 21 Themenintegrator\nbin/datenportal-agent [--config PATH] init|doctor|serve|serve-workspace|schema OP|call OP [--json JSON|--args-file PATH]\nworkspace install|update ZIELORDNER\ninit [--skip-smoke]\ncredentials set|status|remove PROFIL\nacceptance delivery (optional, Docker erforderlich)\nWeitere Helfer: harness-config, codex");
+            "Java 21 Themenintegrator\nbin/datenportal-agent [--config PATH] init|doctor|serve|serve-workspace|schema OP|call OP [--json JSON|--args-file PATH]\nworkspace install|update ZIELORDNER\ninit [--skip-smoke]\ncredentials set|status|remove PROFIL\ncredentials github set --token-stdin | --from-env; credentials github status|remove\nacceptance delivery (optional, Docker erforderlich)\nWeitere Helfer: harness-config, codex");
         return 0;
       }
       String command = args.removeFirst();
-      if (command.equals("git-credential")) return GitHubCredentials.run(args);
+      if (command.equals("git-credential")) return GitHubCredentials.run(args, config);
       if (command.equals("workspace")) {
         print(OperatorWorkspace.command(args));
         return 0;

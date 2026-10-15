@@ -10,31 +10,44 @@ import org.junit.jupiter.api.Test;
 
 class GitHubTest {
   @Test
-  void gitUsesJavaCredentialHelperAndDoesNotDiscloseTokenToOtherHosts() throws Exception {
-    for (String host : List.of("github.com", "example.org")) {
-      var builder = new ProcessBuilder("git", "credential", "fill");
-      builder.environment().putAll(GitHubCredentials.environment());
-      builder.environment().put("GH_TOKEN", "SYNTHETIC-CREDENTIAL");
-      builder.environment().put("GIT_CONFIG_NOSYSTEM", "1");
-      builder.environment().put("GIT_CONFIG_GLOBAL", "/dev/null");
-      builder.redirectError(ProcessBuilder.Redirect.DISCARD);
-      var child = builder.start();
-      try {
-        child
-            .getOutputStream()
-            .write(("protocol=https\nhost=" + host + "\n\n").getBytes(StandardCharsets.UTF_8));
-        child.getOutputStream().close();
-        assertTrue(child.waitFor(15, java.util.concurrent.TimeUnit.SECONDS));
-        String result = new String(child.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-        if (host.equals("github.com")) {
-          assertEquals(0, child.exitValue());
-          assertTrue(result.contains("password=SYNTHETIC-CREDENTIAL"));
-        } else {
-          assertNotEquals(0, child.exitValue());
-          assertFalse(result.contains("SYNTHETIC-CREDENTIAL"));
+  void gitUsesJavaCredentialHelperAndDoesNotDiscloseTokenToOtherHosts(
+      @org.junit.jupiter.api.io.TempDir java.nio.file.Path temp) throws Exception {
+    var fixture = new Fixtures(temp.resolve("workspace with spaces"));
+    new Credentials(fixture.settings).saveGithub("SYNTHETIC-CREDENTIAL");
+    for (String source : List.of("store", "GH_TOKEN", "GITHUB_TOKEN")) {
+      for (String host : List.of("github.com", "example.org")) {
+        var builder = new ProcessBuilder("git", "credential", "fill");
+        builder.environment().putAll(GitHubCredentials.environment(fixture.settings));
+        builder.environment().remove("GH_TOKEN");
+        builder.environment().remove("GITHUB_TOKEN");
+        String expected = source.equals("store") ? "SYNTHETIC-CREDENTIAL" : "SYNTHETIC-ENV";
+        if (!source.equals("store")) builder.environment().put(source, expected);
+        builder.directory(temp.toFile());
+        assertFalse(
+            GitHubCredentials.environment(fixture.settings)
+                .toString()
+                .contains("SYNTHETIC-CREDENTIAL"));
+        builder.environment().put("GIT_CONFIG_NOSYSTEM", "1");
+        builder.environment().put("GIT_CONFIG_GLOBAL", "/dev/null");
+        builder.redirectError(ProcessBuilder.Redirect.DISCARD);
+        var child = builder.start();
+        try {
+          child
+              .getOutputStream()
+              .write(("protocol=https\nhost=" + host + "\n\n").getBytes(StandardCharsets.UTF_8));
+          child.getOutputStream().close();
+          assertTrue(child.waitFor(15, java.util.concurrent.TimeUnit.SECONDS));
+          String result = new String(child.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+          if (host.equals("github.com")) {
+            assertEquals(0, child.exitValue());
+            assertTrue(result.contains("password=" + expected));
+          } else {
+            assertNotEquals(0, child.exitValue());
+            assertFalse(result.contains("SYNTHETIC"));
+          }
+        } finally {
+          child.destroyForcibly();
         }
-      } finally {
-        child.destroyForcibly();
       }
     }
   }
@@ -57,7 +70,11 @@ class GitHubTest {
   }
 
   @Test
-  void restPayloadAuthenticationRateLimitAndNoRedirect() throws Exception {
+  void restPayloadAuthenticationRateLimitAndNoRedirect(
+      @org.junit.jupiter.api.io.TempDir java.nio.file.Path temp) throws Exception {
+    var fixture = new Fixtures(temp);
+    var credentials = new Credentials(fixture.settings, key -> null);
+    credentials.saveGithub("SYNTHETIC");
     var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
     var requests = new ArrayList<String>();
     server.createContext(
@@ -80,6 +97,9 @@ class GitHubTest {
             exchange.getResponseHeaders().set("Retry-After", "90");
             response = "{}";
             code = 429;
+          } else if (exchange.getRequestURI().getPath().endsWith("/4")) {
+            response = "{}";
+            code = 401;
           } else if (exchange.getRequestURI().getPath().endsWith("/3")) {
             exchange.getResponseHeaders().set("Location", "https://example.org/secret");
             response = "{}";
@@ -97,7 +117,9 @@ class GitHubTest {
     try {
       var api =
           new GitHub(
-              URI.create("http://127.0.0.1:" + server.getAddress().getPort()), "SYNTHETIC", 5);
+              URI.create("http://127.0.0.1:" + server.getAddress().getPort()),
+              credentials.resolveGithub().token,
+              5);
       var repo = new GitHub.Repo("org", "repo");
       assertEquals(
           "https://github.com/org/repo/pull/1",
@@ -108,7 +130,9 @@ class GitHubTest {
       assertEquals("90", rate.details.get("retry_after"));
       assertFalse(Json.text(rate.result()).contains("SYNTHETIC"));
       assertEquals("github_api_failed", assertThrows(Problem.class, () -> api.get(repo, 3)).code);
-      assertEquals(List.of("POST", "GET", "GET", "GET"), requests);
+      assertEquals(
+          "github_authentication_failed", assertThrows(Problem.class, () -> api.get(repo, 4)).code);
+      assertEquals(List.of("POST", "GET", "GET", "GET", "GET"), requests);
     } finally {
       server.stop(0);
     }

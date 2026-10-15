@@ -16,7 +16,11 @@ public final class Repository {
       return w.process.checked(List.of(args), cwd, w.settings.timeout);
     var result =
         w.process.run(
-            List.of(args), cwd, w.settings.timeout, null, GitHubCredentials.environment());
+            List.of(args),
+            cwd,
+            w.settings.timeout,
+            null,
+            GitHubCredentials.environment(w.settings));
     if (result.exitCode() != 0) throw new Problem("git_failed", "Git-Zugriff fehlgeschlagen.");
     return result.output().strip();
   }

@@ -5,7 +5,7 @@ import java.util.*;
 
 /** Git credential protocol; token is supplied only over the helper's private stdout pipe. */
 final class GitHubCredentials {
-  static int run(List<String> args) throws IOException {
+  static int run(List<String> args, String config) throws IOException {
     if (!args.equals(List.of("get"))) return 0;
     var fields = new HashMap<String, String>();
     var reader =
@@ -17,8 +17,9 @@ final class GitHubCredentials {
       if (eq > 0) fields.put(line.substring(0, eq), line.substring(eq + 1));
     }
     if ("https".equals(fields.get("protocol")) && "github.com".equals(fields.get("host"))) {
+      String token = new Credentials(Settings.load(config)).resolveGithub().token;
       System.out.println("username=x-access-token");
-      System.out.println("password=" + GitHub.token());
+      System.out.println("password=" + token);
       System.out.println();
     }
     return 0;
@@ -28,16 +29,16 @@ final class GitHubCredentials {
     return "'" + value.replace("'", "'\\''") + "'";
   }
 
-  static Map<String, String> environment() {
+  static Map<String, String> environment(Settings settings) {
     String helper =
         "!"
             + quote(JavaRuntime.java())
             + " -cp "
             + quote(JavaRuntime.classpath())
-            + " ch.so.agi.integrator.Main git-credential";
+            + " ch.so.agi.integrator.Main --config "
+            + quote(settings.file.toString())
+            + " git-credential";
     return Map.of(
-        "GH_TOKEN",
-        GitHub.token(),
         "GIT_TERMINAL_PROMPT",
         "0",
         "GIT_CONFIG_COUNT",

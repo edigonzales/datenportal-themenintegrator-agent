@@ -1629,3 +1629,30 @@ der genannte Integrationstest verwendet echte MCPs und Validatoren.
 Offen/nicht Bestandteil dieser Abnahme: Installation eines neuen Betriebspakets,
 Fortsetzung der laufenden OpenCode-Session und lokale/INT/PROD-Publikation.
 Bestehende Geschäftsvorgänge und andere Komponenten wurden nicht verändert.
+
+## 2026-10-15: GitHub-Token im Workspace-Credential-Store
+
+Tatsächlich ausgeführte technische Prüfungen:
+
+- JDK-21-Build über `bin/datenportal-agent gradle test jar spotlessCheck`
+  erfolgreich: 237 Tests, keine Fehler oder übersprungenen Tests.
+- CLI und Store: stdin-Eingabe, expliziter Env-Import, Rotation, Entfernen,
+  Status ohne Token, Eingabegrenzen, Priorität GH_TOKEN vor GITHUB_TOKEN vor
+  Store sowie defekte und unsichere Stores geprüft. Gesetzte Env-Tokens umgehen
+  defekte Stores bei der Authentifizierung.
+- Bestehende Jenkins-Einträge bleiben erhalten, auch bei parallelen Schreibzugriffen.
+- Echter Git-Prozess mit Java-Credential-Helper: alle drei Tokenquellen,
+  abweichendes Arbeitsverzeichnis und Konfigurationspfad mit Leerzeichen geprüft.
+  Fremde Hosts erhalten keine Tokens; gespeicherte Tokens stehen nicht in der
+  vom Integrator erzeugten Git-Prozessumgebung oder im Helper-Aufruf.
+- REST gegen lokalen HTTP-Testserver: gespeicherter Token im Authorization-Header,
+  keine Redirects und kein automatischer Quellenwechsel bei HTTP 401.
+- `git diff --check` erfolgreich.
+
+Simuliert: Sämtliche Tokens und GitHub-Antworten stammen aus isolierten
+Testfixtures. Es wurden keine echten GitHub-Schreibzugriffe ausgeführt und
+keine persönlichen Zugangsdaten importiert.
+
+Offen: Installation eines neuen Betriebspakets im Operator-Workspace und
+End-to-End-Abnahme mit echten GitHub-Zugängen. INT/PROD-Publikation ist nicht
+Bestandteil dieser Änderung.

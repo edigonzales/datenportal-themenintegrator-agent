@@ -40,6 +40,115 @@ class CredentialsTest {
   }
 
   @Test
+  void githubPriorityRotationAndLegacyStore() throws Exception {
+    credentials.save("local", "user", "jenkins-secret");
+    assertEquals(
+        "github_credentials_missing", assertThrows(Problem.class, credentials::resolveGithub).code);
+    credentials.saveGithub("store-secret");
+    assertEquals("store-secret", credentials.resolveGithub().token);
+    environment.put("GITHUB_TOKEN", "github-secret");
+    environment.put("GH_TOKEN", "gh-secret");
+    assertEquals("gh-secret", credentials.resolveGithub().token);
+    assertEquals("GH_TOKEN", credentials.githubStatus().get("credentials_source"));
+    assertEquals(true, credentials.githubStatus().get("stored"));
+    assertFalse(Json.text(credentials.githubStatus()).contains("secret"));
+    environment.put("GH_TOKEN", " ");
+    assertEquals("github-secret", credentials.resolveGithub().token);
+    credentials.command(List.of("github", "set", "--from-env"));
+    environment.clear();
+    assertEquals("github-secret", credentials.resolveGithub().token);
+    credentials.save("local", "user", "rotated-jenkins");
+    assertEquals("github-secret", credentials.resolveGithub().token);
+    credentials.command(List.of("github", "remove"));
+    assertEquals(false, credentials.githubStatus().get("stored"));
+    assertEquals(
+        "rotated-jenkins", credentials.resolve("local", settings.environment("local")).token);
+  }
+
+  @Test
+  void githubStoreFailuresAreIgnoredOnlyWithEnvironment() throws Exception {
+    credentials.saveGithub("store-secret");
+    Files.writeString(credentials.file, "{broken-secret");
+    assertEquals(
+        "credential_store_invalid", assertThrows(Problem.class, credentials::resolveGithub).code);
+    environment.put("GH_TOKEN", "env-secret");
+    assertEquals("env-secret", credentials.resolveGithub().token);
+    assertEquals(true, credentials.githubStatus().get("credentials_present"));
+    assertEquals("credential_store_invalid", credentials.githubStatus().get("store_error"));
+    assertFalse(Json.text(credentials.githubStatus()).contains("secret"));
+    Files.setPosixFilePermissions(credentials.file, PosixFilePermissions.fromString("rw-r--r--"));
+    assertEquals("env-secret", credentials.resolveGithub().token);
+    environment.clear();
+    assertEquals(
+        "credential_store_permissions",
+        assertThrows(Problem.class, credentials::resolveGithub).code);
+    Files.setPosixFilePermissions(credentials.file, PosixFilePermissions.fromString("rw-------"));
+    Json.write(
+        credentials.file,
+        Json.pretty(
+            Json.map(
+                "version",
+                1,
+                "environments",
+                Json.map(),
+                "github",
+                Json.map("host", "other.org", "token", "secret"))));
+    assertEquals(
+        "credential_store_invalid", assertThrows(Problem.class, credentials::resolveGithub).code);
+  }
+
+  @Test
+  void concurrentGithubAndJenkinsChangesRetainBoth() throws Exception {
+    try (var pool = Executors.newFixedThreadPool(2)) {
+      var first = pool.submit(() -> credentials.save("local", "user", "jenkins-secret"));
+      var second = pool.submit(() -> credentials.saveGithub("github-secret"));
+      first.get(15, TimeUnit.SECONDS);
+      second.get(15, TimeUnit.SECONDS);
+    }
+    assertEquals("github-secret", credentials.resolveGithub().token);
+    assertEquals(
+        "jenkins-secret", credentials.resolve("local", settings.environment("local")).token);
+    credentials.remove("local");
+    assertEquals("github-secret", credentials.resolveGithub().token);
+  }
+
+  @Test
+  void githubCliValidatesStdinAndRejectsTokenArguments() throws Exception {
+    var original = System.in;
+    try {
+      for (String token : List.of("stdin-secret\r\n", "", "bad\nsecret", "x".repeat(65537))) {
+        System.setIn(
+            new java.io.ByteArrayInputStream(
+                token.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        if (token.startsWith("stdin")) {
+          credentials.command(List.of("github", "set", "--token-stdin"));
+          assertEquals("stdin-secret", credentials.resolveGithub().token);
+        } else {
+          assertEquals(
+              "credentials_invalid",
+              assertThrows(
+                      Problem.class,
+                      () -> credentials.command(List.of("github", "set", "--token-stdin")))
+                  .code);
+        }
+      }
+    } finally {
+      System.setIn(original);
+    }
+    assertEquals(
+        "invalid_arguments",
+        assertThrows(
+                Problem.class,
+                () -> credentials.command(List.of("github", "set", "--token", "secret")))
+            .code);
+    assertEquals(
+        "github_credentials_missing",
+        assertThrows(
+                Problem.class, () -> credentials.command(List.of("github", "set", "--from-env")))
+            .code);
+  }
+
+  @Test
   void atomicStoreHasPrivatePermissionsAndReloadsWithoutCaching() throws Exception {
     credentials.save("local", "fixture-user", "fixture-secret-one");
     assertEquals(

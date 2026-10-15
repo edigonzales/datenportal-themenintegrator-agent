@@ -18,8 +18,11 @@ class GitHub {
   private final String token;
   private final int timeout;
 
-  GitHub(int timeout) {
-    this(URI.create("https://api.github.com"), token(), timeout);
+  GitHub(Settings settings) {
+    this(
+        URI.create("https://api.github.com"),
+        new Credentials(settings).resolveGithub().token,
+        settings.timeout);
   }
 
   GitHub(URI endpoint, String token, int timeout) {
@@ -31,14 +34,6 @@ class GitHub {
             .connectTimeout(Duration.ofSeconds(timeout))
             .followRedirects(HttpClient.Redirect.NEVER)
             .build();
-  }
-
-  static String token() {
-    String token = System.getenv("GH_TOKEN");
-    if (token == null || token.isBlank()) token = System.getenv("GITHUB_TOKEN");
-    if (token == null || token.isBlank())
-      throw new Problem("github_credentials_missing", "GH_TOKEN oder GITHUB_TOKEN setzen.");
-    return token;
   }
 
   static Repo repository(String remote) {

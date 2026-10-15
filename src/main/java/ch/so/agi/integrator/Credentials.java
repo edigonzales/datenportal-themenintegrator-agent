@@ -156,6 +156,8 @@ final class Credentials {
   }
 
   Map<String, Object> command(List<String> args) throws java.io.IOException {
+    if (!args.isEmpty() && args.getFirst().equals("github"))
+      return githubCommand(args.subList(1, args.size()));
     if (args.size() < 2)
       throw new Problem("invalid_arguments", "credentials set|status|remove PROFIL");
     String operation = args.get(0), profile = args.get(1);
@@ -174,16 +176,101 @@ final class Credentials {
       if (args.size() == 5
           && args.get(2).equals("--username")
           && args.get(4).equals("--token-stdin")) {
-        byte[] bytes = System.in.readNBytes(65537);
-        if (bytes.length > 65536) throw new Problem("credentials_invalid", "Token zu lang.");
-        String token =
-            new String(bytes, java.nio.charset.StandardCharsets.UTF_8).replaceFirst("\\r?\\n$", "");
-        return save(profile, args.get(3), token);
+        return save(profile, args.get(3), readToken());
       }
     }
     throw new Problem(
         "invalid_arguments",
         "credentials set PROFIL --username USER --token-stdin | --from-env; status|remove PROFIL");
+  }
+
+  private static String readToken() throws java.io.IOException {
+    byte[] bytes = System.in.readNBytes(65537);
+    if (bytes.length > 65536) throw new Problem("credentials_invalid", "Token zu lang.");
+    return new String(bytes, java.nio.charset.StandardCharsets.UTF_8).replaceFirst("\\r?\\n$", "");
+  }
+
+  Value githubFromEnvironment() {
+    for (String name : List.of("GH_TOKEN", "GITHUB_TOKEN")) {
+      String token = environment.apply(name);
+      if (token != null && !token.isBlank()) return new Value("x-access-token", token, name);
+    }
+    return null;
+  }
+
+  private Value githubSaved(Map<String, Object> data) {
+    if (!data.containsKey("github")) return null;
+    Object raw = data.get("github");
+    if (!(raw instanceof Map<?, ?> saved)
+        || !"github.com".equals(saved.get("host"))
+        || !(saved.get("token") instanceof String))
+      throw new Problem(
+          "credential_store_invalid", "GitHub-Eintrag im Credential-Store ist ungültig.");
+    return new Value("x-access-token", (String) saved.get("token"), "local_store");
+  }
+
+  Value resolveGithub() {
+    Value explicit = githubFromEnvironment();
+    if (explicit != null) return explicit;
+    Value saved = githubSaved(read(false));
+    if (saved != null) return saved;
+    throw new Problem(
+        "github_credentials_missing",
+        "GitHub-Token mit credentials github set --token-stdin hinterlegen oder GH_TOKEN/GITHUB_TOKEN setzen.");
+  }
+
+  Map<String, Object> githubStatus() {
+    var result =
+        Json.map("service", "github", "credentials_present", false, "credentials_source", "none");
+    try {
+      Value value = resolveGithub();
+      result.put("credentials_present", true);
+      result.put("credentials_source", value.source);
+    } catch (Problem p) {
+      result.putAll(p.result());
+    }
+    try {
+      result.put("stored", read(false).containsKey("github"));
+    } catch (Problem p) {
+      result.put("store_error", p.code);
+    }
+    return result;
+  }
+
+  Map<String, Object> saveGithub(String token) {
+    var value = new Value("x-access-token", token, "local_store");
+    return changeGithub(value);
+  }
+
+  private Map<String, Object> changeGithub(Value value) {
+    if (!secureDirectory(value != null)) return Json.map("service", "github", "removed", false);
+    Path lock = directory.resolve("store.lock");
+    createPrivateFile(lock);
+    boolean removed;
+    try (var guard = RuntimeGuard.acquire(lock, 10)) {
+      createPrivateFile(lock);
+      var data = read(false);
+      removed = data.remove("github") != null;
+      if (value != null) data.put("github", Json.map("host", "github.com", "token", value.token));
+      if (value != null || removed) write(data);
+    }
+    return Json.map(
+        "service", "github", value == null ? "removed" : "stored", value != null || removed);
+  }
+
+  private Map<String, Object> githubCommand(List<String> args) throws java.io.IOException {
+    if (args.equals(List.of("status"))) return githubStatus();
+    if (args.equals(List.of("remove"))) return changeGithub(null);
+    if (args.equals(List.of("set", "--token-stdin"))) return saveGithub(readToken());
+    if (args.equals(List.of("set", "--from-env"))) {
+      Value value = githubFromEnvironment();
+      if (value == null)
+        throw new Problem("github_credentials_missing", "GH_TOKEN oder GITHUB_TOKEN fehlt.");
+      return saveGithub(value.token);
+    }
+    throw new Problem(
+        "invalid_arguments",
+        "credentials github set --token-stdin | --from-env; credentials github status|remove");
   }
 
   private boolean secureDirectory(boolean create) {

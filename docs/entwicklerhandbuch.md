@@ -38,7 +38,7 @@ Nur für lokale Entwicklung kann `-PmcpArtifactDirectory=/pfad/zu/test-jars` ans
 
 ## GitHub und Fehlerbehandlung
 
-GitHub verwendet Javas HTTP-Client, Bearer-Authentifizierung und keine Redirects. Tokenreihenfolge: GH_TOKEN, GITHUB_TOKEN. PR-Erstellung ist POST, Statusprüfung GET. Ein Java-Credential-Helper liefert Tokens für GitHub-HTTPS über das Git-Credential-Protokoll. Geheimnisse stehen weder in Prozessargumenten noch in Rohlogs. SSH-Zugriff verwendet die normale Git-SSH-Konfiguration.
+GitHub verwendet Javas HTTP-Client, Bearer-Authentifizierung und keine Redirects. Tokenreihenfolge: GH_TOKEN, GITHUB_TOKEN, Workspace-Credential-Store. Leere Variablen werden übersprungen; gesetzte Env-Tokens umgehen den Store für die Authentifizierung. Der optionale `github`-Eintrag enthält `host: github.com` und `token`; Store-Version 1 und bestehende Jenkins-Einträge bleiben kompatibel. REST und Git verwenden `Credentials.resolveGithub()`. PR-Erstellung ist POST, Statusprüfung GET. Ein Java-Credential-Helper liefert Tokens für GitHub-HTTPS über das Git-Credential-Protokoll. Er erhält den absoluten Konfigurationspfad und liest den Store selbst; gespeicherte Tokens werden nicht in die Git-Prozessumgebung kopiert. Bei Authentifizierungsfehlern gibt es keinen Quellenwechsel. Geheimnisse stehen weder in Prozessargumenten noch in Rohlogs. SSH-Zugriff verwendet die normale Git-SSH-Konfiguration.
 
 Vor PR-Erstellung wird die Zielidentität gespeichert. Nach einer unklaren Antwort wird ein passender vorhandener PR gesucht; kein erneuter POST ohne Klärung. Merge-Prüfung kontrolliert merged, Basisbranch, Head-Commit und danach die Dateiinhalte im Zielbranch. Rate-Limits melden Warte-/Reset-Zeit. Menschlicher Merge bleibt Voraussetzung.
 

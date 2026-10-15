@@ -26,7 +26,7 @@ public final class Workflow implements AutoCloseable {
     interlis = i;
     validator = new Validator(s, p);
     csvValidation = new CsvValidation(s, p);
-    github = () -> new GitHub(s.timeout);
+    github = () -> new GitHub(s);
     credentials = (name, env) -> new Credentials(s).resolve(name, env);
     jenkins = (name, env) -> new Jenkins(env, credentials.apply(name, env));
   }

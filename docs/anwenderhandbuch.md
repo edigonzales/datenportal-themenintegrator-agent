@@ -26,7 +26,29 @@ Den Betriebsordner im Client öffnen. Der Fachagent arbeitet ausschliesslich mit
 
 ## Zugänge und Publikation
 
-GitHub-PRs werden direkt über die REST-API erstellt und geprüft. `GH_TOKEN` hat Vorrang vor `GITHUB_TOKEN`. Für das gewählte Repository werden Pull-Request-Schreibrechte und bei HTTPS-Push zusätzlich Contents-Schreibrechte benötigt. Git nutzt den vom Integrator gestarteten Credential-Helper; `gh auth login` ist nicht erforderlich. Tokens nicht in Konfigurationsdateien oder Chatnachrichten eintragen. Git-Autorenidentität wie üblich konfigurieren. Der Client muss die benötigten Umgebungsvariablen an den Integrator weitergeben.
+GitHub-PRs werden direkt über die REST-API erstellt und geprüft. `GH_TOKEN` hat Vorrang vor `GITHUB_TOKEN`; ohne nichtleere Env-Variable wird der Credential Store des Workspace verwendet. Für das gewählte Repository werden Pull-Request-Schreibrechte und bei HTTPS-Push zusätzlich Contents-Schreibrechte benötigt. Git nutzt den vom Integrator gestarteten Credential-Helper; `gh auth login` ist nicht erforderlich. Tokens nicht in Konfigurationsdateien oder Chatnachrichten eintragen. Git-Autorenidentität wie üblich konfigurieren. Nur bei Verwendung von Env-Tokens muss der Client diese an den Integrator weitergeben.
+
+GitHub-Token einmalig im bestehenden dateibasierten Store hinterlegen:
+
+```sh
+bin/datenportal-agent credentials github set --token-stdin
+```
+
+Der Befehl liest bis EOF. Den Token über eine geschützte stdin-Zuführung übergeben;
+bei manueller Terminaleingabe vorher das Terminal-Echo abschalten und danach
+wiederherstellen. Keine Tokens als Argument, in der Shell-History oder im Chat
+hinterlegen. Alternativ übernimmt `credentials github set --from-env` ausdrücklich
+die erste nichtleere Variable (`GH_TOKEN`, dann `GITHUB_TOKEN`).
+
+`credentials github status` zeigt die aktive Quelle und mit `stored`, ob ein
+Store-Eintrag existiert; bei unlesbarem Store erscheint stattdessen `store_error`.
+Der Status prüft keine GitHub-Berechtigungen. Zum Rotieren erneut `set` verwenden,
+zum Entfernen `credentials github remove`. Env-Tokens haben auch nach einer
+Rotation Vorrang. Ein abgelehnter Token löst keinen Wechsel zur nächsten Quelle aus.
+
+Der Store liegt unter `.datenportal-integrator/credentials/local.json` im Workspace
+und ist durch Eigentümerprüfung und Rechte 0700/0600 geschützt, nicht verschlüsselt.
+GitHub und Jenkins teilen sich den Store; ihre Einträge werden unabhängig verwaltet.
 
 Jenkins-Profile stehen unter `[environments.<name>]`: `kind`, `enabled`, `jenkins_url`, `portal_url`, `manifest_url`, `username_env`, `token_env`, `repository_mode="managed-git"`, `git_write_back=false`, optional `git_remote` und `git_branch`. INT/PROD-Adressen werden nicht vorbelegt. Jenkins-Zugänge können auch mit `credentials set <profil> --username <user> --token-stdin` eingerichtet werden. `credentials status` zeigt keine Geheimnisse.
 
