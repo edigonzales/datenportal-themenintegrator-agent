@@ -749,3 +749,35 @@ Jenkins noch einen Upload. `status` bleibt lesend und zeigt unter `repository_sy
 den Abschluss oder einen Blockierungsgrund. Ein Merge auf GitHub allein verändert
 den lokalen Checkout weiterhin nicht. Details zu Konflikten und Wiederaufnahme:
 [Lieferung und Wiederaufnahme](agent/lieferung-und-wiederaufnahme.md#lokales-repository-nach-merge-synchronisieren).
+
+## Modelländerungsvertrag und korrigierte CSV
+
+`operation_schema("derive_model")` und `operation_schema("derive_model.changes")`
+liefern den vollständigen Änderungsvertrag des konfigurierten INTERLIS-MCP,
+einschliesslich verschachtelter Typen und referenzierter Definitionen. Für Betreiber
+ist derselbe Vertrag über `bin/datenportal-agent schema derive_model.changes`
+abrufbar. Diese Auskünfte benötigen keine Vorgangs-ID und ändern kein Modell.
+Ist der Vertrag nicht verfügbar, wird dies als `model_contract_unavailable`
+gemeldet; ausführende Probeaufrufe sind kein Ersatz.
+
+Bei korrigierter CSV: verifiziert übernehmen, im bestehenden Vorgang als `data`
+anhängen, analysieren, tatsächliche Datenfreigabe einholen und das unveränderte
+Modell mit `validate_model(scope="integration")` erneut prüfen. Ohne vorbereitete
+Modellreferenz zunächst `scope="model"`, `prepare_model_reference`, danach
+`scope="integration"`. Kein künstlicher Änderungsbatch und keine Neuschätzung der
+Modellgrenzen. Abweichender Datenblattvertrag, ungültige Modellnachweise und echte
+CSV-Regelverletzungen bleiben Sperren.
+
+`source_data_sha256` dokumentiert weiterhin die Ableitungsquelle.
+`validated_data_sha256` im Modellstand nennt die zuletzt erfolgreich geprüfte CSV;
+`data_sha256` im Prüfbericht nennt auch bei Fehlern die aktuell geprüfte Eingabe.
+Der Review trennt aktuelle von ursprünglichen Ableitungsbeobachtungen. Alte
+Vorgänge benötigen keine Migration. Neue CSV entwertet abhängige Freigaben;
+eine erfolgreiche Neuprüfung ersetzt keine menschliche Freigabe.
+
+Bei fachlicher Modelländerung zuerst das Änderungsschema lesen. Gespeicherte
+Zahlenvorschläge und bestätigte Typangaben werden bei unverändertem Vertrag
+wiederverwendet, Schätzungen bleiben unbestätigt. Eine neu beobachtete Eindeutigkeit
+darf vorgeschlagen, aber erst nach menschlicher Bestätigung als UNIQUE eingebaut
+werden. Das vollständige Beispiel steht in der Modellskill-Referenz
+`skills/datenportal-validierungsmodell/references/typableitung-und-reparatur.md`.

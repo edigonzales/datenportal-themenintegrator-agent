@@ -247,12 +247,163 @@ class ModelsTest {
   }
 
   @Test
-  void csvAfterDerivationInvalidatesModel() {
+  void correctedCsvReusesModelAfterDataApprovalAndKeepsDerivationHistory() {
     f.call("derive_model", "run_id", id, "identity", identity(), "range_proposals", proposals());
+    prepareReference();
+    var first = f.call("validate_model", "run_id", id);
+    f.approve(id, "model", first);
+    var original = Json.obj(first.get("model"));
+    Object source = original.get("source_data_sha256");
+    Object modelHash = first.get("model_sha256");
+    int calls = requests.size();
     Path p = temp.resolve("changed.csv");
     Json.write(p, "Jahr\n2026\n");
     f.call("attach", "run_id", id, "role", "data", "path", p.toString());
-    assertFalse(Json.bool(f.call("validate_model", "run_id", id), "valid", true));
+    f.error("approval_required", () -> f.call("validate_model", "run_id", id));
+    f.approve(id, "data", f.call("analyze", "run_id", id));
+    var result = f.call("validate_model", "run_id", id);
+    assertEquals(true, result.get("valid"), Json.pretty(result));
+    assertEquals(calls, requests.size());
+    assertEquals(modelHash, result.get("model_sha256"));
+    assertEquals(source, Json.obj(result.get("model")).get("source_data_sha256"));
+    assertEquals(Json.sha(p), Json.obj(result.get("model")).get("validated_data_sha256"));
+    assertEquals(Json.sha(p), result.get("data_sha256"));
+    assertFalse(
+        Json.bool(
+            Json.obj(f.call("status", "run_id", id).get("current_approvals")), "model", true));
+    var repeated = f.call("validate_model", "run_id", id);
+    assertEquals(result.get("fingerprint"), repeated.get("fingerprint"));
+    assertTrue(
+        Json.contents(Path.of(Json.required(result, "review_path")))
+            .contains("Aktuell geprüfte CSV"));
+    assertTrue(Json.text(result.get("current_data_observations")).contains("2026"));
+    assertTrue(Json.text(Json.obj(result.get("model")).get("mapping")).contains("2025"));
+    var state = Json.read(f.workflow.store.directory(id).resolve("state.json"));
+    assertEquals(
+        1,
+        Json.list(state.get("events")).stream()
+            .map(Json::obj)
+            .filter(e -> "model_data_validated".equals(e.get("action")))
+            .count());
+  }
+
+  @Test
+  void changedCsvFailureDoesNotReplaceSuccessfulDataBinding() {
+    f.call("derive_model", "run_id", id, "identity", identity(), "range_proposals", proposals());
+    prepareReference();
+    var first = f.call("validate_model", "run_id", id);
+    Object previous = Json.obj(first.get("model")).get("validated_data_sha256");
+    Path p = temp.resolve("invalid_range.csv");
+    Json.write(p, "Jahr\n2200\n");
+    f.call("attach", "run_id", id, "role", "data", "path", p.toString());
+    f.approve(id, "data", f.call("analyze", "run_id", id));
+    f.workflow.csvValidation = new CsvValidation(f.settings, new ProcessRunner());
+    var failed = f.call("validate_model", "run_id", id);
+    assertEquals(false, failed.get("valid"));
+    assertEquals(previous, Json.obj(failed.get("model")).get("validated_data_sha256"));
+    assertEquals(Json.sha(p), failed.get("data_sha256"));
+    assertFalse(Json.list(failed.get("diagnostic_history")).isEmpty());
+  }
+
+  @Test
+  void changeBatchReusesUnconfirmedSavedRanges() {
+    f.call("derive_model", "run_id", id, "identity", identity(), "range_proposals", proposals());
+    reply.put("status", "APPLIED");
+    var result =
+        f.call(
+            "derive_model",
+            "run_id",
+            id,
+            "identity",
+            identity(),
+            "changes",
+            List.of(Json.map("operation", "REMOVE_COMMENTS")));
+    assertEquals("APPLIED", result.get("status"));
+    var state = f.call("status", "run_id", id);
+    var mapping = Json.obj(Json.list(Json.obj(state.get("model")).get("mapping")).getFirst());
+    assertEquals(false, Json.obj(mapping.get("range_proposal")).get("confirmed"));
+    assertEquals("agent_estimate", Json.obj(mapping.get("range_proposal")).get("origin"));
+    assertEquals("applyIliModelChanges", requests.getLast().get("name"));
+  }
+
+  @Test
+  void oldRunWithoutValidatedHashCanBeResumedWithoutAuthoring() {
+    f.call("derive_model", "run_id", id, "identity", identity(), "range_proposals", proposals());
+    prepareReference();
+    f.workflow.store.edit(
+        id,
+        r -> {
+          Json.obj(r.get("model")).remove("validated_data_sha256");
+          return null;
+        });
+    Path csv = temp.resolve("resumed.csv");
+    Json.write(csv, "Jahr\n2027\n");
+    f.call("attach", "run_id", id, "role", "data", "path", csv.toString());
+    f.approve(id, "data", f.call("analyze", "run_id", id));
+    try (var resumed =
+        new Workflow(
+            f.settings,
+            new Fixtures.FakeProcess(),
+            new Datasheet(),
+            (op, args) -> {
+              fail("No model operation required after restart");
+              return Json.map();
+            })) {
+      // Exported metadata is available; avoid requiring a live synthetic draft session.
+      resumed.store.edit(
+          id,
+          r -> {
+            r.remove("draft");
+            return null;
+          });
+      var result = Json.obj(resumed.call("validate_model", Json.map("run_id", id)));
+      assertEquals(true, result.get("valid"), Json.pretty(result));
+      assertEquals(Json.sha(csv), Json.obj(result.get("model")).get("validated_data_sha256"));
+    }
+  }
+
+  @Test
+  void changedContractAndIncompleteProofStillBlockNewData() {
+    f.call("derive_model", "run_id", id, "identity", identity(), "range_proposals", proposals());
+    prepareReference();
+    var original = f.call("validate_model", "run_id", id);
+    Object binding = Json.obj(original.get("model")).get("validated_data_sha256");
+    Path csv = temp.resolve("corrected.csv");
+    Json.write(csv, "Jahr\n2026\n");
+    f.call("attach", "run_id", id, "role", "data", "path", csv.toString());
+    f.approve(id, "data", f.call("analyze", "run_id", id));
+    f.workflow.store.edit(
+        id,
+        r -> {
+          Json.obj(r.get("model")).put("authoring_valid", false);
+          return null;
+        });
+    var invalid = f.call("validate_model", "run_id", id);
+    assertEquals(false, invalid.get("valid"));
+    assertEquals(binding, Json.obj(invalid.get("model")).get("validated_data_sha256"));
+    f.workflow.store.edit(
+        id,
+        r -> {
+          Json.obj(r.get("model")).put("authoring_valid", true);
+          Json.obj(r.get("model")).put("contract_sha256", "synthetic-different-contract");
+          return null;
+        });
+    invalid = f.call("validate_model", "run_id", id);
+    assertEquals(false, invalid.get("valid"));
+    assertTrue(Json.text(invalid.get("errors")).contains("model_contract_changed"));
+    assertEquals(binding, Json.obj(invalid.get("model")).get("validated_data_sha256"));
+    int before = requests.size();
+    var changed =
+        f.call(
+            "derive_model",
+            "run_id",
+            id,
+            "identity",
+            identity(),
+            "changes",
+            List.of(Json.map("operation", "REMOVE_COMMENTS")));
+    assertEquals("NEEDS_INPUT", changed.get("status"));
+    assertEquals(before, requests.size());
   }
 
   @Test

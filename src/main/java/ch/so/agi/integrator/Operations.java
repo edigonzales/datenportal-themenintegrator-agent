@@ -155,7 +155,7 @@ public final class Operations {
     add("validate_organization", "Office-XTF, YAML, Teamreferenzen und Gradle prüfen.", "run_id!");
     add(
         "derive_model",
-        "Explizit angefordertes flaches INTERLIS-Modell über den Fach-MCP ableiten.",
+        "Explizit angefordertes Modell ableiten oder ändern. Vor Änderungen operation_schema(derive_model.changes) lesen; nur neue CSV mit validate_model prüfen.",
         "run_id!",
         "identity:object!",
         "confirmations:object",
@@ -171,7 +171,7 @@ public final class Operations {
         "human_statement!");
     add(
         "validate_model",
-        "Modell und CSV mit Java prüfen. Unveränderte alte Integrator-CSV-Taskblöcke werden als Kandidat auf den bestehenden Publikationsvalidator umgestellt; danach neue Prüfung/Freigabe erforderlich. scope=model ist eine Zwischenprüfung ohne Freigabewirkung; integration prüft das vollständige Paket (Standard).",
+        "Modell und aktuell freigegebene CSV mit Java prüfen, auch nach CSV-Korrektur ohne Modelländerung. Unveränderte alte Integrator-CSV-Taskblöcke werden als Kandidat auf den bestehenden Publikationsvalidator umgestellt; danach neue Prüfung/Freigabe erforderlich. scope=model ist eine Zwischenprüfung ohne Freigabewirkung; integration prüft das vollständige Paket (Standard).",
         "run_id!",
         "scope");
   }
@@ -264,7 +264,7 @@ public final class Operations {
       case "path" ->
           "Konkreter Dateipfad; Anhänge zuerst mit datenportal_workspace.import_attachment verifiziert übernehmen.";
       case "operation" ->
-          "Öffentlicher Werkzeugname. operation_schema(metadata.<operation>) liefert den Integrator-Vertrag; metadata.describe_schema beschreibt fachliche Datenblattfelder.";
+          "Öffentlicher Werkzeugname. operation_schema(derive_model.changes) liefert den vollständigen Modelländerungsvertrag; metadata.<operation> den Datenblatt-Aufrufvertrag. metadata.describe_schema beschreibt fachliche Datenblattfelder.";
       case "arguments" ->
           "Argumentobjekt gemäss operation_schema(metadata.<operation>); Entwurfs-IDs und Revisionen verwaltet der Integrator.";
       case "gate" ->
@@ -301,7 +301,7 @@ public final class Operations {
       case "allow_breaking" ->
           "Nur auf ausdrücklichen Auftrag inkompatible Modelländerungen zulassen.";
       case "changes" ->
-          "Typisierte fachliche Modelländerungen gemäss öffentlichem INTERLIS-Vertrag.";
+          "Typisierte fachliche Modelländerungen; vollständigen Vertrag mit operation_schema(derive_model.changes) lesen. Keine NOOP-/Probeaufrufe.";
       case "job", "queue" ->
           "Belegte externe Lauf-/Queue-Kennung; bei unklarem Upload niemals erfinden oder erneut hochladen.";
       case "sheet" ->

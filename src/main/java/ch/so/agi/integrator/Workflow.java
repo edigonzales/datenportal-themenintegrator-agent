@@ -45,6 +45,9 @@ public final class Workflow implements AutoCloseable {
     if (operation.equals("operation_schema")
         && Json.required(args, "operation").startsWith("metadata."))
       return MetadataContracts.schema(datasheets, Json.required(args, "operation").substring(9));
+    if (operation.equals("operation_schema")
+        && ModelContracts.handles(Json.required(args, "operation")))
+      return ModelContracts.schema(interlis, Json.required(args, "operation"));
     if (operation.equals("operation_schema"))
       return Operations.schema(Json.required(args, "operation"));
     if (OperatorWorkspace.installed(settings.root)) {

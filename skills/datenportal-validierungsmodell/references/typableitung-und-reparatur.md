@@ -51,3 +51,49 @@ Fachbestätigung. Fehlerhafte Eingaben ersetzen keinen bestehenden Modellkandida
 zurück. Es löscht weder Modell noch bestätigte Fachregeln und behebt keine Argumentfehler.
 Modellname, AT-URI und Versionsdatum müssen konsistent sein; einen Widerspruch mit
 dem Benutzer klären, niemals das bestätigte Datum still ändern.
+
+## Bestehendes Modell: Daten neu prüfen oder Fachregel ändern
+
+Eine korrigierte CSV verlangt bei unverändertem Datenblattvertrag keine neue
+Modellableitung. Nach Übernahme, Analyse und echter Datenfreigabe
+`validate_model(scope="integration")` aufrufen. Fehlt die Modellreferenz, zuvor
+`scope="model"` und `prepare_model_reference` ausführen. Die ursprüngliche
+Ableitungsquelle bleibt `source_data_sha256`; `validated_data_sha256` benennt die
+zuletzt insgesamt erfolgreich geprüfte CSV. Fehlprüfungen ersetzen diese Bindung
+nicht. Der Bericht zeigt die aktuelle CSV-Prüfsumme und aktuelle Beobachtungen
+getrennt von den ursprünglichen Ableitungsbeobachtungen. Neue Prüfungen erteilen
+keine Freigabe; die regulären Modell-/Metadatenstopps bleiben bestehen.
+
+Bei echten Modelländerungen zuerst `operation_schema("derive_model.changes")`
+lesen. Es liefert das vollständige `derive_model`-Argumentobjekt mit dem vom
+konfigurierten INTERLIS-MCP übernommenen `changes`-Vertrag und allen referenzierten
+Definitionen. Keine Schemaerkundung durch `{}`, `NOOP` oder unvollständige
+Änderungsaufrufe. Gespeicherte Zahlenvorschläge werden bei unverändertem Vertrag
+wiederverwendet und an den aktuellen Beobachtungen geprüft. Sie bleiben
+`agent_estimate`, nicht menschlich bestätigte Regeln.
+
+Beispiel für das Argument `changes` nach ausdrücklich bestätigter BFS-Eindeutigkeit
+(Modell-/Klassenname an den vorhandenen Kandidaten anpassen):
+
+```json
+[
+  {
+    "operation": "ADD_CONSTRAINT",
+    "addConstraint": {
+      "containerFqn": "SO_Bevoelkerung_Gemeinde_Alter_20261015.Data.Observation",
+      "constraint": {
+        "kind": "UNIQUE",
+        "name": "UniqueBfsNr",
+        "scope": "GLOBAL",
+        "keyPaths": ["BFS_Nr"]
+      }
+    }
+  }
+]
+```
+
+Diese Darstellung wurde gegen den öffentlichen Vertrag von INTERLIS-MCP
+0.0.577-1 und mit einem entsprechenden echten Änderungsaufruf im isolierten Test
+geprüft. Der aktuell konfigurierte Vertrag bleibt verbindlich. Ein neues UNIQUE
+kann zuvor gültige Daten zurückweisen; `allow_breaking=true` im Integrator-Aufruf
+setzt einen ausdrücklichen menschlichen Auftrag auch für diese Auswirkung voraus.

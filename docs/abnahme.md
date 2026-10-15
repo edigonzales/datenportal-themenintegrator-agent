@@ -1590,3 +1590,42 @@ und leere Dateien. Diese Tests stellen keine realen fachlichen Freigaben dar.
 **Noch offen:** Abnahme mit einem realen, menschlich gemergten PR im installierten
 Betriebspaket. Im Rahmen der Implementierung wurden keine realen Vorgänge
 synchronisiert, keine PRs gemergt und keine Checkouts gelöscht.
+
+## 2026-10-15: Modelländerungsvertrag und CSV-Neuprüfung
+
+Implementiert: `operation_schema(derive_model)` und
+`operation_schema(derive_model.changes)` beziehen den vollständigen Änderungsvertrag
+lesend aus dem konfigurierten INTERLIS-MCP. Referenzen werden im Integrator-Schema
+vollständig erhalten. CLI und MCP liefern denselben Vertrag. Fehlende oder nicht
+auflösbare Verträge führen zu `model_contract_unavailable`.
+
+`validate_model` prüft neue, freigegebene CSV ohne Modelländerungsbatch. Die
+ursprüngliche Ableitungsquelle bleibt erhalten; nur erfolgreiche Gesamtprüfungen
+aktualisieren `validated_data_sha256`. Aktuelle CSV-Beobachtungen und ursprüngliche
+Ableitungsbeobachtungen sind im HTML getrennt. Bei fachlichen Änderungen werden
+gespeicherte Bereichsvorschläge bei unverändertem Vertrag wiederverwendet, ohne
+sie zu menschlichen Bestätigungen aufzuwerten.
+
+Tatsächlich ausgeführte technische Prüfungen:
+
+- JDK 21: `bin/datenportal-agent gradle test jar spotlessCheck` erfolgreich;
+  233 Tests, keine Fehler und keine übersprungenen Tests.
+- `ModelRevalidationIntegrationTest` mit expliziter isolierter Konfiguration
+  `build/model-contract-runtime/integration.toml` und den MCP-/Validator-JARs aus
+  Betriebspaket 0.2.24, INTERLIS-MCP 0.0.577-1: echter Schemaabruf und Vergleich
+  von CLI/MCP, echte Modellableitung, Datenblatt-Referenz, CSV-Neuprüfung ohne
+  Authoring-Aufruf, anschliessende UNIQUE-Ergänzung ohne erneut übermittelte
+  Zahlenvorschläge, positive CSV-Prüfung sowie negative Prüfungen für doppelte
+  Schlüssel und Wertebereichsverletzung erfolgreich.
+- Regressionen für alte Vorgänge ohne neue Prüffelder, Wiederaufnahme, stabile
+  Fingerprints, fehlende Datenfreigabe, geänderten Vertrag und unvollständige
+  Modellnachweise sind enthalten.
+
+Simuliert: Alle Geschäftsdatensätze, Zustimmung zu potenziell brechenden
+Änderungen und Freigaben stammen ausschliesslich aus isolierten, ausdrücklich
+gekennzeichneten Testfixtures. Unit-Tests verwenden teilweise MCP-/Prozessdoubles;
+der genannte Integrationstest verwendet echte MCPs und Validatoren.
+
+Offen/nicht Bestandteil dieser Abnahme: Installation eines neuen Betriebspakets,
+Fortsetzung der laufenden OpenCode-Session und lokale/INT/PROD-Publikation.
+Bestehende Geschäftsvorgänge und andere Komponenten wurden nicht verändert.

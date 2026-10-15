@@ -203,12 +203,30 @@ final class ReviewHtml {
     var out = new StringBuilder();
     if (report.get("model_text") instanceof String text)
       out.append("<h3>INTERLIS-Modell</h3>").append(ReportCode.block(text, "INTERLIS"));
+    if (report.containsKey("current_data_observations")) {
+      out.append("<h3>Aktuell geprüfte CSV</h3>")
+          .append(
+              value(
+                  Json.map(
+                      "data_sha256", report.get("data_sha256"),
+                      "columns", report.get("current_data_observations")),
+                  "",
+                  0));
+      out.append("<h3>Modell und ursprüngliche Ableitungsbeobachtungen</h3>");
+    }
     Object model = report.get("model");
     if (!(model instanceof Map<?, ?>)) model = report;
     if (model instanceof Map<?, ?> map) {
       var selected = new LinkedHashMap<Object, Object>();
-      for (String key : List.of("identity", "mapping", "profile", "purpose", "task_configuration"))
-        if (map.containsKey(key)) selected.put(key, map.get(key));
+      for (String key :
+          List.of(
+              "identity",
+              "source_data_sha256",
+              "validated_data_sha256",
+              "mapping",
+              "profile",
+              "purpose",
+              "task_configuration")) if (map.containsKey(key)) selected.put(key, map.get(key));
       out.append(value(selected, "", 0));
     }
     return out.toString();

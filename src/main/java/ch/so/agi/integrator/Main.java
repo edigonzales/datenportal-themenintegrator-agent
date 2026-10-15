@@ -47,7 +47,7 @@ public final class Main {
       }
       if (command.equals("schema")) {
         if (args.size() != 1) throw new Problem("invalid_arguments", "schema OPERATION");
-        if (args.getFirst().startsWith("metadata.")) {
+        if (args.getFirst().startsWith("metadata.") || ModelContracts.handles(args.getFirst())) {
           try (var w = new Workflow(Settings.load(config))) {
             print(w.call("operation_schema", Json.map("operation", args.getFirst())));
           }

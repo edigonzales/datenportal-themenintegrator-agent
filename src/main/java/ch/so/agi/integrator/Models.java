@@ -144,6 +144,27 @@ public final class Models {
     for (String column : confirmations.keySet())
       if (!columnNames.contains(column))
         throw ModelArguments.invalid("confirmations." + column, "Unbekannte CSV-Spalte.");
+    if (!Json.list(args.get("changes")).isEmpty()
+        && Objects.equals(Json.obj(r.get("model")).get("contract_sha256"), contract(sheet))) {
+      for (Object prior : Json.list(Json.obj(r.get("model")).get("mapping"))) {
+        var previous = Json.obj(prior);
+        String column = Json.required(previous, "column");
+        var saved = Json.obj(previous.get("range_proposal"));
+        if (!saved.isEmpty()
+            && !proposals.containsKey(column)
+            && !Json.obj(confirmations.get(column)).containsKey("type_spec")) {
+          proposals.put(
+              column,
+              Json.map(
+                  "type_spec",
+                  saved.get("type_spec"),
+                  "reason",
+                  saved.get("reason"),
+                  "negative_values_possible",
+                  saved.get("negative_values_possible")));
+        }
+      }
+    }
     var typed = new ArrayList<Object>();
 
     var mappings = new ArrayList<Object>();
@@ -631,13 +652,7 @@ public final class Models {
               "message",
               "Datenblatt-Vertrag seit Ableitung verändert."));
     Path data = w.store.file(r, "data");
-    if (data != null && !Objects.equals(model.get("source_data_sha256"), Json.sha(data)))
-      errors.add(
-          Json.map(
-              "code",
-              "model_data_changed",
-              "message",
-              "CSV seit Ableitung verändert; erneut ableiten."));
+    if (data != null) w.require(r, "data");
     if (!Objects.equals(Json.sha(ili), model.get("evidence_model_sha256"))) {
       Map<String, Object> result;
       try {
@@ -791,7 +806,37 @@ public final class Models {
             Json.sha(w.sheet(r)),
             "changes",
             r.get("changes"));
-    if (Json.bool(report, "valid", false)) ModelRepairs.passed(r);
+    report.put("data_sha256", data == null ? null : Json.sha(data));
+    if (data != null) {
+      var current =
+          Csv.inspect(
+              data,
+              Json.read(AgentResources.resolve(w.settings.root, "config/rules.json")),
+              Json.list(sheet.get("attributes")));
+      report.put("current_data_observations", current.get("columns"));
+    }
+    if (Json.bool(report, "valid", false)) {
+      ModelRepairs.passed(r);
+      if (data != null) {
+        String hash = Json.sha(data);
+        Object previous =
+            model.getOrDefault("validated_data_sha256", model.get("source_data_sha256"));
+        model.put("validated_data_sha256", hash);
+        if (!Objects.equals(previous, hash))
+          Store.event(
+              r,
+              "model_data_validated",
+              Json.map(
+                  "previous_data_sha256",
+                  previous,
+                  "data_sha256",
+                  hash,
+                  "model_sha256",
+                  Json.sha(ili),
+                  "scope",
+                  scope));
+      }
+    }
     report.put("scope", scope);
     report.put("approvable", scope.equals("integration"));
     report.put("diagnostic_history", r.get("diagnostic_history"));
