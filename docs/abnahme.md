@@ -1919,3 +1919,27 @@ Integrationstestsuite 22 Tests, davon 21 erfolgreich und eine optionale
 Docker-/Jenkins-Abnahme übersprungen. Agentenänderungen auf `main` gepusht
 (Implementierungscommit `d1d8a78`). Das Agentenpaket ist lokal gebaut und
 installiert, nicht als neuer Maven-Agentenrelease veröffentlicht.
+
+## Maven-Release 0.2.32 und Neuinstallation (15.10.2026)
+
+Tatsächlich veröffentlicht: `ch.so.agi:datenportal-themenintegrator-agent:0.2.32:bin@tar.gz`
+auf `https://jars.interlis.guru/snapshots/`, aus Commit `b18cd07`.
+[Release-Workflow #32](https://github.com/sogis/datenportal-themenintegrator-agent/actions/runs/38734034790)
+ist erfolgreich: Tests, JAR und Formatprüfung unter Linux und macOS, MCP-Transporttests,
+Paketinstallation, Maven-Publikation, erneuter Download mit Bytevergleich und
+nochmalige Paketinstallation. Enthalten sind INTERLIS-MCP `0.0.579-1` und
+Datenblatt-MCP `0.2.3`; `developmentArtifacts=false`.
+
+Zusätzlich lokal unter macOS/JDK 21 tatsächlich geprüft: Das veröffentlichte
+Archiv wurde direkt von Maven nach `build/maven-release-032/agent.tar.gz`
+heruntergeladen und mit `bin/package-smoke` frisch in einem isolierten Workspace
+installiert. Beide MCP-Verbindungen, positive und negative Validierung, `init`,
+`doctor` und Workspace-Update erfolgreich. `doctor` meldet `ready=true` und
+`smoke_current=true`; der echte INTERLIS-MCP-Handshake meldet `0.0.579-1`.
+Archiv-SHA-256: `c0eb9ca3890b9510c40c50477afd379912af7bcc2766b85c0c024dbac4d5e09c`.
+Lokale technische Nachweise liegen unter `build/maven-release-032/`.
+
+Die Installationsprüfung verwendet ausschliesslich synthetische Fachdateien.
+Keine realen Office-Daten, Fachvorgänge, Freigaben oder Publikationen verändert.
+Die bestehende Betriebsinstallation bleibt bei dem zuvor geprüften lokalen Paket;
+dieser Nachweis betrifft ausdrücklich die Neuinstallation des Maven-Releases.
