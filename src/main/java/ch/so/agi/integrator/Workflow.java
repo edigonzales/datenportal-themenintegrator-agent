@@ -62,8 +62,16 @@ public final class Workflow implements AutoCloseable {
         files.handoff(Json.required(args, "source_path"), "change");
     }
     if (operation.equals("start")) return start(args);
+    if (operation.equals("metadata"))
+      store.read(
+          Json.required(args, "run_id"),
+          r -> {
+            Offices.operation(r, operation);
+            return null;
+          });
     if (operation.equals("metadata") && Json.str(args, "operation", "").equals("describe_schema"))
       return datasheets.call("describe_schema", Json.obj(args.get("arguments")));
+    if (operation.equals("office_schema")) return new Offices(this).schema(args);
     if (operation.equals("organization_schema")) return new Organizations(this).schema(args);
     if (operation.equals("repository_plan"))
       return store.read(
@@ -73,6 +81,7 @@ public final class Workflow implements AutoCloseable {
         Json.required(args, "run_id"),
         r -> {
           try {
+            Offices.operation(r, operation);
             return switch (operation) {
               case "status" -> status(r);
               case "set_issue" -> IssueSelection.set(r, args);
@@ -90,7 +99,7 @@ public final class Workflow implements AutoCloseable {
                   new RepositoryDatasheets(this).select(r, Json.str(args, "relative_path", null));
               case "prepare_model_reference" -> new Models(this).prepareReference(r);
               case "stage_change" ->
-                  stage(
+                  stageExternal(
                       r,
                       Json.required(args, "relative_path"),
                       Path.of(Json.required(args, "source_path")));
@@ -98,14 +107,20 @@ public final class Workflow implements AutoCloseable {
               case "approve" -> approve(r, args);
               case "metadata" ->
                   metadata(r, Json.required(args, "operation"), Json.obj(args.get("arguments")));
-              case "office" -> new Organizations(this).office(r, Json.obj(args.get("values")));
+              case "office" ->
+                  new Offices(this)
+                      .prepare(r, Json.obj(args.get("values")), Json.str(args, "mode", null));
               case "prepare_organization" ->
                   new Organizations(this).prepare(r, Json.obj(args.get("values")));
               case "validate_organization" -> new Organizations(this).validate(r);
               case "reset_model_repair" -> ModelRepairs.reset(r, args);
               case "derive_model" -> new Models(this).derive(r, args);
               case "validate_model" ->
-                  new Models(this).validate(r, Json.str(args, "scope", "integration"));
+                  new Models(this)
+                      .validate(
+                          r,
+                          Json.str(args, "scope", "integration"),
+                          Json.bool(args, "refresh_evidence", false));
               case "transform" -> new Converters(this).transform(r, args);
               case "apply_local_changes" -> apply(r);
               case "publication_plan" ->
@@ -141,6 +156,15 @@ public final class Workflow implements AutoCloseable {
 
   private Object start(Map<String, Object> a) {
     String workflow = Json.str(a, "workflow", "topic");
+    if (workflow.equals("office"))
+      for (String field :
+          List.of("organization", "identifier", "issue", "data_path", "metadata_path"))
+        if (a.containsKey(field))
+          throw new Problem(
+              "invalid_arguments",
+              "Office-Pflege benötigt nur workflow und optional source_environment.",
+              "field",
+              field);
     if (workflow.equals("organization")
         && (a.containsKey("data_path") || a.containsKey("metadata_path") || a.containsKey("issue")))
       throw new Problem(
@@ -148,7 +172,7 @@ public final class Workflow implements AutoCloseable {
     var r =
         store.create(
             workflow,
-            Json.required(a, "organization"),
+            workflow.equals("office") ? null : Json.required(a, "organization"),
             Json.str(a, "identifier", null),
             Json.str(a, "issue", null),
             Json.str(a, "source_environment", "local"));
@@ -203,6 +227,7 @@ public final class Workflow implements AutoCloseable {
 
   public String primaryGate(Map<String, Object> r) {
     return switch (Json.str(r, "workflow", "topic")) {
+      case "office" -> "office";
       case "organization" -> "organization";
       case "model" -> "model";
       default -> "metadata";
@@ -235,6 +260,7 @@ public final class Workflow implements AutoCloseable {
   }
 
   String fingerprint(Map<String, Object> r, String gate, String policy) {
+    if (Offices.standalone(r)) return new Offices(this).fingerprint(r);
 
     var context = Json.map();
     Path shared = settings.topics.resolve("shared");
@@ -428,9 +454,24 @@ public final class Workflow implements AutoCloseable {
   }
 
   public void require(Map<String, Object> r, String gate) {
-    if (!gate.equals("data") && !Json.str(r, "workflow", "topic").equals("organization"))
+    if (!gate.equals("data")
+        && !Set.of("organization", "office").contains(Json.str(r, "workflow", "topic")))
       exportRequired(r);
+    if (Offices.standalone(r)
+        && !Json.bool(Json.obj(Json.obj(r.get("checks")).get("office")), "valid", false))
+      throw new Problem(
+          "approval_required",
+          "Aktuelle erfolgreiche Office-Prüfung und menschliche Freigabe erforderlich.");
     var approval = Json.obj(Json.obj(r.get("approvals")).get(gate));
+
+    if (Set.of("metadata", "model").contains(gate)) CheckStates.manifest(this, r, gate);
+    if (Set.of("data", "metadata", "model", "office").contains(gate)
+        && !CheckStates.current(this, r, gate, Json.obj(Json.obj(r.get("checks")).get(gate))))
+      throw new Problem(
+          "approval_required",
+          "Prüfstand ist veraltet; aktuelle Dateien und Komponenten erneut prüfen.",
+          "gate",
+          gate);
     if (!Objects.equals(approval.get("fingerprint"), fingerprint(r, gate)))
       throw new Problem(
           "approval_required",
@@ -455,7 +496,11 @@ public final class Workflow implements AutoCloseable {
 
   Map<String, Object> validateXtf(Map<String, Object> r, Path xtf, String name) {
     try {
-      var result = validator.validate(xtf, offices(r), directory(r).resolve(name));
+      var result =
+          validator.validate(
+              CheckStates.snapshot(directory(r), xtf),
+              CheckStates.snapshot(directory(r), offices(r)),
+              directory(r).resolve(name));
       var check =
           Diagnostics.record(
               this,
@@ -487,6 +532,17 @@ public final class Workflow implements AutoCloseable {
       }
     }
     result.put("current_approvals", valid);
+    result.put("check_states", CheckStates.overview(this, r));
+    if (r.containsKey("model"))
+      result.put(
+          "model_states",
+          Json.map(
+              "candidate",
+              Json.obj(Json.obj(r.get("files")).get("model")),
+              "candidate_ready",
+              Json.bool(Json.obj(r.get("model")), "package_ready", false),
+              "prepared_package",
+              r.get("prepared_package")));
     if (r.get("identifier") != null) {
       Path recipe = settings.root.resolve("topics").resolve(topic(r)).resolve("integration.json");
       if (Files.isRegularFile(recipe)) result.put("topic_recipe", Json.read(recipe));
@@ -557,10 +613,11 @@ public final class Workflow implements AutoCloseable {
   private Object analyze(Map<String, Object> r) {
     Path p = store.file(r, "data");
     if (p == null) return Json.map("skipped", true, "reason", "metadata_only");
+    var manifest = CheckStates.manifest(this, r, "data");
     var report =
         Csv.inspect(p, Json.read(AgentResources.resolve(settings.root, "config/rules.json")), null);
     report.put("fingerprint", fingerprint(r, "data"));
-    Json.obj(r.get("checks")).put("data", report);
+    CheckStates.record(this, r, "data", report, manifest);
     var result = new LinkedHashMap<>(report);
     result.put(
         "review_path",
@@ -574,8 +631,11 @@ public final class Workflow implements AutoCloseable {
   }
 
   public Object stage(Map<String, Object> r, String rel, Path source) {
+    if (Offices.standalone(r) && !Offices.PATH.equals(rel))
+      throw new Problem("change_not_allowed", "Office-Pflege darf nur den Office-Katalog ändern.");
+
     Path dest = Json.inside(settings.topics, rel);
-    String org = Json.required(r, "organization");
+    String org = Offices.standalone(r) ? "" : Json.required(r, "organization");
     boolean allowed =
         Set.of(
                 "shared/data/offices.xtf",
@@ -602,6 +662,10 @@ public final class Workflow implements AutoCloseable {
         prev.containsKey("before_sha256")
             ? (String) prev.get("before_sha256")
             : Files.exists(dest) ? Json.sha(dest) : null;
+    String actual = Files.exists(dest) ? Json.sha(dest) : null;
+    if (actual != null
+        && Objects.equals(actual, Json.obj(Json.obj(r.get("applied")).get("hashes")).get(rel)))
+      before = actual;
     String sha = Json.sha(source);
     Path staged = directory(r).resolve("changes").resolve(sha + "-" + dest.getFileName());
     try {
@@ -610,6 +674,12 @@ public final class Workflow implements AutoCloseable {
     } catch (java.io.IOException e) {
       throw new Problem("file_write_failed", "Änderung kann nicht gesichert werden.");
     }
+    if (!sha.equals(Json.sha(source)) || !sha.equals(Json.sha(staged)))
+      throw new Problem("artifact_changed", "Änderung während Sicherung verändert.", "path", rel);
+    String actualBefore = Files.exists(dest) ? Json.sha(dest) : null;
+    if (!Objects.equals(before, actualBefore))
+      throw new Problem(
+          "repository_changed", "Repository-Datei seit Vorbereitung verändert.", "path", rel);
     String old = Files.exists(dest) ? Json.contents(dest) : "";
     String candidate = Json.contents(staged);
     var change =
@@ -627,10 +697,20 @@ public final class Workflow implements AutoCloseable {
     return change;
   }
 
+  private Object stageExternal(Map<String, Object> r, String rel, Path source) {
+    if (r.containsKey("model") && (rel.endsWith(".ili") || rel.endsWith("/dataset.gradle")))
+      throw new Problem(
+          "model_artifact_managed",
+          "Modell und Task werden gemeinsam vorbereitet. derive_model für Änderungen; validate_model(refresh_evidence=true) für neue Nachweise verwenden.");
+    return stage(r, rel, source);
+  }
+
   private Object validate(Map<String, Object> r) {
+    if (Offices.standalone(r)) return new Offices(this).validate(r);
     if (Json.str(r, "workflow", "topic").equals("organization"))
       return new Organizations(this).validate(r);
     exportRequired(r);
+    var manifest = CheckStates.manifest(this, r, "metadata");
     var sheet = describe(r);
     Path data = store.file(r, "data");
     var errors = new ArrayList<Object>();
@@ -743,7 +823,7 @@ public final class Workflow implements AutoCloseable {
             r.get("provenance"));
     report.put("diagnostic_history", r.get("diagnostic_history"));
     report.put("fingerprint", fingerprint(r, "metadata"));
-    Json.obj(r.get("checks")).put("metadata", report);
+    CheckStates.record(this, r, "metadata", report, manifest);
     var result = new LinkedHashMap<>(report);
     result.put(
         "review_path",
@@ -758,7 +838,13 @@ public final class Workflow implements AutoCloseable {
 
   private Object approve(Map<String, Object> r, Map<String, Object> a) {
     String gate = Json.required(a, "gate");
-    if (!Set.of("data", "metadata", "model", "organization").contains(gate)
+    if (Offices.standalone(r) && !gate.equals("office")
+        || !Offices.standalone(r) && gate.equals("office"))
+      throw new Problem(
+          "invalid_gate",
+          "Office-Freigabe gehört ausschliesslich zur eigenständigen Office-Pflege.");
+
+    if (!Set.of("data", "metadata", "model", "organization", "office").contains(gate)
         && !gate.startsWith("publish:")) throw new Problem("invalid_gate", "Unbekannte Freigabe.");
     String statement = Json.str(a, "human_statement", "");
     if (statement.isBlank())
@@ -767,10 +853,16 @@ public final class Workflow implements AutoCloseable {
     String fp = fingerprint(r, gate);
     if (!fp.equals(a.get("fingerprint")))
       throw new Problem("stale_review", "Prüfstand wurde verändert; erneut prüfen.");
-    if (!gate.equals("data") && !Json.str(r, "workflow", "topic").equals("organization"))
+    if (!gate.equals("data")
+        && !Set.of("organization", "office").contains(Json.str(r, "workflow", "topic")))
       exportRequired(r);
     if (!gate.startsWith("publish:")) {
       var check = Json.obj(Json.obj(r.get("checks")).get(gate));
+      if (Set.of("data", "model", "metadata", "office").contains(gate)
+          && !CheckStates.current(this, r, gate, check))
+        throw new Problem(
+            "validation_required",
+            "Prüfstand ist veraltet; aktuelle Dateien und Komponenten erneut prüfen.");
       if (!Json.bool(check, "valid", false) || !Objects.equals(check.get("fingerprint"), fp))
         throw new Problem("validation_required", "Aktuelle erfolgreiche Prüfung fehlt.");
     }
@@ -940,6 +1032,7 @@ public final class Workflow implements AutoCloseable {
   }
 
   private Object applyLocked(Map<String, Object> r) {
+    Offices.scope(r);
     require(r, primaryGate(r));
     if (r.containsKey("model") && primaryGate(r).equals("metadata")) require(r, "model");
     var changes = Json.obj(r.get("changes"));
@@ -992,6 +1085,16 @@ public final class Workflow implements AutoCloseable {
               false,
               "message",
               "Organisation im Repo angelegt. Jenkins-Job entsteht erst mit dem ersten Thema."));
+    if (Offices.standalone(r))
+      r.put(
+          "completion",
+          Json.map(
+              "status",
+              changes.isEmpty() ? "unchanged" : "office_updated",
+              "message",
+              changes.isEmpty()
+                  ? "Keine Office-Änderungen erforderlich."
+                  : "Office-Katalog aktualisiert."));
     return Json.map("applied", changes.keySet(), "completion", r.get("completion"));
   }
 }

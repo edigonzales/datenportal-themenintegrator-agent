@@ -36,3 +36,31 @@ aufrufen. Das Repository-Journal und seine Sicherungen erhalten; bei unbekannten
 zwischenzeitlichen Änderungen erfolgt keine automatische Überschreibung. Ein
 anderer Vorgang kann während einer offenen Synchronisierung keine lokalen
 Änderungen übernehmen. Es werden weder alte Checkouts noch PR-Arbeitskopien gelöscht.
+
+## Aktuelle Dateien und historische Prüfungen
+
+Prüfungen sind an Inhaltsprüfsummen und Prüfkomponenten gebunden. `status` zeigt
+unter `check_states` den aktuellen beziehungsweise veralteten Status sowie das
+Manifest des letzten erfolgreichen Prüfstands. Alte Ergebnisse bleiben in
+`check_history` und HTML-Snapshots unter `report-history` erhalten. Sie dürfen
+nicht als aktuelle Freigaben verwendet werden. Pfadwechsel ohne Inhaltsänderung
+ändern die Dateiversion nicht; Änderungen während einer Prüfung machen deren
+Ergebnis unbrauchbar für die Freigabe.
+
+Ein unvollständiger Modellkandidat ist vom vorbereiteten Übernahmepaket getrennt.
+Das Fehlen eines neuen Pakets ist keine nachträgliche Taskänderung. Nach einem
+Proof-Engine-Update vorhandene Modellbytes mit
+`validate_model(scope="model", refresh_evidence=true)` erneut prüfen. Keine
+zusätzlichen Constraints einfügen und keine vorgemerkten Dateien manuell austauschen.
+Erst anschliessend Modellreferenz und Integrationsreview vorbereiten. Externe
+Repository-Änderungen müssen geklärt werden; sie werden nicht überschrieben.
+
+## Eigenständige Office-Pflege
+
+Office-Vorgänge übernehmen ausschliesslich `shared/data/offices.xtf`. Nach
+`validate`, gezeigtem HTML-Bericht und tatsächlicher Freigabe `gate=office`
+ist die beauftragte lokale Übernahme oder PR-Erstellung möglich. Ein lokaler
+Datenliefernachweis und Publikationsfreigaben sind hierfür nicht erforderlich.
+`repository_plan`, `prepare_pr` und nach menschlichem Merge `sync_repository`
+verwenden; keinen Seed und keine Lieferung starten. Ein bereits vorbereiteter
+PR wird fortgesetzt; weitere Office-Änderungen benötigen einen neuen Vorgang.

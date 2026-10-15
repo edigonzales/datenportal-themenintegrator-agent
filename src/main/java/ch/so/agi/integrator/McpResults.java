@@ -32,6 +32,8 @@ final class McpResults {
               "code",
               "run_id",
               "id",
+              "workflow",
+              "completion",
               "organization",
               "identifier",
               "issue",

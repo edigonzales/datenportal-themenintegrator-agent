@@ -19,6 +19,10 @@ class OperatorWorkspaceTest {
   void distributionIsSelfContainedAndHasNoImplementation() throws Exception {
     assertTrue(OperatorWorkspace.installed(bundle()));
     DocumentationTest.verifyGuidance(bundle());
+    String topicSkill =
+        Json.contents(bundle().resolve("skills/datenportal-themenintegrator/SKILL.md"));
+    assertTrue(topicSkill.contains("start(workflow=office)"));
+    assertTrue(topicSkill.contains("approve(gate=office)"));
     var inventory = OperatorWorkspace.inventory(bundle());
     assertTrue(inventory.containsKey("docs/anwenderhandbuch.md"));
     assertFalse(

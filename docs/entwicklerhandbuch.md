@@ -32,6 +32,11 @@ bash bin/package-smoke build/java-distribution
 
 Repository: `https://jars.interlis.guru/snapshots/`. Zugang über `MAVEN_USERNAME` und `MAVEN_PASSWORD`. Die GitHub-Actions-Pipeline `java-package.yml` prüft auf Linux und macOS; explizite Workflow-Dispatch-Eingaben wählen die veröffentlichten MCP-Versionen für ein Betriebspaket.
 
+Die getesteten Standardversionen in `gradle.properties` sind Datenblatt-MCP
+`0.2.3` und INTERLIS-MCP `0.0.579-1`. Die `-P`-Argumente überschreiben diese
+Defaults bei einer gezielten Aktualisierung; Workflow-Dispatch bietet dieselben
+Versionen als Vorgabe an.
+
 Reine Dokumentationsänderungen unter `docs/**`, an `README.md`, `DEMO.md` sowie
 an `templates/operator/README.md` und `templates/operator/anwenderhandbuch.md`
 starten bei Push und Pull Request keinen Workflow. Gemischte Änderungen mit

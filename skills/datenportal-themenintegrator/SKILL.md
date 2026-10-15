@@ -1,6 +1,6 @@
 ---
 name: datenportal-themenintegrator
-description: Prüfe und integriere Datenportal-Themen und ihre Daten- oder Metadatenlieferungen aus CSV/XTF/XLSX mit menschlichen Freigaben. Auch für reine CSV-Prüfung, Metadatenkorrektur und Wiederaufnahme; eigenständige Modellierung und Organisationsanlage verwenden ihre eigenen Skills. Nicht für allgemeine CSV-Analysen.
+description: Prüfe und integriere Datenportal-Themen und ihre Daten- oder Metadatenlieferungen aus CSV/XTF/XLSX mit menschlichen Freigaben. Auch für eigenständige Office-Katalogpflege, reine CSV-Prüfung, Metadatenkorrektur und Wiederaufnahme; eigenständige Modellierung und Organisationsanlage verwenden ihre eigenen Skills. Nicht für allgemeine CSV-Analysen.
 ---
 
 Verwende den `datenportal_integrator`-MCP. Unbekannte Aufrufe mit `operation_schema(operation=<Werkzeugname>)` klären; keine Implementierungsquellen lesen oder durchsuchen. Anleitungen und Fachdateien mit `datenportal_workspace.read_file` lesen. Im Betriebspaket sind Shell und Quellcodesuche gesperrt. Der CLI-Fallback `bin/datenportal-agent schema <operation>` beziehungsweise `call` bleibt eine Betreiberhandlung. Bei Einrichtung, Runtime- oder Zugangsfehlern [Betrieb und Zugänge](../../docs/agent/betrieb-und-zugaenge.md) lesen.
@@ -39,9 +39,40 @@ Vor dem ersten Integrator-Aufruf mit angehängten CSV/XTF/XLSX die [verbindliche
 
 Innerhalb einer Themenintegration die [Modellanleitung](../datenportal-validierungsmodell/SKILL.md) ergänzend lesen; derselbe Vorgang und gemeinsamer Review. Ein eigenständiger Modellauftrag verwendet direkt diesen Modellskill.
 
+## Office-Katalog eigenständig pflegen
+
+Ein Auftrag nur für `offices.xtf` benötigt weder ein Thema noch eine vollständige
+Organisation. Dafür `office_schema` lesen, den Bestand prüfen und
+`start(workflow=office)` ohne `organization`, Themenidentifier oder Lieferdateien
+verwenden. Keine Jenkins-Kennung, Teams oder Benutzerzuordnungen erfragen.
+
+1. Bei Wiederaufnahme zuerst `status` mit derselben `run_id`.
+2. Alle sechs Office-Pflichtfelder anhand von `office_schema` klären. Für eine
+   Ergänzung `office(run_id, mode=create, values=...)` verwenden. Bestehende
+   Identifier nicht als neue Einträge überschreiben.
+3. Nur bei ausdrücklichem Korrekturauftrag `mode=update` verwenden: Bestandswerte
+   lesen, bestätigte Änderungen einsetzen und die übrigen Felder unverändert
+   übernehmen. Identifier bleiben gleich; Löschungen und Umbenennungen sind
+   nicht Bestandteil dieses Ablaufs. Identische Wiederholungen ändern nichts.
+4. `validate` ausführen und den HTML-Bericht mit den Vorher-/Nachher-Werten über
+   `datenportal_workspace.open_report` zeigen. **Office-Stopp:** tatsächliche
+   menschliche Antwort abwarten; erst dann `approve(gate=office)` mit gezeigtem
+   Fingerprint und tatsächlicher Aussage. Nach Korrekturen erneut prüfen.
+5. Nur beauftragte Übernahme mit `apply_local_changes` beziehungsweise PR
+   fortsetzen. Vor einem beauftragten PR `repository_plan` zeigen, dann
+   `prepare_pr`; nach menschlichem Merge `sync_repository` verwenden.
+   Kein lokaler Datenliefernachweis, Seed oder Upload gehört zur Office-Pflege.
+   Ohne Änderungen ist kein PR erforderlich.
+
+Ein fehlendes Office während einer Themenintegration bleibt dagegen im vorhandenen
+Themenvorgang. Für den Katalog niemals ein Dummy-Thema oder eine vollständige
+Organisation anlegen. Office-Kandidaten ausschliesslich über `office` vorbereiten,
+nicht per `stage_change` oder direkter Dateibearbeitung.
+
 ## Organisation anlegen
 
-Eigenständige Organisationsaufträge verwenden [datenportal-organisation](../datenportal-organisation/SKILL.md). Einzelne fehlende Offices im Themenvorgang über `organization_schema` und `office` ergänzen; siehe [Metadaten und XLSX](../../docs/agent/metadaten-und-xlsx.md#dienststelle-ergänzen).
+
+Aufträge für eine vollständige Organisation mit Jobdateien und Berechtigungen verwenden [datenportal-organisation](../datenportal-organisation/SKILL.md). Einzelne fehlende Offices im Themenvorgang über `organization_schema` und `office` ergänzen; siehe [Metadaten und XLSX](../../docs/agent/metadaten-und-xlsx.md#dienststelle-ergänzen).
 
 ## Zielumgebung und Wiederaufnahme
 

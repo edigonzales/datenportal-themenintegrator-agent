@@ -24,6 +24,7 @@ public final class Reports {
     METADATA("Datenblatt und Modell prüfen"),
     MODEL_CANDIDATE("Modellableitung prüfen"),
     MODEL("INTERLIS-Modell und CSV prüfen"),
+    OFFICE("Dienststellen prüfen"),
     ORGANIZATION("Organisation und Berechtigungen prüfen");
     final String title;
 
@@ -54,7 +55,13 @@ public final class Reports {
                 java.util.regex.Matcher.quoteReplacement(
                     m.group(1).equals("TITLE") ? escape(kind.title) : renderedBody));
     Json.write(output, result);
-    return output.toString();
+    Path snapshot =
+        output
+            .getParent()
+            .resolve("report-history")
+            .resolve(Json.digest(result) + "-" + output.getFileName());
+    if (!Files.exists(snapshot)) Json.write(snapshot, result);
+    return snapshot.toString();
   }
 
   public static Map<String, Object> workbook(Path p, String sheet, int offset, int limit) {

@@ -97,3 +97,30 @@ Diese Darstellung wurde gegen den öffentlichen Vertrag von INTERLIS-MCP
 geprüft. Der aktuell konfigurierte Vertrag bleibt verbindlich. Ein neues UNIQUE
 kann zuvor gültige Daten zurückweisen; `allow_breaking=true` im Integrator-Aufruf
 setzt einen ausdrücklichen menschlichen Auftrag auch für diese Auswirkung voraus.
+
+## Unvollständige Nachweise und Dateistände
+
+`PROOF_INCOMPLETE` ist keine Aufforderung, eine bestätigte Fachregel zu entfernen.
+Den betroffenen Constraint und dessen `reasonCode` aus `constraintProofs` nennen,
+einen absoluten Diagnoselink zeigen und die technische Ursache klären. Eine Antwort
+„mit UNIQUE weiterfahren“ erhält den Auftrag und die Regel; sie ersetzt keinen
+Nachweis und ist kein Override für `approve` oder `prepare_model_reference`.
+Keine weiteren Auswahlfragen zur Entfernung stellen, wenn die Regel bestätigt ist.
+
+Nach einer tatsächlichen Komponentenreparatur im selben Vorgang
+`validate_model(run_id, scope="model", refresh_evidence=true)` verwenden. Diese
+Operation prüft die vorhandenen Modellbytes über `verifyIliModel`, ohne zusätzliche
+Constraints einzufügen. Bei Erfolg folgen `prepare_model_reference` und
+`validate_model(scope="integration")`, dann der neue menschliche Modellreview.
+Ohne geänderte Prüfkomponente oder geklärte Ursache keine unveränderten Versuche
+wiederholen. `derive_model` ist für fachliche Änderungen, nicht zum Neubinden
+von Task-Prüfsummen. Modell und Task nicht mit `stage_change` nachregistrieren.
+
+`status.check_states` unterscheidet aktuelle und veraltete Prüfungen. Das Manifest
+bindet Daten, Datenblatt, Modell, Task, Repository-Abhängigkeiten, Prüfparameter
+und Komponenten an einen Stand. Gleicher Inhalt an anderem Pfad erzeugt keine
+neue Dateiversion. Eine neue CSV entwertet abhängige Freigaben; alte erfolgreiche
+Berichte bleiben Historie, sind aber kein Nachweis für neue Dateien. Fehlende
+Manifeste alter Modellprüfungen verlangen erneute Prüfung. Bestehende echte
+CSV-Freigaben werden nur bei weiterhin passendem Fingerprint wiederverwendet.
+Repository-Konflikte gezielt klären, keine fremden Änderungen überschreiben.

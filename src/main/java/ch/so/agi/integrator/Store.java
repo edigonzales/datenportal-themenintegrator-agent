@@ -23,13 +23,20 @@ public final class Store {
 
   public Map<String, Object> create(
       String workflow, String organization, String identifier, String issue, String env) {
-    identifier(organization);
-    if (Set.of("shared", "build", ".git", ".gradle").contains(organization))
+    if ("office".equals(workflow)) {
+      if (organization != null || identifier != null || issue != null)
+        throw new Problem(
+            "invalid_arguments",
+            "Office-Pflege hat keine Organisation, kein Thema und keine Ausgabe.");
+    } else identifier(organization);
+
+    if (organization != null && Set.of("shared", "build", ".git", ".gradle").contains(organization))
       throw new Problem(
           "invalid_identifier", "Reservierter Repository-Ordner ist keine Organisation.");
-    if (!Set.of("topic", "model", "organization").contains(workflow))
-      throw new Problem("invalid_workflow", "workflow muss topic, model oder organization sein.");
-    if (!workflow.equals("organization")) identifier(identifier);
+    if (!Set.of("topic", "model", "organization", "office").contains(workflow))
+      throw new Problem(
+          "invalid_workflow", "workflow muss topic, model, organization oder office sein.");
+    if (!Set.of("organization", "office").contains(workflow)) identifier(identifier);
     else if (identifier != null)
       throw new Problem(
           "invalid_arguments", "Organisationsvorgänge haben keinen Themenidentifier.");
@@ -134,6 +141,11 @@ public final class Store {
     } catch (java.io.IOException e) {
       throw new Problem("file_write_failed", "Eingabedatei kann nicht gesichert werden.");
     }
+    if (!sha.equals(Json.sha(source)) || !sha.equals(Json.sha(dest)))
+      throw new Problem(
+          "artifact_changed", "Eingabedatei während Sicherung verändert.", "role", role);
+    var previous = Json.obj(Json.obj(data.get("files")).get(role));
+    if (sha.equals(previous.get("sha256"))) return previous;
     var record = Json.map("path", dest.toString(), "sha256", sha, "original_name", name);
     Json.obj(data.get("files")).put(role, record);
     event(data, "attach", Json.map("role", role, "sha256", sha));

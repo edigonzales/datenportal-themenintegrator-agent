@@ -14,6 +14,9 @@ public class CsvValidation {
   }
 
   public Map<String, Object> validate(Path data, Path model, String modelName, Path output) {
+    output = output.resolve(UUID.randomUUID().toString());
+    data = CheckStates.snapshot(output.resolve("data"), data);
+    model = CheckStates.snapshot(output.resolve("model"), model);
     Path log = output.resolve("csv.log");
     var dirs = new ArrayList<String>();
     dirs.add(model.toAbsolutePath().getParent().toString());

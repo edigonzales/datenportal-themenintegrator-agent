@@ -337,6 +337,12 @@ public final class Models {
     Map<String, Object> result;
     String operation;
     Path existing = w.store.file(r, "model");
+    if ("PROOF_INCOMPLETE".equals(Json.obj(Json.obj(r.get("model")).get("evidence")).get("status")))
+      throw new Problem(
+          "model_candidate_blocked",
+          "Unvollständigen Kandidaten zuerst klären. Nach Komponentenreparatur validate_model(refresh_evidence=true) verwenden; keine erneute ADD_CONSTRAINT-Ableitung.",
+          "evidence",
+          Json.obj(r.get("model")).get("evidence"));
     if (r.containsKey("model") && !Json.bool(Json.obj(r.get("model")), "authoring_valid", false))
       existing = null;
     if (existing == null) {
@@ -372,8 +378,33 @@ public final class Models {
     r.put(
         "pending_model", Json.map("operation", operation, "arguments", callArgs, "at", Json.now()));
     w.persist(r);
+    var derivationInputs = CheckStates.manifest(w, r, "model");
     try {
       result = w.interlis.call(operation, callArgs);
+      if (operation.equals("authorIliModel")
+          && authoringValid(result)
+          && !Json.list(args.get("changes")).isEmpty()) {
+        callArgs =
+            Json.map(
+                "modelPurpose",
+                purpose,
+                "ruleProfile",
+                profile,
+                "modelText",
+                Json.required(result, "updatedModelText"),
+                "request",
+                Json.map(
+                    "changes",
+                    args.get("changes"),
+                    "allowPotentiallyBreaking",
+                    Json.bool(args, "allow_breaking", false)));
+        operation = "applyIliModelChanges";
+        result = w.interlis.call(operation, callArgs);
+      }
+      if (!Json.digest(derivationInputs).equals(Json.digest(CheckStates.manifest(w, r, "model"))))
+        throw new Problem(
+            "check_inputs_changed",
+            "Eingangsdateien oder Prüfkomponenten während Modellableitung verändert; Kandidat nicht übernommen.");
     } catch (Problem error) {
       if (Json.str(Json.obj(error.details.get("response")), "message", "")
           .contains("input validation failed")) {
@@ -439,6 +470,11 @@ public final class Models {
             authoringValid(result),
             "task_configuration",
             Json.map("header", true, "encoding", "UTF-8", "separator", ";", "quote", "\""));
+    model.put("derivation", Json.map("operation", operation, "arguments", callArgs));
+    model.put("evidence_component_identity", w.interlis.identity());
+    model.put("package_ready", false);
+    if (Json.bool(Json.obj(r.get("model")), "authoring_valid", false))
+      r.put("prepared_model", Json.read(Json.text(r.get("model"))));
     r.put("model", model);
     if (text != null) {
       Path out = w.directory(r).resolve("model").resolve(modelName + ".ili");
@@ -446,14 +482,7 @@ public final class Models {
       w.store.attach(r, out, "model");
       model.put("evidence_model_sha256", Json.sha(out));
       if (authoringValid(result)) {
-        w.stage(r, w.topic(r) + "/" + modelName + ".ili", out);
-        String taskRelative = w.topic(r) + "/dataset.gradle";
-        Path taskExisting = w.repoFile(r, taskRelative);
-        String original = Files.exists(taskExisting) ? Json.contents(taskExisting) : "";
-        Path task = w.directory(r).resolve("model/dataset.gradle");
-        Json.write(task, task(original, Json.required(r, "identifier"), modelName));
-        w.stage(r, taskRelative, task);
-        model.put("dataset_task_sha256", Json.sha(task));
+        preparePackage(r, model, out);
       }
     }
     return Json.map(
@@ -538,6 +567,10 @@ public final class Models {
             "repository_datasheet_changed",
             "Repository-Datenblatt seit Auswahl verändert; Quelle und Modellgrundlage erneut prüfen.");
     }
+    if (!CheckStates.current(w, r, "model", check))
+      throw new Problem(
+          "validation_required",
+          "Prüfstand ist veraltet; aktuelle Dateien und Komponenten erneut prüfen.");
     if (!Objects.equals(Json.obj(w.describe(r).get("fields")).get("model"), modelName)) {
       if (!r.containsKey("draft")) w.metadata(r, "import_xtf", Json.map());
       w.metadata(r, "update_metadata", Json.map("values", Json.map("model", modelName)));
@@ -572,12 +605,45 @@ public final class Models {
 
   static boolean authoringValid(Map<String, Object> result) {
     var review = Json.obj(result.get("afterReview"));
-    return Set.of("GENERATED", "APPLIED").contains(Json.str(result, "status", ""))
+    return Set.of("GENERATED", "APPLIED", "VERIFIED").contains(Json.str(result, "status", ""))
         && Json.bool(result, "complete", false)
         && !Boolean.FALSE.equals(result.get("proofVerified"))
         && compilerPassed(review, result)
         && Json.bool(review, "validForAutomatedRules", false)
         && Json.list(result.get("openQuestions")).isEmpty();
+  }
+
+  private void preparePackage(Map<String, Object> r, Map<String, Object> model, Path ili) {
+    String name = Json.required(Json.obj(model.get("identity")), "name");
+    String relative = w.topic(r) + "/dataset.gradle";
+    Path old = w.repoFile(r, relative);
+    String content =
+        task(
+            Files.isRegularFile(old) ? Json.contents(old) : "",
+            Json.required(r, "identifier"),
+            name);
+    Path task = w.directory(r).resolve("model/tasks/" + Json.digest(content) + ".gradle");
+    if (!Files.exists(task)) Json.write(task, content);
+    if (!Json.contents(task).equals(content))
+      throw new Problem("artifact_changed", "Gesicherte Taskdatei wurde verändert.");
+    // Stage on an isolated state; only publish the complete package together.
+    var staged = Json.read(Json.text(r));
+    w.stage(staged, w.topic(r) + "/" + name + ".ili", ili);
+    w.stage(staged, relative, task);
+    model.put("dataset_task_sha256", Json.sha(task));
+    model.put("package_ready", true);
+    r.put("changes", staged.get("changes"));
+    r.put("events", staged.get("events"));
+    r.put("prepared_model", Json.read(Json.text(model)));
+    r.put(
+        "prepared_package",
+        Json.map(
+            "model_sha256",
+            Json.sha(ili),
+            "task_sha256",
+            Json.sha(task),
+            "identity",
+            model.get("identity")));
   }
 
   static boolean compilerPassed(Map<String, Object> review, Map<String, Object> result) {
@@ -633,6 +699,11 @@ public final class Models {
   }
 
   public Map<String, Object> validate(Map<String, Object> r, String scope) {
+    return validate(r, scope, false);
+  }
+
+  public Map<String, Object> validate(
+      Map<String, Object> r, String scope, boolean refreshEvidence) {
     if (!Set.of("model", "integration").contains(scope))
       throw new Problem("invalid_arguments", "scope=model oder integration erforderlich.");
 
@@ -642,7 +713,33 @@ public final class Models {
     w.exportRequired(r);
     Path ili = w.requiredFile(r, "model");
     var sheet = w.describe(r);
+    Path data = w.store.file(r, "data");
+    if (data != null) w.require(r, "data");
     ModelIdentity.verify(Json.contents(ili), Json.obj(model.get("identity")));
+    if (refreshEvidence) {
+      var beforeVerification = CheckStates.manifest(w, r, "model");
+      String text = Json.contents(ili);
+      var evidence =
+          w.interlis.call(
+              "verifyIliModel",
+              Json.map(
+                  "modelText", text, "modelPurpose", model.get("purpose"), "ruleProfile", profile));
+      if (!Json.digest(beforeVerification).equals(Json.digest(CheckStates.manifest(w, r, "model"))))
+        throw new Problem(
+            "check_inputs_changed",
+            "Modell oder Prüfkomponenten während Nachweis verändert; Ergebnis nicht übernommen.");
+      if (!text.equals(
+          Json.str(evidence, "updatedModelText", Json.str(evidence, "candidateModelText", null))))
+        throw new Problem(
+            "model_verification_changed", "Nachweis muss unveränderte Modellbytes zurückgeben.");
+      Diagnostics.record(
+          w, r, "model-proof", authoringValid(evidence) ? "PASSED" : "INCOMPLETE", evidence, false);
+      model.put("evidence", evidence);
+      model.put("evidence_component_identity", w.interlis.identity());
+      model.put("evidence_model_sha256", Json.sha(ili));
+      model.put("authoring_valid", authoringValid(evidence));
+      if (authoringValid(evidence)) preparePackage(r, model, ili);
+    }
     var errors = new ArrayList<Object>();
     if (!Objects.equals(model.get("contract_sha256"), contract(sheet)))
       errors.add(
@@ -651,8 +748,6 @@ public final class Models {
               "model_contract_changed",
               "message",
               "Datenblatt-Vertrag seit Ableitung verändert."));
-    Path data = w.store.file(r, "data");
-    if (data != null) w.require(r, "data");
     if (!Objects.equals(Json.sha(ili), model.get("evidence_model_sha256"))) {
       Map<String, Object> result;
       try {
@@ -673,6 +768,7 @@ public final class Models {
       }
       Diagnostics.record(w, r, "ili2c", compilerStatus(result, result), result, true);
       model.put("external_review", result);
+      model.put("evidence_component_identity", w.interlis.identity());
       model.put("evidence_model_sha256", Json.sha(ili));
       model.put(
           "authoring_valid",
@@ -686,25 +782,26 @@ public final class Models {
               .replaceAll("\"[^\"]*\"", "");
       if (declarations.matches("(?s).*\\b(CONSTRAINT|UNIQUE|EXISTENCE)\\b.*"))
         model.put("authoring_valid", false);
-      if (Json.bool(model, "authoring_valid", false)) {
-        String name = Json.required(Json.obj(model.get("identity")), "name");
-        w.stage(r, w.topic(r) + "/" + name + ".ili", ili);
-        String relative = w.topic(r) + "/dataset.gradle";
-        Path candidate = w.directory(r).resolve("model/dataset.gradle");
-        Json.write(
-            candidate,
-            task(Json.contents(w.repoFile(r, relative)), Json.required(r, "identifier"), name));
-        w.stage(r, relative, candidate);
-        model.put("dataset_task_sha256", Json.sha(candidate));
-      }
+      if (Json.bool(model, "authoring_valid", false)) preparePackage(r, model, ili);
     }
-    if (!Json.bool(model, "authoring_valid", false))
+    if (!Json.bool(model, "authoring_valid", false)) {
+      model.put("package_ready", false);
       errors.add(
           Json.map(
               "code",
               "model_candidate",
               "message",
-              "Compiler-/Regelprüfung oder automatische Constraint-Nachweise sind unvollständig."));
+              "Compiler-/Regelprüfung oder automatische Constraint-Nachweise sind unvollständig. Fachregel beibehalten; Komponentenursache klären, danach refresh_evidence=true.",
+              "constraint_proofs",
+              Json.obj(model.get("evidence")).get("constraintProofs")));
+    }
+    if (!Objects.equals(model.get("evidence_component_identity"), w.interlis.identity()))
+      errors.add(
+          Json.map(
+              "code",
+              "model_evidence_stale",
+              "message",
+              "Modellnachweis stammt von anderer oder unbekannter Prüfkomponente. validate_model(refresh_evidence=true) erforderlich."));
     String modelName = Json.required(Json.obj(model.get("identity")), "name");
     if (scope.equals("integration")
         && !Objects.equals(Json.obj(sheet.get("fields")).get("model"), modelName))
@@ -716,16 +813,22 @@ public final class Models {
               "Datenblatt-Modellreferenz fehlt oder stimmt nicht überein."));
     String iliRelative = w.topic(r) + "/" + modelName + ".ili",
         taskRelative = w.topic(r) + "/dataset.gradle";
+    boolean packageReady =
+        Json.bool(model, "authoring_valid", false) && Json.bool(model, "package_ready", false);
+    if (Json.bool(model, "authoring_valid", false) && !packageReady)
+      errors.add(
+          Json.map(
+              "code",
+              "model_package_not_prepared",
+              "message",
+              "Modell-/Taskpaket ist noch nicht vollständig vorbereitet. Nachweise mit refresh_evidence=true erneuern."));
     Path existingTask = w.repoFile(r, taskRelative);
-    if (Json.bool(model, "authoring_valid", false)
+    if (packageReady
         && Files.isRegularFile(existingTask)
         && Objects.equals(Json.sha(existingTask), model.get("dataset_task_sha256"))) {
       String original = Json.contents(existingTask);
       if (original.contains(BEGIN) && original.contains("tasks.register('validateThemenCsv'")) {
-        Path candidate = w.directory(r).resolve("model/dataset.gradle");
-        Json.write(candidate, task(original, Json.required(r, "identifier"), modelName));
-        w.stage(r, taskRelative, candidate);
-        model.put("dataset_task_sha256", Json.sha(candidate));
+        preparePackage(r, model, ili);
         Store.event(
             r,
             "csv_task_updated",
@@ -736,22 +839,26 @@ public final class Models {
                 "Single publication CSV validator; fresh review required."));
       }
     }
-    if (!Files.isRegularFile(w.repoFile(r, taskRelative))
-        || !Objects.equals(Json.sha(w.repoFile(r, taskRelative)), model.get("dataset_task_sha256")))
+    if (packageReady
+        && (!Files.isRegularFile(w.repoFile(r, taskRelative))
+            || !Objects.equals(
+                Json.sha(w.repoFile(r, taskRelative)), model.get("dataset_task_sha256"))))
       errors.add(
           Json.map(
               "code",
               "model_task_changed",
               "message",
               "CSV-Taskdefinition seit Modellableitung verändert; erneut ableiten und prüfen."));
-    if (!Files.isRegularFile(w.repoFile(r, iliRelative))
-        || !Objects.equals(Json.sha(w.repoFile(r, iliRelative)), Json.sha(ili)))
+    if (packageReady
+        && (!Files.isRegularFile(w.repoFile(r, iliRelative))
+            || !Objects.equals(Json.sha(w.repoFile(r, iliRelative)), Json.sha(ili))))
       errors.add(
           Json.map(
               "code",
               "repository_model_mismatch",
               "message",
               "Themenmodell und Prüfmodell unterscheiden sich."));
+    var manifest = CheckStates.manifest(w, r, "model");
     Map<String, Object> csvValidation;
     if (data == null)
       csvValidation = Json.map("valid", true, "skipped", true, "reason", "metadata_only");
@@ -815,7 +922,8 @@ public final class Models {
               Json.list(sheet.get("attributes")));
       report.put("current_data_observations", current.get("columns"));
     }
-    if (Json.bool(report, "valid", false)) {
+    if (Json.bool(report, "valid", false)
+        && CheckStates.current(w, r, "model", Json.map("manifest", manifest))) {
       ModelRepairs.passed(r);
       if (data != null) {
         String hash = Json.sha(data);
@@ -838,12 +946,13 @@ public final class Models {
       }
     }
     report.put("scope", scope);
-    report.put("approvable", scope.equals("integration"));
+    report.put("approvable", scope.equals("integration") && Json.bool(report, "valid", false));
     report.put("diagnostic_history", r.get("diagnostic_history"));
     report.put("repair", r.get("model_repair"));
     report.put("fingerprint", w.fingerprint(r, "model"));
 
-    Json.obj(r.get("checks")).put(scope.equals("model") ? "model_preparation" : "model", report);
+    CheckStates.record(
+        w, r, scope.equals("model") ? "model_preparation" : "model", report, manifest);
     var result = new LinkedHashMap<>(report);
     result.put(
         "review_path",

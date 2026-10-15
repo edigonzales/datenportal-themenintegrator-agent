@@ -10,6 +10,10 @@ import java.util.*;
 
 public final class McpClients {
   public interface ToolClient extends AutoCloseable {
+    default String identity() {
+      return getClass().getName();
+    }
+
     Map<String, Object> call(String name, Map<String, Object> args);
 
     default String sessionKey() {
@@ -37,6 +41,11 @@ public final class McpClients {
   }
 
   static final class Managed implements ToolClient {
+    @Override
+    public String identity() {
+      return Json.sha(JavaRuntime.mcp(settings, service));
+    }
+
     final Settings settings;
     final String service;
 
@@ -178,7 +187,12 @@ public final class McpClients {
             "remove_issue",
             "validate_datasheet",
             "export_xtf")
-        : Set.of("authorIliModel", "applyIliModelChanges", "reviewIliModel", "reviewIliChange");
+        : Set.of(
+            "authorIliModel",
+            "applyIliModelChanges",
+            "reviewIliModel",
+            "reviewIliChange",
+            "verifyIliModel");
   }
 
   private static Map<String, Object> result(McpSchema.CallToolResult result) {

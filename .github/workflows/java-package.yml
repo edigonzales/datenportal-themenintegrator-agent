@@ -19,9 +19,11 @@ on:
     inputs:
       datasheet_version:
         description: Published datasheet-mcp executable version
+        default: '0.2.3'
         required: true
       interlis_version:
         description: Published interlis-mcp executable version
+        default: '0.0.579-1'
         required: true
 permissions:
   contents: read

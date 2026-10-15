@@ -1,9 +1,5 @@
 package ch.so.agi.integrator;
 
-import ch.interlis.ili2c.metamodel.AbstractClassDef;
-import ch.interlis.ili2c.metamodel.AttributeDef;
-import ch.interlis.ili2c.metamodel.TextType;
-import java.net.URI;
 import java.nio.file.*;
 import java.util.*;
 import org.yaml.snakeyaml.LoaderOptions;
@@ -31,47 +27,7 @@ public final class Organizations {
   }
 
   public Map<String, Object> officeRules() {
-    var paths = new ArrayList<String>();
-    var files = new ArrayList<String>();
-    for (String dir : w.settings.modelDirectories())
-      if (!dir.startsWith("https://")) {
-        paths.add(w.settings.path(dir).toString());
-        Path p = w.settings.path(dir).resolve("SO_AGI_DataCatalog_Base_20260529.ili");
-        if (Files.isRegularFile(p)) files.add(p.toString());
-      }
-    if (files.size() != 1)
-      throw new Problem(
-          "office_model_missing", "Genau ein konfiguriertes Office-Modell erforderlich.");
-    var td = ch.interlis.ili2c.Main.compileIliFiles(files, paths, null);
-    if (td == null)
-      throw new Problem("office_model_invalid", "Konfiguriertes Office-Modell kompiliert nicht.");
-    var element = td.getElement("SO_AGI_DataCatalog_Base_20260529.Office.Office");
-    if (!(element instanceof AbstractClassDef<?> office))
-      throw new Problem("office_model_missing", "Office-Klasse fehlt im konfigurierten Modell.");
-    var rules = Json.map();
-    var iter = office.getAttributes();
-    while (iter.hasNext()) {
-      if (!(iter.next() instanceof AttributeDef a)) continue;
-      var type = a.getDomainResolvingAliases();
-      rules.put(
-          a.getName(),
-          Json.map(
-              "mandatory",
-              a.getDomain().isMandatoryConsideringAliases(),
-              "max_length",
-              type instanceof TextType t ? t.getMaxLength() : null,
-              "uri",
-              a.isDomainUri()));
-    }
-    return Json.map(
-        "fields",
-        rules,
-        "model",
-        files.getFirst(),
-        "model_sha256",
-        Json.sha(Path.of(files.getFirst())),
-        "unique",
-        List.of("identifier", "name", "abbreviation"));
+    return new Offices(w).officeRules();
   }
 
   public Object schema(Map<String, Object> args) {
@@ -91,11 +47,7 @@ public final class Organizations {
                     && Json.str(Json.obj(values.get("office")), key, "").isBlank())
                   missing.add("office." + key);
               });
-    var offices =
-        Xml.all(Xml.parse(w.settings.topics.resolve("shared/data/offices.xtf"))).stream()
-            .filter(e -> Xml.local(e).equals("Office.Office"))
-            .map(Xml::structure)
-            .toList();
+    var offices = new Offices(w).catalog(w.settings.topics.resolve(Offices.PATH));
     return Json.map(
         "organization_required",
         List.of(
@@ -115,64 +67,7 @@ public final class Organizations {
   }
 
   public Object office(Map<String, Object> r, Map<String, Object> values) {
-    var rules = Json.obj(officeRules().get("fields"));
-    for (String field : values.keySet())
-      if (!rules.containsKey(field) || !(values.get(field) instanceof String))
-        throw new Problem("office_fields", "Unbekanntes Office-Feld.", "field", field);
-    for (var entry : rules.entrySet()) {
-      String field = entry.getKey(), value = Json.str(values, field, "");
-      var rule = Json.obj(entry.getValue());
-      if (Json.bool(rule, "mandatory", false) && value.isBlank())
-        throw new Problem("office_fields", "Pflichtangabe der Dienststelle fehlt.", "field", field);
-      int max = Json.number(rule, "max_length", 0);
-      if (max > 0 && value.codePointCount(0, value.length()) > max)
-        throw new Problem(
-            "office_length", "Office-Wert ist zu lang.", "field", field, "max_length", max);
-      if (Json.bool(rule, "uri", false) && !value.isEmpty())
-        try {
-          URI uri = URI.create(value);
-          if (!uri.isAbsolute()
-              || uri.getScheme() == null
-              || uri.getRawSchemeSpecificPart().isEmpty()) throw new IllegalArgumentException();
-        } catch (Exception e) {
-          throw new Problem("office_uri", "Absolute URI erforderlich.", "field", field);
-        }
-    }
-    var doc = Xml.parse(w.offices(r));
-    var offices = Xml.all(doc).stream().filter(e -> Xml.local(e).equals("Office.Office")).toList();
-    String id = Json.required(values, "identifier");
-    var existing = offices.stream().filter(e -> id.equals(Xml.text(e, "identifier"))).toList();
-    if (existing.size() > 1) throw new Problem("duplicate_office", "Doppelter Office-Identifier.");
-    for (var o : offices)
-      if (!id.equals(Xml.text(o, "identifier")))
-        for (String field : List.of("name", "abbreviation"))
-          if (Objects.equals(values.get(field), Xml.text(o, field)))
-            throw new Problem(
-                "duplicate_office",
-                "Office-Name oder Abkürzung bereits vorhanden.",
-                "field",
-                field);
-    var baskets =
-        Xml.all(doc).stream()
-            .filter(e -> Xml.BASE.equals(e.getNamespaceURI()) && Xml.local(e).equals("Office"))
-            .toList();
-    if (baskets.size() != 1)
-      throw new Problem("office_catalog_invalid", "Genau ein Office-Basket erforderlich.");
-    var node =
-        existing.isEmpty() ? doc.createElementNS(Xml.BASE, "Office.Office") : existing.getFirst();
-    if (existing.isEmpty()) {
-      node.setAttributeNS(Xml.ILI, "i:tid", id);
-      baskets.getFirst().appendChild(node);
-    }
-    while (node.hasChildNodes()) node.removeChild(node.getFirstChild());
-    for (String field : rules.keySet()) {
-      var c = doc.createElementNS(Xml.BASE, field);
-      c.setTextContent(Json.str(values, field, ""));
-      node.appendChild(c);
-    }
-    Path candidate = w.directory(r).resolve("offices-candidate.xtf");
-    Json.write(candidate, Xml.serialize(doc));
-    return w.stage(r, "shared/data/offices.xtf", candidate);
+    return new Offices(w).prepare(r, values, null);
   }
 
   private void organization(Map<String, Object> r) {

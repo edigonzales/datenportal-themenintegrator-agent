@@ -18,6 +18,8 @@ Use this repository's Java CLI/MCP and select the skill by the requested task:
 For modeling within topic integration, also read the model skill and keep the
 existing `run_id`; do not start a second workflow. A missing office within a
 topic is an `office` addition, not a new organization.
+Standalone Office catalog maintenance uses the topic skill with `workflow=office`,
+without a topic, organization or teams; review and approve with `gate=office`.
 Before passing CSV files or chat attachments to the integrator, read and apply
 [Eingangsdateien](docs/agent/eingangsdateien.md): check original CSV names before
 handoff and automatically copy chat CSV/XTF/XLSX attachments unchanged with

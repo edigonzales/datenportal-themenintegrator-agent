@@ -153,6 +153,14 @@ final class ReviewHtml {
     appendMessages(overview, "Warnungen", warnings, "warning");
     appendMessages(overview, "Offene Fragen und fachliche Prüfpunkte", questions, "notice");
     var out = new StringBuilder(section("Prüfstand", overview.toString()));
+    if (report.containsKey("manifest"))
+      out.append(
+          section(
+              "Dateistand dieser Prüfung",
+              value(
+                  Json.map("state", report.get("state"), "manifest", report.get("manifest")),
+                  "",
+                  0)));
     var remaining = new LinkedHashMap<Object, Object>(report);
     var business = new StringBuilder();
     switch (kind) {
@@ -169,6 +177,7 @@ final class ReviewHtml {
         business.append(modelSummary(report.get("model")));
       }
       case MODEL_CANDIDATE, MODEL -> business.append(modelSummary(report));
+      case OFFICE -> take(business, remaining, "office_changes", "message");
       case ORGANIZATION -> take(business, remaining, "organization", "message", "jenkins_job");
     }
     if (business.isEmpty())

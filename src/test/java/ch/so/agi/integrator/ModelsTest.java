@@ -288,6 +288,120 @@ class ModelsTest {
   }
 
   @Test
+  void incompleteProofCanBeRefreshedWithoutAnotherChangeOrLostTaskBinding() {
+    f.call("derive_model", "run_id", id, "identity", identity(), "range_proposals", proposals());
+    String text = Json.required(reply, "updatedModelText");
+    reply.put("status", "PROOF_INCOMPLETE");
+    reply.put("proofVerified", false);
+    reply.put("candidateModelText", reply.remove("updatedModelText"));
+    f.call(
+        "derive_model",
+        "run_id",
+        id,
+        "identity",
+        identity(),
+        "changes",
+        List.of(Json.map("operation", "ADD_CONSTRAINT")));
+    var failed = f.call("validate_model", "run_id", id, "scope", "model");
+    assertEquals(
+        List.of("model_candidate"),
+        Json.list(failed.get("errors")).stream().map(Json::obj).map(e -> e.get("code")).toList());
+    assertFalse(Json.bool(failed, "approvable", true));
+    f.error(
+        "model_candidate_blocked",
+        () ->
+            f.call(
+                "derive_model",
+                "run_id",
+                id,
+                "identity",
+                identity(),
+                "changes",
+                List.of(Json.map("operation", "ADD_CONSTRAINT"))));
+    reply.put("status", "VERIFIED");
+    reply.put("proofVerified", true);
+    reply.put("updatedModelText", reply.remove("candidateModelText"));
+    var refreshed =
+        f.call("validate_model", "run_id", id, "scope", "model", "refresh_evidence", true);
+    assertTrue(Json.bool(refreshed, "valid", false), Json.pretty(refreshed));
+    assertEquals("verifyIliModel", requests.getLast().get("name"));
+    assertEquals(text, Json.obj(requests.getLast().get("arguments")).get("modelText"));
+    f.call("prepare_model_reference", "run_id", id);
+    assertTrue(Json.bool(f.call("validate_model", "run_id", id), "approvable", false));
+  }
+
+  @Test
+  void initialDerivationAppliesRequestedChanges() {
+    f.call(
+        "derive_model",
+        "run_id",
+        id,
+        "identity",
+        identity(),
+        "range_proposals",
+        proposals(),
+        "changes",
+        List.of(Json.map("operation", "ADD_CONSTRAINT")));
+    assertEquals(
+        List.of("authorIliModel", "applyIliModelChanges"),
+        requests.stream().map(r -> r.get("name")).toList());
+  }
+
+  @Test
+  void changedInputsDuringValidationCannotBecomeCurrentOrApprovable() {
+    f.call("derive_model", "run_id", id, "identity", identity(), "range_proposals", proposals());
+    f.workflow.csvValidation =
+        new CsvValidation(f.settings, f.workflow.process) {
+          @Override
+          public Map<String, Object> validate(Path data, Path model, String name, Path output) {
+            Json.write(f.repo.resolve("shared/models/new-dependency.ili"), "changed during check");
+            return Json.map("valid", true);
+          }
+        };
+    var result = f.call("validate_model", "run_id", id, "scope", "model");
+    assertFalse(Json.bool(result, "valid", true));
+    assertEquals("stale", result.get("state"));
+    assertTrue(Json.text(result.get("errors")).contains("check_inputs_changed"));
+  }
+
+  @Test
+  void identicalContentDifferentPathPreservesApprovalAndHistoricalReport() {
+    f.call("derive_model", "run_id", id, "identity", identity(), "range_proposals", proposals());
+    prepareReference();
+    var report = f.call("validate_model", "run_id", id);
+    f.approve(id, "model", report);
+    Path original = Path.of(Json.required(report, "review_path"));
+    String hash = Json.sha(original);
+    Path copy = temp.resolve("same-content.csv");
+    Json.write(copy, "Jahr\n2025\n");
+    f.call("attach", "run_id", id, "role", "data", "path", copy.toString());
+    assertTrue(
+        Json.bool(
+            Json.obj(f.call("status", "run_id", id).get("current_approvals")), "model", false));
+    Json.write(copy, "Jahr\n2026\n");
+    f.call("attach", "run_id", id, "role", "data", "path", copy.toString());
+    assertFalse(
+        Json.bool(
+            Json.obj(f.call("status", "run_id", id).get("current_approvals")), "model", true));
+    assertEquals(hash, Json.sha(original));
+    assertEquals(
+        "stale",
+        Json.obj(Json.obj(f.call("status", "run_id", id).get("check_states")).get("model"))
+            .get("state"));
+  }
+
+  @Test
+  void incompletePackagePreparationDoesNotPublishHalfAPackage() {
+    f.call("derive_model", "run_id", id, "identity", identity(), "range_proposals", proposals());
+    String before = Json.digest(f.call("status", "run_id", id).get("changes"));
+    Json.write(f.repo.resolve("agi/ch.so.grundwasser.qualitaet/dataset.gradle"), "external edit");
+    f.error(
+        "repository_conflict",
+        () -> f.call("validate_model", "run_id", id, "scope", "model", "refresh_evidence", true));
+    assertEquals(before, Json.digest(f.call("status", "run_id", id).get("changes")));
+  }
+
+  @Test
   void changedCsvFailureDoesNotReplaceSuccessfulDataBinding() {
     f.call("derive_model", "run_id", id, "identity", identity(), "range_proposals", proposals());
     prepareReference();
@@ -345,9 +459,17 @@ class ModelsTest {
             f.settings,
             new Fixtures.FakeProcess(),
             new Datasheet(),
-            (op, args) -> {
-              fail("No model operation required after restart");
-              return Json.map();
+            new McpClients.ToolClient() {
+              @Override
+              public String identity() {
+                return f.workflow.interlis.identity();
+              }
+
+              @Override
+              public Map<String, Object> call(String op, Map<String, Object> args) {
+                fail("No model operation required after restart");
+                return Json.map();
+              }
             })) {
       // Exported metadata is available; avoid requiring a live synthetic draft session.
       resumed.store.edit(
@@ -515,14 +637,19 @@ class ModelsTest {
     f.call("derive_model", "run_id", id, "identity", identity(), "range_proposals", proposals());
     Path changed = temp.resolve("changed-task.gradle");
     Json.write(changed, "tasks.register('validateThemenCsv') { }\n");
-    f.call(
-        "stage_change",
-        "run_id",
-        id,
-        "relative_path",
-        "agi/ch.so.grundwasser.qualitaet/dataset.gradle",
-        "source_path",
-        changed.toString());
+    f.error(
+        "model_artifact_managed",
+        () ->
+            f.call(
+                "stage_change",
+                "run_id",
+                id,
+                "relative_path",
+                "agi/ch.so.grundwasser.qualitaet/dataset.gradle",
+                "source_path",
+                changed.toString()));
+    f.workflow.store.edit(
+        id, r -> f.workflow.stage(r, "agi/ch.so.grundwasser.qualitaet/dataset.gradle", changed));
     var report = f.call("validate_model", "run_id", id);
     assertFalse(Json.bool(report, "valid", true));
     assertTrue(

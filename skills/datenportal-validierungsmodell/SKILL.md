@@ -54,3 +54,11 @@ und Zielbytes und synchronisiert das lokale Themenrepository. `status` bleibt
 lesend. Bei `repository_sync` mit Phase `blocked` die Betreiberdiagnose zeigen und
 keine neue Veröffentlichung starten; keine lokalen Änderungen mit Reset/Clean
 verwerfen. Unterbrochene Synchronisierung mit demselben Vorgang wiederaufnehmen.
+
+Bei `PROOF_INCOMPLETE` bestätigte Regeln erhalten und technische Ursache mit dem
+konkreten Constraint-Nachweis benennen. Zustimmung ist kein technischer Override.
+Keine wiederholten ADD_CONSTRAINT-Aufrufe oder manuellen stage_change-Reparaturen.
+Nach Komponentenupdate `validate_model(scope="model", refresh_evidence=true)`
+verwenden; erst bei Erfolg Referenz vorbereiten und Integration prüfen. Aktuelle
+und historische Dateistände anhand `status.check_states` und Manifest unterscheiden;
+Details stehen in der Referenz „Typableitung und Reparatur“.

@@ -1756,3 +1756,144 @@ Isoliert simuliert:
 Offen: reale Ende-zu-Ende-Abnahme mit lokalem Docker/Jenkins, echtem GitHub-PR und
 menschlichem Merge. Keine reale INT-/PROD-Anlieferung und keine produktiven
 Freigaben oder Pushes wurden durch diese Implementierungsprüfung ausgeführt.
+
+## XMLDate-Nachweise und Dateistände (2026-10-15)
+
+Implementiert in Integrator und INTERLIS-MCP: XMLDate-Wertepaare aus dem
+Metamodell, vollständige Prüfung unveränderter Modellbytes mit `verifyIliModel`,
+Abweisung doppelter Constraint-Namen und gezielte Nachweiserneuerung mit
+`validate_model(refresh_evidence=true)`. Modell und Task werden gemeinsam
+vorgemerkt. Unvollständige Kandidaten können weder über `stage_change` noch durch
+Freigabe als erfolgreiches Paket übernommen werden.
+
+Prüfstände enthalten Inhaltsprüfsummen, Parameter und Komponentenidentitäten.
+Berichte, CSV-Prüfeingaben und Prüfprotokolle bleiben als einzelne historische
+Stände erhalten. Abweichende Dateien, Komponenten und Repository-Konflikte
+blockieren die Verwendung alter Ergebnisse. Tatsächliche Datenfreigaben können
+beim Paketwechsel nur bei unveränderter CSV, identischen CSV-Prüfregeln und
+belegter menschlicher Antwort erhalten bleiben; dies erzeugt keine neue Freigabe.
+
+Die isolierte eBau-Regression verwendet synthetische CSV-Daten und ausdrücklich
+synthetische Datenfreigaben, aber echte MCPs und ilivalidator. Sie rekonstruiert
+einen unvollständigen Kandidaten mit fehlender Taskbindung, erneuert dessen
+Nachweise ohne Modelländerung, bereitet die Modellreferenz vor und prüft die
+Integration. Eine CSV mit doppeltem Monat muss am UNIQUE scheitern. Fehler bei
+Paketvorbereitung und Eingabeänderungen während einer Prüfung werden zusätzlich
+in isolierten Java-Tests injiziert.
+
+Docker-/Jenkins-Abnahme bleibt optional und wird in der expliziten
+Integrationskonfiguration mit `docker_acceptance=true` zugeschaltet. Ohne diese
+Option wird dieser Abschnitt als übersprungen ausgewiesen. Ein tatsächlicher
+Prozessabbruch durch Betriebssystem/Crash und eine produktive Veröffentlichung
+sind durch diese Tests nicht abgenommen.
+
+Lokales Entwicklungspaket: `0.2.28-local-proof-recovery`
+(`developmentArtifacts=true`, kein veröffentlichter Release). JDK 21.0.7.
+Vollständige INTERLIS-MCP-Tests: 598 erfolgreich. Integrator `test jar
+spotlessCheck`: 253 Tests erfolgreich; anschliessend `distributionFiles` mit den
+zuvor gebauten MCP-Artefakten.
+
+SHA-256 der lokalen Paketkomponenten:
+
+| Komponente | SHA-256 |
+| --- | --- |
+| Integrator | `477dbfefa6f30231b4c8c1ad55071fd7d67a4083078c8f16bf9db019fb9326ea` |
+| INTERLIS-MCP | `c79bb6c689f1324eda504507f00d4cd52789c71e2eed1809d13612d7ab2c8684` |
+| Datenblatt-MCP (unverändert) | `cb4c0dd0c4d4f188f9cc5373edeeddd0a9a152d4cfadae4cc04ea723e032c99a` |
+| ilivalidator | `8c984abed5841421ae1008bf3d671f1d1164f1fead93a64b2d82ad251e0d4569` |
+
+Explizite isolierte Integrationskonfiguration:
+`build/proof-integration.toml`, Themenrepository-Kopie unter
+`build/proof-fixture-repo`, beide MCPs und Validator aus `build/java-distribution`.
+Die anfänglichen Läufe deckten eine fehlende Schema-Normalisierung des neuen
+MCP-Tools, eine falsche Testannahme zu `skipped` und unvollständige
+Testkonfiguration auf; diese Fehler wurden vor der Operator-Aktualisierung behoben.
+
+Abschluss der tatsächlichen lokalen Abnahme:
+
+- `integrationTest` mit obiger expliziter Konfiguration erfolgreich: 21 Tests,
+  davon 20 bestanden und der optionale Docker-/Jenkins-Test übersprungen.
+- Lokales Paket unter
+  `/Users/stefan/datenportal/pakete/datenportal-themenintegrator-agent-0.2.28-local-proof-recovery`
+  bereitgestellt; Arbeitsbereich über öffentliches `workspace update` aktualisiert.
+- Bestehenden Vorgang `02d53671ddc44c6ebf55c0f394789705` ausschliesslich über
+  öffentliche Operationen fortgesetzt: `validate_model(scope=model,
+  refresh_evidence=true)`, `prepare_model_reference`, `validate_model(scope=integration)`
+  und `validate`. Beide Reviews sind gültig, Modellintegration `approvable=true`.
+- Modell mit genau einem UNIQUE bytegleich:
+  `35daa444705c394ed5a81958e27d85691357b5a7f03a7c05ef22c4a884d5be77`.
+  Modellnachweis `VERIFIED`, CSV-Prüfung tatsächlich ausgeführt und erfolgreich.
+- Tatsächliche Datenfreigabe vom 2026-10-15 08:54:10 UTC erhalten; keine neue
+  Daten-, Modell- oder Metadatenfreigabe erzeugt. Kein direkter Eingriff in
+  gespeicherte Zustandsdateien, keine Übernahme ins Themenrepository und keine
+  Veröffentlichung.
+- Unveränderlicher Modellreview: `report-history/862a5dff698cae116d56be5e5d97fa2783400fb3eb5ee5a8f1f885993fed6553-model-review.html`.
+  Metadatenreview: `report-history/60ce94816bbbeb54f6564c191d7a548ed818f0db069646402e1c2019b38b687e-metadata-review.html`
+  (jeweils im bestehenden Vorgangsordner).
+
+Bereits laufende OpenCode-MCP-Verbindungen müssen neu verbunden werden, um das
+neue Paket und das ergänzte Operationsschema zu laden. Der Vorgang selbst bleibt
+dabei derselbe; keine erneute Ableitung und keine Entfernung der Fachregel nötig.
+
+## Eigenständige Office-Pflege (15.10.2026)
+
+Implementiert ist der eigenständige Vorgang `workflow=office` ohne Organisation,
+Thema, Teams oder Lieferdateien. `office_schema` liest nur Office-Regeln und
+Bestand. `office` unterscheidet ausdrücklich `mode=create` und `mode=update`;
+Korrekturen behalten den Identifier. `validate` erstellt den Office-Review,
+`approve(gate=office)` bindet eine tatsächliche menschliche Antwort an diesen
+Prüfstand. Nur `shared/data/offices.xtf` kann übernommen werden. Neue
+Themen-/Organisationsdateien, Seeds und Lieferungen sind im Office-Vorgang gesperrt.
+
+**Tatsächlich geprüft:** Java-21-Build und Unit-/Regressionstests sowie der
+gezielte Integrationstest `OfficeMcpIntegrationTest` mit echtem stdio-MCP,
+echtem INTERLIS-Validator und isoliertem quellfreiem Operator-Arbeitsbereich.
+Abschliessend bestanden 265 Unit-/Regressionstests und die zwei ausgewählten
+Integrationstests ohne Fehler oder Auslassungen; `jar` und `spotlessCheck`
+waren ebenfalls erfolgreich. Die lokale Git-Prüfung enthält auch eine
+Prozessunterbrechung während der Synchronisierung mit anschliessender Wiederaufnahme.
+Der BFS-Fall aus der OpenCode-Session wird dabei ohne Organisation oder Thema
+vorbereitet, geprüft und übernommen. `WorkspaceMcpIntegrationTest` prüft
+zusätzlich die vorhandenen MCP-/Dateigrenzen. Integrationstests laufen mit
+expliziter neuer Konfiguration:
+`./bin/datenportal-agent gradle integrationTest -PintegrationConfig=build/office-integration.toml --tests '*OfficeMcpIntegrationTest' --tests '*WorkspaceMcpIntegrationTest'`.
+Die lokale Testkonfiguration enthält den absoluten Entwicklungsroot,
+`topics_repo="build/office-integration-repo"`,
+`state_dir="build/office-integration-runs"`,
+`model_dirs=["tests/fixtures/models"]` und
+`[datasheet]` mit `transport="stdio"`. Der Office-Test erzeugt seine eigenen
+temporären Fachdateien und verwendet standardmässig
+`build/validator/ilivalidator.jar` (mit `gradle validatorJar` erstellbar).
+
+**Isoliert simuliert:** Menschliche Freigaben und GitHub-Antworten sind explizit
+synthetische Testdaten. `OfficeRepositoryTest` verwendet echte lokale Git-Repositories
+und einen lokalen Bare-Remote für PR-Kandidat, wiederholte Vorbereitung,
+simulierten menschlichen Merge und anschliessende Synchronisierung. Es erfolgt
+kein Netzwerkzugriff auf GitHub und kein Jenkins-Aufruf. Unit-Tests simulieren
+Validator-Erfolge/-Fehler und prüfen unter anderem veraltete Freigaben,
+Kandidaten-/Modelländerungen, konkurrierende Katalogänderungen und unerlaubte
+Dateien beziehungsweise Operationen.
+
+**Offen / nicht durchgeführt:** Kein Release oder Update des realen Betriebspakets,
+keine Änderung an der aktiven OpenCode-Session oder am realen Office-Katalog.
+Keine echten PRs, menschlichen Fachfreigaben oder INT-/PROD-Publikationen.
+Die übrigen externen Fachintegrationstests und die optionale Docker-Publikationsabnahme
+wurden für diese Office-Erweiterung nicht erneut ausgeführt.
+
+## Veröffentlichtes INTERLIS-MCP im lokalen Paket (15.10.2026)
+
+Build-Defaults: INTERLIS-MCP `0.0.579-1`, Datenblatt-MCP `0.2.3`.
+Beide ausführbaren JARs werden über Maven bezogen; das lokale Agentenpaket
+`0.2.28-local-office-interlis579` hat `developmentArtifacts=false`.
+Der veröffentlichte SHA-256 von INTERLIS-MCP stimmt mit dem Paket überein:
+`c70705ee4c436a6b9c7ec4aeb97273d2783023c43f73ecbe8ae77c2732b4df3b`.
+
+Tatsächlich geprüft: `test jar spotlessCheck javaDistribution` erfolgreich;
+Paket-Smoke mit Installation, beiden MCPs, positiver/negativer Validierung und
+Workspace-Update erfolgreich. INTERLIS-MCP meldet im echten stdio-Handshake
+`0.0.579-1`. Alle Paket-Smoke-Fachdateien und Freigaben sind isolierte Testdaten.
+Die vollständige Integrationstestsuite gegen das neue Paket bestand ebenfalls
+(mit expliziter Konfiguration `build/proof-integration.toml` und
+`DATENPORTAL_AGENT_HOME=build/java-distribution`). Der optionale Docker-/Jenkins-Test
+bleibt ausdrücklich übersprungen; Modellnachweiserneuerung und Office-MCP wurden
+mit den tatsächlich veröffentlichten Laufzeitkomponenten geprüft.

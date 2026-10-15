@@ -26,6 +26,7 @@ public final class Repository {
   }
 
   public Object plan(Map<String, Object> run, String environment) {
+    Offices.scope(run);
     var env = w.settings.environment(environment);
     String remote = Json.str(env, "git_remote", "origin");
     // Parse before displaying: credential-bearing or ambiguous URLs are rejected without echoing
@@ -67,6 +68,7 @@ public final class Repository {
   }
 
   public Object prepare(Map<String, Object> run, String environment) {
+    Offices.scope(run);
     var env = w.settings.environment(environment);
     var changes = Json.obj(run.get("changes"));
     if (changes.isEmpty()) return Json.map("required", false);
@@ -143,7 +145,10 @@ public final class Repository {
       run.put("pull_request", result);
       return result;
     }
-    String subject = Json.str(run, "identifier", Json.required(run, "organization"));
+    String subject =
+        Offices.standalone(run)
+            ? "Office-Katalog"
+            : Json.str(run, "identifier", Json.required(run, "organization"));
     String title = "Datenportal: " + subject;
     command(clone, "git", "commit", "-m", title);
     String head = command(clone, "git", "rev-parse", "HEAD");
@@ -293,6 +298,13 @@ public final class Repository {
   }
 
   public Object sync(Map<String, Object> run, String environment) {
-    return new RepositorySync(w).sync(run, w.settings.environment(environment));
+    Offices.scope(run);
+    Object result = new RepositorySync(w).sync(run, w.settings.environment(environment));
+    if (Offices.standalone(run)
+        && "complete".equals(Json.obj(run.get("repository_sync")).get("phase")))
+      run.put(
+          "completion",
+          Json.map("status", "office_updated", "message", "Office-Katalog aktualisiert."));
+    return result;
   }
 }

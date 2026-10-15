@@ -135,6 +135,12 @@ class RepositoryPlanTest {
           id,
           r -> {
             r.put("workflow", workflow);
+            if (workflow.equals("model"))
+              Json.obj(r.get("checks"))
+                  .put(
+                      "model",
+                      Json.map(
+                          "manifest", CheckStates.manifest(f.workflow, r, "model"), "valid", true));
             Json.obj(r.get("approvals"))
                 .put(
                     workflow,

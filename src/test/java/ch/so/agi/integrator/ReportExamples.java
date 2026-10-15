@@ -184,6 +184,23 @@ public final class ReportExamples {
               Json.map("valid", true, "log", "synthetic/gretl.log"),
               "fingerprint",
               "synthetisch-keine-freigabe");
+      case OFFICE ->
+          Json.map(
+              "valid",
+              true,
+              "office_changes",
+              List.of(
+                  Json.map(
+                      "identifier",
+                      "ch.bfs",
+                      "field",
+                      "name",
+                      "before",
+                      null,
+                      "after",
+                      "Bundesamt für Statistik")),
+              "message",
+              "Nur der Office-Katalog wird geändert.");
       case ORGANIZATION ->
           Json.map(
               "valid",

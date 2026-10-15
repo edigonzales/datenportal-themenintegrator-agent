@@ -282,7 +282,8 @@ public final class Main {
                                           "metadata-review.html",
                                           "model-review.html",
                                           "model-preparation-review.html",
-                                          "organization-review.html")) {
+                                          "organization-review.html",
+                                          "office-review.html")) {
                                     var report = s.runs.resolve(runId).resolve(reportName);
                                     if (java.nio.file.Files.isRegularFile(report))
                                       reports.add(

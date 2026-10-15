@@ -240,6 +240,9 @@ class IntegrationTest {
 
     // Execute the identical staged task inside the existing Jenkins runtime, without
     // seed/upload/publication.
+    Assumptions.assumeTrue(
+        Json.bool(s.values, "docker_acceptance", false),
+        "Optional Docker/Jenkins acceptance requires docker_acceptance=true in integration config");
     var process = new ProcessRunner();
     String container =
         process.checked(

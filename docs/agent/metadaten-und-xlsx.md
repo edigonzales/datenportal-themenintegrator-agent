@@ -12,6 +12,16 @@ XLSX als `metadata_source` aufnehmen. Mit `xlsx` Quellenkoordinaten und gespeich
 
 ## Dienststelle ergänzen
 
+Für alleinige Ergänzungen oder ausdrücklich beauftragte Korrekturen in
+`shared/data/offices.xtf` den eigenständigen Office-Ablauf im
+[Themenintegrator](../../skills/datenportal-themenintegrator/SKILL.md#office-katalog-eigenständig-pflegen)
+verwenden: `office_schema`, `start(workflow=office)`, `office(mode=create|update)`,
+`validate`, HTML-Review und `approve(gate=office)`. Keine Organisation und keine
+Teams erforderlich. Ein vollständiger Korrekturdatensatz enthält die bestätigten
+Änderungen und alle übrigen unveränderten Bestandswerte. Identische Angaben sind
+wirkungslos; der Identifier bleibt bestehen.
+
+
 Für ein fehlendes Office im Themenvorgang zuerst `organization_schema` lesen und vorhandene Offices prüfen. Mit `office` bestätigte Pflichtangaben ergänzen; Organisation und Office-Identifier unterscheiden. Diese Ergänzung bleibt beim vorhandenen `run_id` und wird gemeinsam mit den Themenänderungen geprüft.
 
 Ein Auftrag zur vollständigen neuen Organisation verwendet dagegen [datenportal-organisation](../../skills/datenportal-organisation/SKILL.md). Dafür bestätigte Kontakte und Berechtigungszuordnungen klären; fehlende Offices allein sind keine solche Beauftragung.

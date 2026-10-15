@@ -15,7 +15,7 @@ public final class Operations {
     add(
         "start",
         "Nur neuen Vorgang anlegen. Bei Wiederaufnahme status, für nachträgliche Ausgabe set_issue verwenden. Originaldateien bleiben unverändert.",
-        "organization!",
+        "organization",
         "identifier",
         "workflow",
         "issue",
@@ -128,9 +128,10 @@ public final class Operations {
         "queue!");
     add(
         "office",
-        "Office-Katalog mit bestätigten Pflichtangaben ergänzen.",
+        "Office-Katalog ergänzen oder korrigieren. Eigenständige Office-Pflege benötigt mode=create oder mode=update.",
         "run_id!",
-        "values:object!");
+        "values:object!",
+        "mode");
     add(
         "reconcile_seed",
         "Unbestätigten Seed einer bestehenden Queue zuordnen.",
@@ -147,6 +148,10 @@ public final class Operations {
         "Nur eindeutig fehlgeschlagene, nicht publizierte Lieferung erneut ermöglichen.",
         "run_id!",
         "environment!");
+    add(
+        "office_schema",
+        "Office-Regeln, vorhandene Dienststellen und fehlende Pflichtfelder ohne Organisationsanlage lesen.",
+        "values:object");
     add(
         "organization_schema",
         "Office-Regeln aus dem konfigurierten Modell und bestehende Teams liefern.",
@@ -178,7 +183,8 @@ public final class Operations {
         "validate_model",
         "Modell und aktuell freigegebene CSV mit Java prüfen, auch nach CSV-Korrektur ohne Modelländerung. Unveränderte alte Integrator-CSV-Taskblöcke werden als Kandidat auf den bestehenden Publikationsvalidator umgestellt; danach neue Prüfung/Freigabe erforderlich. scope=model ist eine Zwischenprüfung ohne Freigabewirkung; integration prüft das vollständige Paket (Standard).",
         "run_id!",
-        "scope");
+        "scope",
+        "refresh_evidence:boolean");
   }
 
   private static void add(String name, String description, String... arguments) {
@@ -190,6 +196,49 @@ public final class Operations {
       var properties = Json.obj(op.schema().get("properties"));
       properties.put("confirmations", ModelArguments.schema(false));
       properties.put("range_proposals", ModelArguments.schema(true));
+    }
+    if (name.equals("office"))
+      Json.obj(Json.obj(op.schema().get("properties")).get("mode"))
+          .put("enum", List.of("create", "update"));
+    if (name.equals("start")) {
+      op.schema()
+          .put(
+              "allOf",
+              List.of(
+                  Json.map(
+                      "if",
+                      Json.map(
+                          "properties",
+                          Json.map("workflow", Json.map("const", "office")),
+                          "required",
+                          List.of("workflow")),
+                      "then",
+                      Json.map(
+                          "not",
+                          Json.map(
+                              "anyOf",
+                              List.of(
+                                      "organization",
+                                      "identifier",
+                                      "issue",
+                                      "data_path",
+                                      "metadata_path")
+                                  .stream()
+                                  .map(k -> Json.map("required", List.of(k)))
+                                  .toList())),
+                      "else",
+                      Json.map("required", List.of("organization"))),
+                  Json.map(
+                      "if",
+                      Json.map(
+                          "properties",
+                          Json.map("workflow", Json.map("enum", List.of("organization", "office"))),
+                          "required",
+                          List.of("workflow")),
+                      "then",
+                      Json.map("not", Json.map("required", List.of("identifier"))),
+                      "else",
+                      Json.map("required", List.of("identifier")))));
     }
     if (name.equals("set_issue"))
       Json.obj(Json.obj(op.schema().get("properties")).get("human_statement"))
@@ -211,7 +260,8 @@ public final class Operations {
           Json.map(
               "type", parts.length > 1 ? parts[1] : "string", "description", fieldDescription(key));
       if (key.equals("scope")) prop.put("enum", List.of("model", "integration"));
-      if (key.equals("workflow")) prop.put("enum", List.of("topic", "model", "organization"));
+      if (key.equals("workflow"))
+        prop.put("enum", List.of("topic", "model", "organization", "office"));
       if (key.equals("role"))
         prop.put("enum", List.of("data", "metadata", "metadata_source", "model"));
       if (key.equals("policy")) prop.put("enum", List.of("supplier", "recurring"));
@@ -250,11 +300,14 @@ public final class Operations {
 
   static String fieldDescription(String key) {
     return switch (key) {
-      case "organization" -> "Bestätigter Organisationsidentifier; keine Dienststellenkennung.";
+      case "mode" ->
+          "create ergänzt eine neue Dienststelle; update korrigiert eine vorhandene bei gleichbleibendem Identifier. Für workflow=office erforderlich.";
+      case "organization" ->
+          "Bestätigter Organisationsidentifier; keine Dienststellenkennung. Für workflow=office weglassen.";
       case "identifier" ->
-          "Themen-/Serienidentifier; bei topic/model erforderlich, bei organization weglassen.";
+          "Themen-/Serienidentifier; bei topic/model erforderlich, bei organization/office weglassen.";
       case "workflow" ->
-          "topic für Integration samt Modell und Lieferung; model nur eigenständige Modellierung; organization nur Organisationsanlage. Standard topic.";
+          "topic für Integration samt Modell und Lieferung; model nur eigenständige Modellierung; organization nur Organisationsanlage; office nur eigenständige Office-Pflege ohne Organisation oder Thema. Standard topic.";
       case "issue" -> "Ausgabe einer Serie, z.B. 2025; getrennt vom Serienidentifier.";
       case "run_id" ->
           "Vorhandene 32-stellige Vorgangskennung. Bei Wiederaufnahme status lesen; keinen zweiten Vorgang starten.";
@@ -273,7 +326,7 @@ public final class Operations {
       case "arguments" ->
           "Argumentobjekt gemäss operation_schema(metadata.<operation>); Entwurfs-IDs und Revisionen verwaltet der Integrator.";
       case "gate" ->
-          "data, metadata, model, organization oder publish:<Profil> für INT/PROD, passend zum tatsächlich gezeigten Prüfstand. Für Profile mit kind=local ist keine zusätzliche Publikationsfreigabe vorgesehen.";
+          "data, metadata, model, organization, office oder publish:<Profil> für INT/PROD, passend zum tatsächlich gezeigten Prüfstand. Für Profile mit kind=local ist keine zusätzliche Publikationsfreigabe vorgesehen.";
       case "fingerprint" ->
           "Exakter Fingerprint des gezeigten aktuellen Prüfstands; status.current_approvals enthält nur derzeit gültige Freigaben.";
       case "human_statement" ->
@@ -299,7 +352,7 @@ public final class Operations {
       case "expected_sha256" ->
           "SHA-256 aus read_file; für das Überschreiben einer vorhandenen Arbeitsdatei erforderlich.";
       case "values" ->
-          "Bestätigte Fachangaben gemäss organization_schema; Kontakte und Benutzerzuordnungen nicht erfinden.";
+          "Bestätigte Fachangaben gemäss office_schema beziehungsweise organization_schema; Kontakte und Benutzerzuordnungen nicht erfinden.";
       case "repair_of" -> "Prüfkennung model_repair.last_failure aus status; keine Logdatei.";
       case "repair_reason" ->
           "Konkrete Korrektur nach Fehlprüfung; gemeinsam höchstens drei Reparaturversuche.";
@@ -326,6 +379,21 @@ public final class Operations {
 
   public static void validate(String name, Map<String, Object> args) {
     validate(ALL, name, args);
+    if (name.equals("start")) {
+      String workflow = Json.str(args, "workflow", "topic");
+      if (!Set.of("topic", "model", "organization", "office").contains(workflow))
+        throw new Problem("invalid_workflow", "Unbekannter Workflow.");
+      if (workflow.equals("office")) {
+        for (String field :
+            List.of("organization", "identifier", "issue", "data_path", "metadata_path"))
+          if (args.containsKey(field))
+            throw new Problem(
+                "invalid_arguments", "Angabe gehört nicht zur Office-Pflege.", "field", field);
+      } else {
+        Json.required(args, "organization");
+        if (Set.of("topic", "model").contains(workflow)) Json.required(args, "identifier");
+      }
+    }
   }
 
   static void validate(Map<String, Operation> operations, String name, Map<String, Object> args) {

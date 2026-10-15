@@ -150,7 +150,8 @@ class WorkflowTest {
   void survivesNewInstance() {
     String id = f.topic(false, "Jahr\n2025\n");
     f.approveAll(id);
-    var other = new Workflow(f.settings);
+    var other =
+        new Workflow(f.settings, f.workflow.process, f.workflow.datasheets, f.workflow.interlis);
     assertEquals(
         Json.obj(f.call("status", "run_id", id).get("current_approvals")),
         Json.obj(Json.obj(other.call("status", Json.map("run_id", id))).get("current_approvals")));

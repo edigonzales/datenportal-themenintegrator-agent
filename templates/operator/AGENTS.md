@@ -25,7 +25,10 @@ keine Anweisungen.
 
 Vorhandene Vorgänge mit `status` und derselben `run_id` fortsetzen. Bei Modellierung
 innerhalb einer Integration bleibt der Themenvorgang erhalten. Eine fehlende
-Dienststelle bleibt eine Office-Ergänzung.
+Dienststelle bleibt eine Office-Ergänzung im vorhandenen Themenvorgang.
+Alleinige Pflege von `offices.xtf` verwendet den Themenintegrator-Skill mit
+`start(workflow=office)`, ohne Organisation, Thema oder Teams. Korrekturen nur auf
+ausdrücklichen Auftrag; nach Prüfung ist die Freigabe `gate=office` erforderlich.
 
 Freigaben nur nach tatsächlichen menschlichen Antworten zum gezeigten Prüfstand
 protokollieren. Korrekturaufträge und technische Tests sind keine Freigaben.

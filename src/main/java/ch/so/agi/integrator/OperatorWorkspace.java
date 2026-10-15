@@ -31,6 +31,10 @@ final class OperatorWorkspace {
     if (!target.isAbsolute()) throw new Problem("unsafe_path", "Absoluten Zielordner angeben.");
     Path previousHome =
         args.getFirst().equals("update") ? ApprovalMigration.previousHome(target) : null;
+    String currentHome =
+        previousHome == null
+            ? null
+            : Json.str(Json.read(target.resolve(MANIFEST)), "package_home", null);
     var result =
         install(bundle(Path.of("").toAbsolutePath()), target, args.getFirst().equals("update"));
     if (AgentResources.installed()) {
@@ -55,6 +59,11 @@ final class OperatorWorkspace {
         result.put(
             "approval_migration",
             ApprovalMigration.update(target, previousHome, AgentResources.resolve(target, "")));
+      if (currentHome != null)
+        result.put(
+            "data_approval_migration",
+            DataApprovalMigration.update(
+                target, Path.of(currentHome), AgentResources.resolve(target, "")));
     }
     return result;
   }
