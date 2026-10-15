@@ -137,6 +137,7 @@ public final class Workflow implements AutoCloseable {
               case "deliver" ->
                   new Deliveries(this).deliver(r, Json.str(args, "environment", "local"));
               case "seed" -> new Deliveries(this).seed(r, Json.str(args, "environment", "local"));
+              case "adopt_seed" -> new Deliveries(this).adopt(r, args);
               case "reconcile" -> new Deliveries(this).reconcile(r, args, false);
               case "reconcile_seed" -> new Deliveries(this).reconcile(r, args, true);
               case "verify_delivery" ->
@@ -146,6 +147,22 @@ public final class Workflow implements AutoCloseable {
               default -> throw new Problem("unknown_operation", "Operation ist nicht bekannt.");
             };
           } catch (Problem error) {
+            if (Set.of(
+                    "deliver",
+                    "seed",
+                    "adopt_seed",
+                    "reconcile",
+                    "reconcile_seed",
+                    "retry_delivery")
+                .contains(operation)) {
+              error.details.put("external_runs", Deliveries.states(r));
+              String name = Json.str(args, "environment", "local");
+              var item = Json.obj(Json.obj(r.get("deliveries")).get(name));
+              boolean standaloneSeed = item.isEmpty() || operation.equals("seed");
+              if (standaloneSeed) item = Json.obj(Json.obj(r.get("seeds")).get(name));
+              if (!item.isEmpty())
+                error.details.put("external_state", Deliveries.describe(item, standaloneSeed));
+            }
             if (operation.equals("derive_model") && error.code.equals("model_arguments_invalid"))
               error.details.put(
                   "diagnostics",
@@ -560,6 +577,7 @@ public final class Workflow implements AutoCloseable {
       }
     }
     result.put("current_approvals", valid);
+    result.put("external_runs", Deliveries.states(r));
     if (r.get("identifier") != null)
       result.put("metadata_source", MetadataArtifacts.source(this, r));
     result.put("check_states", CheckStates.overview(this, r));
@@ -708,6 +726,9 @@ public final class Workflow implements AutoCloseable {
         && Objects.equals(actual, Json.obj(Json.obj(r.get("applied")).get("hashes")).get(rel)))
       before = actual;
     String sha = Json.sha(source);
+    // Explicitly preparing the current repository bytes adopts a manual correction as a
+    // new candidate. It does not restore the old candidate or grant any approval.
+    if (Objects.equals(sha, actual)) before = actual;
     Path staged = directory(r).resolve("changes").resolve(sha + "-" + dest.getFileName());
     try {
       Files.createDirectories(staged.getParent());
@@ -1127,6 +1148,15 @@ public final class Workflow implements AutoCloseable {
       Path dest = Json.inside(settings.topics, rel);
       String actual = Files.exists(dest) ? Json.sha(dest) : null;
       var c = Json.obj(changes.get(rel));
+      var applied = Json.obj(Json.obj(r.get("applied")).get("hashes"));
+      if (applied.containsKey(rel)
+          && !Objects.equals(actual, applied.get(rel))
+          && !Objects.equals(actual, c.get("sha256")))
+        throw new Problem(
+            "repository_conflict",
+            "Bereits übernommene Datei wurde manuell verändert oder entfernt. Korrektur zuerst als Kandidat prüfen.",
+            "path",
+            rel);
       if (!Objects.equals(actual, c.get("before_sha256"))
           && !Objects.equals(actual, c.get("sha256"))
           && (!Json.obj(Json.obj(r.get("applied")).get("hashes")).containsKey(rel)

@@ -241,3 +241,18 @@ laufende Aufrufe auslaufen lassen. Ein Paketwechsel führt weder `restore` aus
 noch repariert oder genehmigt er fachliche Vorgänge. Serienausgaben und die
 Diagnose gesperrter Wiederherstellungen sind in den ausgelieferten Referenzen
 zu Metadaten und Wiederaufnahme beschrieben.
+
+### Manueller Seed nach Repository-Reparatur
+
+Ein erfolgreicher manueller Seed kann mit
+`adopt_seed(run_id, environment, build_url)` im bestehenden Vorgang übernommen
+werden. Die vollständige Build-URL genügt; keine Queue-ID aus der Buildnummer
+ableiten. `deliver` fragt einen laufenden Seed ab und liefert erst nach Erfolg
+und den weiterhin nötigen Freigaben. Ohne zugeordneten manuellen Seed startet
+`deliver` einen eigenen Seed. Unbestätigte Starts müssen zuerst geklärt werden.
+
+`delivery_submitting` bezeichnet einen Datenupload, auch wenn dieser mit 404
+endet. Dann den Datenlieferlauf klären, keinen Seed zuordnen oder blind erneut
+liefern. `status.external_runs` zeigt Aktion, Referenz und nächsten Schritt.
+Manuell veränderte oder entfernte Dateien nicht mit alten Kandidaten
+überschreiben; Korrekturen neu vorbereiten, prüfen und gegebenenfalls freigeben.

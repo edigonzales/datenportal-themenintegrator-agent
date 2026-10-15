@@ -89,3 +89,40 @@ Quelle zulässig. Anschließend gelten dieselben vollständigen Inhalts- und
 Identitätsprüfungen. Fehlende Evidenz führt zu
 `draft_recovery_evidence_missing`, nicht zu einer gelockerten Prüfung.
 Freigaben und Repository-Dateien werden durch Wiederherstellung nicht verändert.
+
+## Manuell repariert und geseedet
+
+Ein manueller Seed ist ein gültiger Wiederaufnahmefall im bestehenden Vorgang.
+Mit belegter Build-URL `adopt_seed(run_id, environment, build_url)` verwenden.
+Die Operation prüft Jenkins-Basis, konfigurierten Seed-Job und Ergebnis; sie
+startet weder Seed noch Upload. Laufende Seeds werden durch `seed` oder die
+anschliessenden `deliver`-Aufrufe weiter abgefragt. Nur `SUCCESS` erlaubt die
+Lieferung. Frühere Versuche bleiben in der Historie. Fachliche Freigaben und
+INT-/PROD-Publikationsfreigaben gelten weiterhin unverändert.
+
+Ohne belegte manuelle Build-URL darf innerhalb des bestehenden Lieferauftrags
+nach einem eindeutig fehlgeschlagenen Seed `retry_delivery` und danach `deliver`
+einen eigenen Seed starten. Bei unbestätigtem Start zuerst aufklären. Kein
+zweiter Vorgang und keine erfundene Queue-ID. Buildnummer und Queue-ID sind
+verschiedene Kennungen; eine Build-URL wird niemals in eine Queue-ID umgedeutet.
+
+`status.external_runs`, Aufrufergebnisse (`action`, `reference`, `next_operation`)
+und Fehler (`external_state`) trennen Seed und Datenlieferung:
+
+- `seed_submitting`: eigener Seed-Start unbestätigt; `reconcile_seed` verwenden.
+- `seeding`: den gespeicherten Seed weiter abfragen.
+- `delivery_submitting`: Datenupload unbestätigt; nur den Datenlieferlauf mit
+  `reconcile` zuordnen. Auch ein 404 in dieser Phase ist kein Seed-Fehler.
+  Seed-Kennungen helfen hier nicht; `adopt_seed` und blinder Retry sind gesperrt.
+
+Bei `local_changes_missing` fehlt eine geprüfte Datei, bei
+`local_changes_modified` weicht ihr Inhalt ab. Nach manueller Reparatur niemals
+automatisch `apply_local_changes` zum Wiederherstellen alter Bytes aufrufen.
+Korrekturen zunächst als neue Kandidaten im vorhandenen Fachablauf vorbereiten:
+Metadaten über den Datenblatt-MCP, verwaltetes Modell und Task gemeinsam über
+`derive_model`, sonst erlaubte Fachdateien über `stage_change`. Die Vorbereitung
+kann die aktuellen Repo-Bytes als neuen Kandidaten übernehmen, wenn sie exakt
+dem Kandidaten entsprechen. Danach die betroffenen Prüfungen und menschlichen
+Freigaben erneuern. Veränderte oder entfernte bereits übernommene Dateien werden
+nicht ungeprüft überschrieben. Nach geändertem Prüfstand den passenden manuellen
+Seed erneut zuordnen; die frühere Zuordnung ist kein Nachweis für neue Bytes.

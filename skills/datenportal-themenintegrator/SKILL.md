@@ -120,3 +120,21 @@ wiederherstellen; einen identischen Restore-Blocker mit seinen Feldpfaden melden
 keine weitere Versuchsschleife beginnen. Details stehen in den Referenzen
 [Metadaten](../../docs/agent/metadaten-und-xlsx.md) und
 [Wiederaufnahme](../../docs/agent/lieferung-und-wiederaufnahme.md).
+
+## Manuellen Seed übernehmen
+
+Nach manueller Repo-Reparatur denselben Vorgang fortsetzen. Einen belegten
+manuellen Seed mit `adopt_seed(run_id, environment, build_url)` übernehmen und
+mit `deliver` fortsetzen; laufende Seeds werden abgefragt, nur `SUCCESS` erlaubt
+den Upload. Ohne konkrete Build-URL darf bei eindeutig fehlgeschlagenem Seed
+innerhalb des bestehenden Lieferauftrags `retry_delivery` und `deliver` einen
+eigenen Seed starten. Bei unbestätigtem Start zuerst aufklären.
+
+`status.external_runs` und Fehlerfeld `external_state` beachten:
+`delivery_submitting` ist ein unbestätigter Datenupload, kein Seed-Problem.
+Dafür ausschliesslich `reconcile` mit Datenlieferkennungen verwenden; niemals
+Seed-Job, Buildnummer oder Build-URL als Queue-ID ausprobieren. Manuelle
+Dateikorrekturen bei `local_changes_modified`/`local_changes_missing` erhalten,
+als neue Kandidaten prüfen und nötige Freigaben erneuern; keine automatische
+Wiederherstellung mit `apply_local_changes`. Details stehen in
+[Lieferung und Wiederaufnahme](../../docs/agent/lieferung-und-wiederaufnahme.md#manuell-repariert-und-geseedet).

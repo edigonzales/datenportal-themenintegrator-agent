@@ -153,7 +153,7 @@ public final class Jenkins {
                     new Problem(
                         "submission_unknown",
                         "Seed gestartet, aber keine Queue-Kennung erhalten."));
-    return Json.map("queue_url", trusted(loc));
+    return Json.map("queue_url", trusted(loc), "job", job, "origin", "integrator");
   }
 
   public Map<String, Object> seedStatus(Map<String, Object> item) {
@@ -166,7 +166,42 @@ public final class Jenkins {
       item.put("build_url", trusted(Json.required(executable, "url")));
     }
     var r = get(Json.required(item, "build_url").replaceAll("/+$", "") + "/api/json");
-    return Json.map("complete", !Json.bool(r, "building", false), "result", r.get("result"));
+    if (r.containsKey("number")) item.put("build", r.get("number"));
+    if (r.containsKey("queueId")) item.put("queue", r.get("queueId"));
+    var status = Json.map("complete", !Json.bool(r, "building", false), "result", r.get("result"));
+    item.putAll(status);
+    return status;
+  }
+
+  public Map<String, Object> manualSeed(String buildUrl) {
+    String url = trusted(buildUrl);
+    String job = Json.str(env, "seed_job", "gretl-datenportal-seed");
+    String prefix =
+        base
+            + "/job/"
+            + Arrays.stream(job.split("/"))
+                .map(Jenkins::encode)
+                .reduce((a, b) -> a + "/job/" + b)
+                .orElseThrow()
+            + "/";
+    if (!url.startsWith(prefix) || !url.substring(prefix.length()).matches("[1-9][0-9]*/?"))
+      throw new Problem("wrong_seed", "Build-URL gehört nicht zum konfigurierten Seed-Job.");
+    var seed =
+        Json.map("build_url", url.replaceAll("/+$", "") + "/", "origin", "manual", "job", job);
+    seed.put("build", url.substring(prefix.length()).replaceAll("/+$", ""));
+    var status = seedStatus(seed);
+    if (Json.bool(status, "complete", false) && !Objects.equals(status.get("result"), "SUCCESS"))
+      throw new Problem(
+          "seed_failed",
+          "Manueller Seed ist nicht erfolgreich; nicht übernommen.",
+          "action",
+          "seed",
+          "build_url",
+          seed.get("build_url"),
+          "result",
+          status.get("result"));
+    seed.putAll(status);
+    return seed;
   }
 
   public Map<String, Object> submit(

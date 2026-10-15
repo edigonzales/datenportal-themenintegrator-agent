@@ -10,6 +10,118 @@ public final class Deliveries {
     this.w = w;
   }
 
+  static Map<String, Object> describe(Map<String, Object> item) {
+    return describe(item, false);
+  }
+
+  static Map<String, Object> describe(Map<String, Object> item, boolean standaloneSeed) {
+    var result = new LinkedHashMap<>(item);
+    String phase = Json.str(item, "phase", "");
+    boolean seed =
+        phase.startsWith("seed")
+            || (!item.containsKey("job")
+                && !item.containsKey("report")
+                && !phase.equals("delivery_submitting"));
+    result.put("action", seed ? "seed" : "delivery");
+    result.put(
+        "reference", item.getOrDefault(seed ? "seed" : "job", item.get("submission_target")));
+    result.put(
+        "next_operation",
+        phase.equals("delivery_submitting")
+            ? "reconcile"
+            : phase.equals("seed_submitting")
+                ? "reconcile_seed"
+                : phase.equals("failed")
+                    ? (seed ? "adopt_seed" : "status")
+                    : phase.equals("complete") ? null : standaloneSeed ? "seed" : "deliver");
+    if (phase.equals("failed") && seed && !standaloneSeed)
+      result.put("alternative_operation", "retry_delivery");
+    return result;
+  }
+
+  static Map<String, Object> states(Map<String, Object> r) {
+    var result = Json.map();
+    for (String kind : List.of("deliveries", "seeds")) {
+      var entries = Json.map();
+      Json.obj(r.get(kind))
+          .forEach(
+              (name, value) -> entries.put(name, describe(Json.obj(value), kind.equals("seeds"))));
+      result.put(kind, entries);
+    }
+    return result;
+  }
+
+  void localFiles(Map<String, Object> r) {
+    for (String rel : Json.obj(r.get("changes")).keySet()) {
+      Path p = Json.inside(w.settings.topics, rel);
+      if (!Files.isRegularFile(p))
+        throw new Problem(
+            "local_changes_missing",
+            "Geprüfte Datei fehlt im Themenrepo. Nicht automatisch wiederherstellen.",
+            "path",
+            rel,
+            "required_action",
+            "review_repository_changes");
+      if (!Objects.equals(Json.sha(p), Json.obj(Json.obj(r.get("changes")).get(rel)).get("sha256")))
+        throw new Problem(
+            "local_changes_modified",
+            "Datei im Themenrepo wurde verändert. Korrektur als Kandidat prüfen; nicht überschreiben.",
+            "path",
+            rel,
+            "required_action",
+            "review_repository_changes");
+    }
+  }
+
+  public Object adopt(Map<String, Object> r, Map<String, Object> args) {
+    String name = Json.required(args, "environment");
+    var env = w.settings.environment(name);
+    var delivery = Json.obj(Json.obj(r.get("deliveries")).get(name));
+    var previous = Json.obj(Json.obj(r.get("seeds")).get(name));
+    if ("seed_submitting".equals(previous.get("phase"))
+        || (!delivery.isEmpty()
+            && (delivery.containsKey("job")
+                || delivery.containsKey("report")
+                || !Set.of("failed", "seeding").contains(Json.str(delivery, "phase", "")))))
+      throw new Problem(
+          "seed_adoption_unsafe",
+          "Bestehenden Start zuerst aufklären; Seed-Übernahme setzt keine Lieferung zurück.");
+    var seed = w.jenkins.apply(name, env).manualSeed(Json.required(args, "build_url"));
+    var item =
+        Json.map(
+            "phase",
+            Json.bool(seed, "complete", false) ? "complete" : "seeding",
+            "seed",
+            seed,
+            "at",
+            Json.now(),
+            "fingerprint",
+            w.fingerprint(r, w.primaryGate(r)));
+    if (Objects.equals(Json.obj(previous.get("seed")).get("build_url"), seed.get("build_url"))
+        && Objects.equals(previous.get("fingerprint"), item.get("fingerprint"))
+        && (delivery.isEmpty()
+            || ("seeding".equals(delivery.get("phase"))
+                && Objects.equals(
+                    Json.obj(delivery.get("seed")).get("build_url"), seed.get("build_url"))
+                && Objects.equals(delivery.get("fingerprint"), item.get("fingerprint"))))) {
+      previous.put("seed", seed);
+      previous.put("phase", item.get("phase"));
+      return describe(previous, true);
+    }
+    if (!r.containsKey("seeds")) r.put("seeds", Json.map());
+    if (!previous.isEmpty()) {
+      if (!r.containsKey("seed_history")) r.put("seed_history", new ArrayList<>());
+      Json.list(r.get("seed_history")).add(Json.map("environment", name, "attempt", previous));
+    }
+    Json.obj(r.get("seeds")).put(name, item);
+    if (!delivery.isEmpty()) {
+      if (!r.containsKey("delivery_history")) r.put("delivery_history", new ArrayList<>());
+      Json.list(r.get("delivery_history")).add(Json.map("environment", name, "attempt", delivery));
+      Json.obj(r.get("deliveries")).remove(name);
+    }
+    return describe(item, true);
+  }
+
   void approved(Map<String, Object> r) {
     for (String gate : approvalGates(r)) w.require(r, gate);
   }
@@ -35,22 +147,14 @@ public final class Deliveries {
   }
 
   void ready(Map<String, Object> r, String name, Map<String, Object> env, boolean publication) {
+    if (Json.str(env, "kind", "").equals("local") && !Json.obj(r.get("applied")).isEmpty())
+      localFiles(r);
     approved(r);
     // Resolve credentials before any stack changes or new external submission.
     var credentials = w.credentials.apply(name, env);
     if (Json.str(env, "kind", "").equals("local")) {
       if (r.containsKey("pull_request")) new RepositorySync(w).sync(r, env);
-      for (String rel : Json.obj(r.get("changes")).keySet()) {
-        Path p = Json.inside(w.settings.topics, rel);
-        if (!Files.isRegularFile(p)
-            || !Objects.equals(
-                Json.sha(p), Json.obj(Json.obj(r.get("changes")).get(rel)).get("sha256")))
-          throw new Problem(
-              "local_changes_missing",
-              "Freigegebene Änderungen zuerst lokal übernehmen.",
-              "path",
-              rel);
-      }
+      localFiles(r);
       var stack = new Stack(w.settings, w.process);
       stack.ensure();
 
@@ -116,7 +220,21 @@ public final class Deliveries {
     var env = w.settings.environment(name);
     var deliveries = Json.obj(r.get("deliveries"));
     if (deliveries.containsKey(name)) return advance(r, name, env, Json.obj(deliveries.get(name)));
+    if ("seed_submitting".equals(Json.obj(Json.obj(r.get("seeds")).get(name)).get("phase")))
+      throw new Problem(
+          "submission_unknown", "Unbestätigten Seed zuerst mit reconcile_seed aufklären.");
     ready(r, name, env, true);
+    var adopted = Json.obj(Json.obj(r.get("seeds")).get(name));
+    if ("manual".equals(Json.obj(adopted.get("seed")).get("origin"))) {
+      if (!Objects.equals(adopted.get("fingerprint"), w.fingerprint(r, w.primaryGate(r))))
+        throw new Problem(
+            "seed_review_changed",
+            "Prüfstand seit Seed-Zuordnung geändert; Seed nach Prüfung erneut zuordnen.");
+      var item = Json.read(Json.text(adopted));
+      item.put("phase", "seeding");
+      deliveries.put(name, item);
+      return describe(item);
+    }
     var jenkins = w.jenkins.apply(name, env);
     var item =
         Json.map(
@@ -127,10 +245,12 @@ public final class Deliveries {
             "at",
             Json.now());
     deliveries.put(name, item);
+    item.put(
+        "submission_target", Json.map("job", Json.str(env, "seed_job", "gretl-datenportal-seed")));
     w.persist(r);
     item.put("seed", jenkins.seed());
     item.put("phase", "seeding");
-    return item;
+    return describe(item);
   }
 
   public Object seed(Map<String, Object> r, String name) {
@@ -143,14 +263,19 @@ public final class Deliveries {
       if (phase.equals("seed_submitting"))
         throw new Problem(
             "submission_unknown", "Seed-Start unbestätigt. Queue zuordnen; nicht erneut starten.");
-      if (Set.of("complete", "failed").contains(phase)) return item;
+      if (Set.of("complete", "failed").contains(phase)) return describe(item, true);
       var status = w.jenkins.apply(name, env).seedStatus(Json.obj(item.get("seed")));
       if (Json.bool(status, "complete", false)) {
         item.put("result", status.get("result"));
         item.put("phase", Objects.equals(status.get("result"), "SUCCESS") ? "complete" : "failed");
       }
-      return item;
+      return describe(item, true);
     }
+    var delivery = Json.obj(Json.obj(r.get("deliveries")).get(name));
+    if (Set.of("delivery_submitting", "seed_submitting").contains(Json.str(delivery, "phase", "")))
+      throw new Problem(
+          "submission_unknown",
+          "Unbestätigten Start zuerst aufklären; keinen weiteren Seed starten.");
     ready(r, name, env, false);
     var jenkins = w.jenkins.apply(name, env);
     item =
@@ -162,10 +287,12 @@ public final class Deliveries {
             "fingerprint",
             w.fingerprint(r, w.primaryGate(r)));
     seeds.put(name, item);
+    item.put(
+        "submission_target", Json.map("job", Json.str(env, "seed_job", "gretl-datenportal-seed")));
     w.persist(r);
     item.put("seed", jenkins.seed());
     item.put("phase", "seeding");
-    return item;
+    return describe(item, true);
   }
 
   Object advance(
@@ -177,17 +304,23 @@ public final class Deliveries {
           "Start nicht bestätigt. Bestehenden Lauf zuordnen; niemals blind wiederholen.",
           "state",
           item);
-    if (Set.of("complete", "failed").contains(phase)) return item;
+    if (Set.of("complete", "failed").contains(phase)) return describe(item);
     var j = w.jenkins.apply(name, env);
     if (phase.equals("seeding")) {
       var status = j.seedStatus(Json.obj(item.get("seed")));
-      if (!Json.bool(status, "complete", false)) return item;
+      if (!Json.bool(status, "complete", false)) return describe(item);
       if (!Objects.equals(status.get("result"), "SUCCESS")) {
         item.put("phase", "failed");
         item.put("error", "Seed fehlgeschlagen; Seed-Konsole prüfen.");
-        return item;
+        return describe(item);
       }
+      if (Json.str(env, "kind", "").equals("local")) localFiles(r);
       approved(r);
+      if ("manual".equals(Json.obj(item.get("seed")).get("origin"))
+          && !Objects.equals(item.get("fingerprint"), w.fingerprint(r, w.primaryGate(r))))
+        throw new Problem(
+            "seed_review_changed",
+            "Prüfstand seit Seed-Zuordnung geändert; Seed nach Prüfung erneut zuordnen.");
       if (!Json.str(env, "kind", "").equals("local")) {
         w.require(r, "publish:" + name);
         new RepositorySync(w).sync(r, env);
@@ -213,6 +346,15 @@ public final class Deliveries {
               "data",
               Json.obj(r.get("files")).get("data")));
       item.put("phase", "delivery_submitting");
+      item.put(
+          "submission_target",
+          Json.map(
+              "endpoint",
+              j.base + "/gretl-datenportal/build",
+              "organization",
+              r.get("organization"),
+              "dataset",
+              r.get("identifier")));
       w.persist(r);
       item.put(
           "job",
@@ -224,10 +366,10 @@ public final class Deliveries {
               metadata,
               "Themenintegrator " + r.get("id")));
       item.put("phase", "running");
-      return item;
+      return describe(item);
     }
     var status = j.status(Json.obj(item.get("job")));
-    if (!Json.bool(status, "complete", false)) return item;
+    if (!Json.bool(status, "complete", false)) return describe(item);
     try {
       item.put("report", j.report(status));
     } catch (Problem e) {
@@ -242,11 +384,11 @@ public final class Deliveries {
               status.get("consoleUrl"),
               "result",
               status.get("status")));
-      return item;
+      return describe(item);
     }
     outcome(r, name, env, item);
     item.put("build_url", status.get("consoleUrl"));
-    return item;
+    return describe(item);
   }
 
   void outcome(
@@ -271,7 +413,7 @@ public final class Deliveries {
     if (!Objects.equals(Json.obj(item.get("report")).get("publication"), "accepted"))
       throw new Problem("publication_unconfirmed", "Keine bestätigte Publikation zum Nachprüfen.");
     outcome(r, name, w.settings.environment(name), item);
-    return item;
+    return describe(item);
   }
 
   public Object retry(Map<String, Object> r, String name) {
@@ -287,6 +429,12 @@ public final class Deliveries {
     if (!r.containsKey("delivery_history")) r.put("delivery_history", new ArrayList<>());
     Json.list(r.get("delivery_history")).add(Json.map("environment", name, "attempt", item));
     Json.obj(r.get("deliveries")).remove(name);
+    var adopted = Json.obj(Json.obj(r.get("seeds")).get(name));
+    if ("manual".equals(Json.obj(adopted.get("seed")).get("origin"))) {
+      if (!r.containsKey("seed_history")) r.put("seed_history", new ArrayList<>());
+      Json.list(r.get("seed_history")).add(Json.map("environment", name, "attempt", adopted));
+      Json.obj(r.get("seeds")).remove(name);
+    }
     return Json.map("ready_for_new_attempt", true, "environment", name);
   }
 
@@ -324,6 +472,6 @@ public final class Deliveries {
       item.put("job", candidate);
       item.put("phase", "running");
     }
-    return item;
+    return describe(item);
   }
 }

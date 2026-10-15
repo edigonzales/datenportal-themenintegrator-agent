@@ -121,7 +121,7 @@ public final class Operations {
         "environment");
     add(
         "reconcile",
-        "Unbestätigte Lieferung einem bestehenden Jenkins-Lauf zuordnen.",
+        "Nur delivery_submitting einem belegten Datenlieferlauf zuordnen. job und numerische queue aus dessen Lieferkennung, niemals Seed-Job oder Seed-Buildnummer verwenden.",
         "run_id!",
         "environment!",
         "job!",
@@ -133,8 +133,14 @@ public final class Operations {
         "values:object!",
         "mode");
     add(
+        "adopt_seed",
+        "Manuellen Seed anhand seiner Build-URL prüfen und ohne Upload übernehmen. Keine Queue-ID oder Buildnummer als URL verwenden.",
+        "run_id!",
+        "environment!",
+        "build_url!");
+    add(
         "reconcile_seed",
-        "Unbestätigten Seed einer bestehenden Queue zuordnen.",
+        "Nur seed_submitting einer belegten numerischen Seed-Queue-ID zuordnen. Buildnummer ist keine Queue-ID; manuellen Ersatzlauf über adopt_seed(build_url) übernehmen.",
         "run_id!",
         "environment!",
         "queue!");

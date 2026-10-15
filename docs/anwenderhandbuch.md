@@ -889,3 +889,19 @@ Bereich und kompiliertem Modell festgestellt. Keine alternativen Grenzen oder
 Dateipfade versuchen; die MCP-Komponente muss korrigiert werden. Bei
 `model_component_upgrade_required` das Betriebspaket mit aktuellem INTERLIS-MCP
 installieren. Paketwechsel übertragen keine fachlichen Freigaben auf neue Prüfstände.
+
+### Manuelle Seed-Übernahme
+
+`adopt_seed(run_id, environment, build_url)` übernimmt einen manuell gestarteten
+Build des konfigurierten Seed-Jobs ohne neuen Seed oder Upload. Laufende Builds
+werden weiter abgefragt; nur `SUCCESS` erfüllt die Seed-Voraussetzung. Danach
+`deliver` fortsetzen. Ohne manuell zugeordneten Seed startet der normale Ablauf
+einen eigenen. Historie, fachliche Freigaben und INT-/PROD-Freigaben bleiben
+wirksam. Nach verändertem Prüfstand erneut prüfen und passend zuordnen.
+
+`status.external_runs` und Fehlerfeld `external_state` unterscheiden Seed und
+Datenlieferung. `delivery_submitting` benötigt die Aufklärung des Datenuploads
+mit `reconcile`, keine Seed-Kennung. Buildnummern sind keine Queue-IDs.
+Manuelle Repo-Korrekturen bleiben erhalten: fehlende und veränderte Dateien
+werden getrennt gemeldet und müssen als neue Kandidaten geprüft werden.
+Siehe [Wiederaufnahme](agent/lieferung-und-wiederaufnahme.md#manuell-repariert-und-geseedet).

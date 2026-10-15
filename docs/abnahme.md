@@ -2145,3 +2145,42 @@ für die Installationskontrolle neu erfasst und ebenfalls unverändert erhalten.
 Der ausdrücklich geschützte Vorgang `11ff1aa4f8b7463f9fbe06f503e72698` blieb
 auch gegenüber der Entwicklungsaufnahme unverändert. Kein reales `restore`,
 keine manuelle Zustandskorrektur und keine Übertragung fachlicher Freigaben.
+
+## 2026-10-15: Manuelle Seeds und getrennte Wiederaufnahme
+
+Implementiert: öffentliche Operation `adopt_seed` mit Prüfung von Jenkins-Basis,
+Seed-Job und Build-Ergebnis, Speicherung der manuellen Herkunft und Historie,
+Wiederverwendung bei `deliver` sowie Sperre bei unbestätigtem Upload.
+`external_runs`/`external_state` unterscheiden Seed und Datenlieferung mit
+Referenz und nächstem Schritt. Fehlende und veränderte Repo-Dateien werden
+getrennt gemeldet; bereits übernommene Dateien werden nach manueller Änderung
+oder Entfernung nicht automatisch wiederhergestellt. Aktuelle Repository-Bytes
+können explizit als neue Kandidaten vorbereitet und erneut geprüft werden.
+
+**Simuliert:** `JenkinsTest` verwendet ausschliesslich einen Loopback-HTTP-Server,
+einen simulierten Stack und isolierte Testfreigaben. Abgedeckt sind manueller
+Ersatz eines fehlgeschlagenen Seeds, laufender/fehlgeschlagener/falscher manueller
+Build, idempotente Übernahme und Lieferung, normaler eigener Seed, eigener Retry
+nach fehlgeschlagenem manuellem Seed, geänderter Prüfstand, weiterhin nötige
+INT-Freigabe, Upload-404 mit gesperrter Seed-Übernahme und ohne zweiten Upload,
+sowie Erhalt und erneute Kandidatenprüfung manueller Repository-Korrekturen.
+
+**Tatsächlich:** Java-Build, Unit-/Regressionstests und Formatprüfung werden mit
+`./bin/datenportal-agent gradle test jar spotlessCheck` ausgeführt. Das
+Betriebspaket enthält die aktualisierte öffentliche Operation und Anleitungen.
+
+**Offen:** Echte Wiederaufnahme mit einem manuellen Jenkins-Seed im installierten
+Operator-Workspace. Keine reale Seed-Ausführung, Lieferung, INT-/PROD-Publikation
+oder Änderung bestehender Geschäftsvorgänge wurde für diese Abnahme ausgeführt.
+
+**Lokale Installation und OpenCode geprüft (2026-10-15):** Paket
+`0.2.36-local-manual-seed` mit unveränderten Fach-MCP-JARs aus dem bisherigen
+lokalen Paket gebaut und im bestehenden Operator-Workspace mit
+`workspace update --preserve-run-state` installiert. `init` meldet `ready=true`
+und erfolgreichen synthetischen Selbsttest; `doctor` bestätigt beide Fach-MCPs
+ohne fehlende Werkzeuge. `schema adopt_seed` liefert den neuen Vertrag.
+Beide MCP-Verbindungen in OpenCode explizit deaktiviert und wieder aktiviert;
+anschliessend beide `connected`. Die neuen OpenCode-Kindprozesse verwenden das
+JAR aus dem neuen Paket. Prüfsummen aller 1930 bestehenden Vorgangsdateien und
+der lokalen Konfiguration vor/nach dem Update identisch. Keine echte
+Seed-Übernahme oder Datenlieferung ausgeführt; diese fachliche Abnahme bleibt offen.
