@@ -2130,3 +2130,18 @@ Paket `0.2.35-local-series-recovery` gebaut und synthetischer Paket-Smoke
 bestanden: Installation, beide MCPs, positive/negative Validierung, Update und
 explizites `--preserve-run-state` mit byteidentischer Zustandsfixture.
 Der öffentliche Updatepfad kann damit ohne Freigabemigration verwendet werden.
+
+Lokale Auslieferung tatsächlich abgeschlossen: Implementierung `9ca905f` auf
+`main` gepusht; Paket `0.2.35-local-series-recovery` installiert mit
+`workspace update --preserve-run-state`. `init` und `doctor` erfolgreich,
+beide Fach-MCPs vollständig verfügbar. Vor dem kontrollierten OpenCode-Reload
+waren keine Werkzeugaufrufe aktiv; anschließend Integrator und Workspace-MCP
+verbunden und Java-Prozesse aus dem neuen Paket nachgewiesen.
+
+Vor Installation bis nach Reload: Konfiguration und 18 Vorgangsdateien,
+19/19 SHA-256 unverändert. Während der Entwicklung war ein anderer Vorgang
+außerhalb dieser Änderungen aktualisiert worden; dessen aktueller Stand wurde
+für die Installationskontrolle neu erfasst und ebenfalls unverändert erhalten.
+Der ausdrücklich geschützte Vorgang `11ff1aa4f8b7463f9fbe06f503e72698` blieb
+auch gegenüber der Entwicklungsaufnahme unverändert. Kein reales `restore`,
+keine manuelle Zustandskorrektur und keine Übertragung fachlicher Freigaben.
