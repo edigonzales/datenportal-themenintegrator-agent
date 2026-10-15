@@ -8,6 +8,12 @@
     "datasheet"
   ],
   "properties": {
+    "github_token_source": {
+      "type": "string",
+      "enum": ["auto", "store"],
+      "default": "auto",
+      "description": "store verwendet ausschliesslich den Workspace-Credential-Store; auto priorisiert GH_TOKEN und GITHUB_TOKEN. Nach Änderungen MCP-Verbindungen neu starten."
+    },
     "root": {
       "type": "string",
       "default": ".."

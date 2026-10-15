@@ -37,6 +37,7 @@ public final class Settings {
     Set<String> allowed =
         Set.of(
             "root",
+            "github_token_source",
             "topics_repo",
             "stack_repo",
             "state_dir",
@@ -74,6 +75,8 @@ public final class Settings {
               || (key.equals("validator_command") && list.isEmpty()))) throw invalid(key);
     }
     if (!values.containsKey("datasheet")) throw invalid("datasheet");
+    if (!Set.of("auto", "store").contains(Json.str(values, "github_token_source", "auto")))
+      throw invalid("github_token_source");
     for (String key : List.of("timeout_seconds", "stack_timeout_seconds"))
       if (values.get(key) instanceof Long number && (number < 1 || number > 7200))
         throw invalid(key);

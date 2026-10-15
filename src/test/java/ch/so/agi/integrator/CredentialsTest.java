@@ -40,6 +40,33 @@ class CredentialsTest {
   }
 
   @Test
+  void explicitStoreSelectionSurvivesHarnessRegenerationAndRejectsEnvironmentFallback()
+      throws Exception {
+    String config = Files.readString(settings.file);
+    Files.writeString(settings.file, "github_token_source=\"store\"\n" + config);
+    settings = new Settings(settings.file);
+    credentials = new Credentials(settings, environment::get);
+    environment.put("GH_TOKEN", "inherited-secret");
+    environment.put("GITHUB_TOKEN", "other-inherited-secret");
+    assertEquals(
+        "github_credentials_missing", assertThrows(Problem.class, credentials::resolveGithub).code);
+    credentials.saveGithub("store-secret");
+    new Harness(settings).install();
+    new Harness(new Settings(settings.file)).install();
+    credentials = new Credentials(new Settings(settings.file), environment::get);
+    assertEquals("store-secret", credentials.resolveGithub().token);
+    assertEquals("local_store", credentials.githubStatus().get("credentials_source"));
+    assertEquals("store", credentials.githubStatus().get("configured_source"));
+    Files.writeString(credentials.file, "{broken");
+    assertEquals(
+        "credential_store_invalid", assertThrows(Problem.class, credentials::resolveGithub).code);
+    Files.writeString(settings.file, "github_token_source=\"unknown\"\n" + config);
+    assertEquals(
+        "invalid_configuration",
+        assertThrows(Problem.class, () -> new Settings(settings.file)).code);
+  }
+
+  @Test
   void githubPriorityRotationAndLegacyStore() throws Exception {
     credentials.save("local", "user", "jenkins-secret");
     assertEquals(

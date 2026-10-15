@@ -58,6 +58,24 @@ Erwartet wird `"stored": true`. Ohne gesetzte Env-Tokens erscheint zusätzlich
 `"credentials_source": "local_store"`. Sind `GH_TOKEN` oder `GITHUB_TOKEN` noch
 gesetzt, haben sie weiterhin Vorrang vor dem gespeicherten Token.
 
+Soll dieser Workspace dauerhaft ausschliesslich den Credential Store verwenden,
+auf oberster Ebene von `config/local.toml` (vor den Tabellen wie `[datasheet]`)
+folgende Einstellung ergänzen:
+
+```toml
+github_token_source = "store"
+```
+
+Danach `bin/datenportal-agent init` ausführen und die MCP-Verbindungen neu starten.
+Die Einstellung bleibt bei erneutem `init` erhalten und gilt gemeinsam für REST
+und Git-Helper, auch wenn der Client GitHub-Token-Variablen erbt. Fehlt der
+Store-Eintrag oder ist er unlesbar, wird ein Fehler gemeldet; es gibt keinen
+Rückgriff auf Env-Tokens. `credentials github status` zeigt zusätzlich
+`"configured_source": "store"`. Ein ausdrücklicher Import mit `set --from-env`
+bleibt möglich. Mit `github_token_source = "auto"` (Standard) gilt wieder
+GH_TOKEN → GITHUB_TOKEN → Store.
+
+
 `credentials github status` zeigt die aktive Quelle und mit `stored`, ob ein
 Store-Eintrag existiert; bei unlesbarem Store erscheint stattdessen `store_error`.
 Der Status prüft keine GitHub-Berechtigungen. Zum Rotieren erneut `set` verwenden,

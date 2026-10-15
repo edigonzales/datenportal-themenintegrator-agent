@@ -210,18 +210,22 @@ final class Credentials {
   }
 
   Value resolveGithub() {
-    Value explicit = githubFromEnvironment();
+    Value explicit =
+        Json.str(settings.values, "github_token_source", "auto").equals("store")
+            ? null
+            : githubFromEnvironment();
     if (explicit != null) return explicit;
     Value saved = githubSaved(read(false));
     if (saved != null) return saved;
     throw new Problem(
         "github_credentials_missing",
-        "GitHub-Token mit credentials github set --token-stdin hinterlegen oder GH_TOKEN/GITHUB_TOKEN setzen.");
+        "GitHub-Token mit credentials github set --token-stdin hinterlegen; Env-Tokens gelten nur bei github_token_source=auto.");
   }
 
   Map<String, Object> githubStatus() {
     var result =
         Json.map("service", "github", "credentials_present", false, "credentials_source", "none");
+    result.put("configured_source", Json.str(settings.values, "github_token_source", "auto"));
     try {
       Value value = resolveGithub();
       result.put("credentials_present", true);

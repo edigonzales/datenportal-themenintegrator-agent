@@ -1656,3 +1656,23 @@ keine persönlichen Zugangsdaten importiert.
 Offen: Installation eines neuen Betriebspakets im Operator-Workspace und
 End-to-End-Abnahme mit echten GitHub-Zugängen. INT/PROD-Publikation ist nicht
 Bestandteil dieser Änderung.
+
+## 2026-10-15: Dauerhafte GitHub-Store-Auswahl
+
+Tatsächlich geprüft: `bin/datenportal-agent gradle test jar spotlessCheck`
+mit JDK 21 erfolgreich, 238 Tests ohne Fehler oder übersprungene Tests.
+Die optionale Einstellung `github_token_source="store"` bleibt nach wiederholter
+Client-Konfiguration erhalten und ignoriert beide GitHub-Env-Variablen.
+Standard `auto` behält die bisherige Quellenpriorität bei.
+
+Lokal wurde Paket 0.2.28 mit Datenblatt-MCP 0.2.3 und INTERLIS-MCP 0.0.577-1
+gebaut und im bestehenden Operator-Workspace installiert. Die Store-Auswahl
+wurde in dessen lokaler Konfiguration aktiviert. Der frühere `env -u`-Workaround
+wurde entfernt. Zwei anschliessende `init`-Durchläufe meldeten `ready=true`;
+der Credential-Status meldete danach `configured_source=store` und
+`credentials_source=local_store`. Beide OpenCode-MCP-Prozesse wurden neu gestartet
+und ihre Paketpfade auf 0.2.28 geprüft. Tokenwerte wurden nicht ausgegeben.
+
+Simuliert: Regressionstests verwenden synthetische Tokens; die lokale
+Initialisierungsprüfung verwendet synthetische Fachdaten. Offen: echte
+GitHub-Authentifizierung und Publikation; kein GitHub-Schreibzugriff durchgeführt.
