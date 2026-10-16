@@ -272,3 +272,15 @@ Bestehende aktuelle Modellfreigaben werden beim nächsten schreibenden Schritt
 nachvollziehbar ergänzt; aus veralteten Freigaben wird keine Bestätigung abgeleitet.
 Im Abschluss beispielsweise schreiben: «Die Zahlenbereiche und Genauigkeiten wurden
 vom Agenten vorgeschlagen und mit der Modellabnahme bestätigt.»
+
+### Bestätigter CSV-Name beim Import
+
+Bei einem ungültigen CSV-Namen schlägt der Agent einen Namen mit ASCII-Buchstaben,
+Ziffern und Unterstrichen vor. Nach deiner Zustimmung erstellt er selbst die
+bytegleiche Eingangskopie mit `datenportal_workspace.import_attachment`:
+`target_name` enthält den bestätigten Namen inklusive `.csv`, `human_statement`
+die tatsächliche Zustimmung. Bereits erteilte Zustimmung wird nicht erneut erfragt.
+Die Originaldatei bleibt unverändert. Ohne Zustimmung wird nicht umbenannt.
+Die drei SHA-256-Prüfungen bleiben verbindlich; diese Zustimmung erteilt keine
+CSV-, Modell-, Metadaten- oder Publikationsfreigabe. Die Erweiterung gilt nur für
+CSV-Dateien, nicht für XTF/XLSX und nicht für Verzeichnispfade.

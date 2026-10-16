@@ -25,7 +25,7 @@ Dev-Stack, Fach-MCPs, Jenkins-Plugin, GRETL und Portal über vorhandene Schnitts
 
 ## CSV-Dateinamen prüfen
 
-Vor der Weitergabe jeder CSV den ursprünglichen Basisnamen nach [Eingangsdateien](../../docs/agent/eingangsdateien.md#csv-dateinamen-prüfen) prüfen, bei Chat-Anhängen schon vor der Ablage. Bei ungültigem Namen stoppen; nur auf ausdrücklichen Auftrag umbenennen.
+Vor der Weitergabe jeder CSV den ursprünglichen Basisnamen nach [Eingangsdateien](../../docs/agent/eingangsdateien.md#csv-dateinamen-prüfen) prüfen, bei Chat-Anhängen schon vor der Ablage. Bei ungültigem Namen einen gültigen CSV-Namen vorschlagen und Zustimmung abwarten, sofern sie nicht bereits erteilt ist. Danach `import_attachment` mit `target_name` und der tatsächlichen Benutzerantwort als `human_statement` ausführen: nur die bytegleiche Kopie erhält den neuen Namen, das Original bleibt unverändert. Keine manuelle Umbenennung durch den Betreiber verlangen, wenn der Auftrag vorliegt.
 
 ## Chat-Anhänge übernehmen
 

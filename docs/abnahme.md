@@ -2416,3 +2416,42 @@ absolute Pfad zur Betriebskonfiguration sowie `DATENPORTAL_AGENT_HOME` mit dem
 installierten Paketpfad. Ohne diese Paketzuordnung schlugen frühere Schemaabrufe
 fehl. Der Test ändert keine realen Vorgänge. Paketbau, gezielte MCP-Ausgabetests
 und Formatprüfung sind ebenfalls erfolgreich. Keine INT-/PROD-Publikation.
+
+## Bestätigter CSV-Kopiename beim Import (16. Oktober 2026)
+
+`datenportal_workspace.import_attachment` akzeptiert optional `target_name` und
+`human_statement`. Ein abweichender CSV-Kopiename erfordert die tatsächliche
+Benutzerzustimmung; das Original wird nicht umbenannt oder verändert. Neue
+Nachweise dokumentieren Original- und Zielnamen, `renamed` und die Zustimmung.
+`name` bezeichnet weiterhin den Kopienamen, alte Nachweise bleiben kompatibel.
+Die Zustimmung ist keine fachliche Freigabe.
+
+**Automatisiert geprüft:** 333 reguläre Tests ohne Fehler oder Auslassungen,
+JAR und `spotlessCheck` erfolgreich. Ein echter stdio-MCP-Integrationstest
+(`WorkspaceMcpIntegrationTest`) importiert eine isolierte Testdatei mit neuem
+Namen und reicht die verifizierte Kopie erfolgreich an den Integrator weiter.
+Negative Tests decken fehlende Zustimmung, ungültige Namen/Pfade/Dateitypen,
+Quellen ausserhalb freigegebener Eingänge, Symlinks, Quellenänderungen und
+nachträgliche Manipulation der Kopie ab. Testzustimmungen sind ausdrücklich
+synthetisch und auf isolierte Fixtures begrenzt.
+
+**Tatsächlich lokal geprüft:** Paket `0.2.40-local-csv-import-name` gebaut und
+im bestehenden Betriebsworkspace über `workspace update --preserve-run-state`
+installiert. Beide Fach-MCP-JARs sind SHA-256-identisch mit dem vorherigen Paket
+`0.2.39-local-model-approval-r3`. `init` und `doctor` erfolgreich. Von 5344 direkt
+vor der Installation gesicherten Vorgangs-/Konfigurationsdateien änderte sich
+nur `.datenportal-integrator/init.json`. Sicherungen und Nachweise liegen privat
+unter `build/operator-update-csv-import-name`.
+
+Beide OpenCode-MCP-Verbindungen wurden nach Abschluss des laufenden PR-Auftrags
+getrennt und nach Installation wieder verbunden. Eine gleichzeitig vom Benutzer
+angestossene Fortsetzung nach Merge traf die kurze Unterbrechung und meldete
+fehlende Werkzeuge; beide Verbindungen wurden anschliessend wiederhergestellt.
+Der reale Fachvorgang wurde durch diesen Test nicht fortgesetzt.
+
+Ein separater OpenCode-Testchat importierte ausschliesslich die synthetische
+Datei `test-invalid-name.csv` als `test_valid_name.csv` unter `smoketest`, mit
+explizit synthetischer Testzustimmung. Ergebnis: `verified=true`, `renamed=true`,
+alle drei SHA-256-Werte gleich. Originalbytes, Kopie und Importnachweis wurden
+zusätzlich direkt verglichen. Kein Fachvorgang, keine fachliche Freigabe und
+keine Veröffentlichung wurden für diesen Test ausgelöst. `DEMO.md` unverändert.

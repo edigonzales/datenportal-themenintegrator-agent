@@ -27,7 +27,7 @@ class WorkspaceMcpIntegrationTest {
         "root=\"..\"\ntopics_repo=\"../repo\"\nstack_repo=\"../stack\"\n[datasheet]\ntransport=\"stdio\"\n");
     var settings = new Settings(config);
     new Harness(settings).install();
-    Path original = temp.resolve("data.csv");
+    Path original = temp.resolve("data-invalid.csv");
     Json.write(original, "Id\r\n0012\r\n");
     String importedPath = null;
     for (String command : List.of("serve-workspace", "serve")) {
@@ -84,10 +84,22 @@ class WorkspaceMcpIntegrationTest {
               client.callTool(
                   new McpSchema.CallToolRequest(
                       "import_attachment",
-                      Json.map("organization", "agi", "path", original.toString())));
+                      Json.map(
+                          "organization",
+                          "agi",
+                          "path",
+                          original.toString(),
+                          "target_name",
+                          "data_valid.csv",
+                          "human_statement",
+                          "Synthetische isolierte Testzustimmung: Kopie als data_valid.csv erstellen.")));
           assertFalse(Boolean.TRUE.equals(imported.isError()));
           var response = Json.obj(imported.structuredContent());
           assertEquals(true, response.get("verified"));
+          assertEquals(true, response.get("renamed"));
+          assertEquals("data-invalid.csv", response.get("original_name"));
+          assertEquals("data_valid.csv", response.get("target_name"));
+          assertTrue(Files.exists(original));
           assertEquals(Json.sha(original), response.get("copy_sha256"));
           importedPath = Json.required(response, "path");
           var rejected =

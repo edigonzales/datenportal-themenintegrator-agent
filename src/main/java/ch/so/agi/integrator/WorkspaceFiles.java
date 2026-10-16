@@ -11,9 +11,20 @@ final class WorkspaceFiles {
   static {
     tool(
         "import_attachment",
-        "Original CSV/XTF/XLSX unverändert übernehmen; drei SHA-256 prüfen. Keine Freigabe.",
+        "CSV/XTF/XLSX bytegleich kopieren; drei SHA-256 prüfen. Optional target_name nur für CSV nach tatsächlicher Benutzerzustimmung in human_statement; Original bleibt unverändert. Keine fachliche Freigabe.",
         "organization!",
-        "path!");
+        "path!",
+        "target_name",
+        "human_statement");
+    var importProperties = Json.obj(TOOLS.get("import_attachment").schema().get("properties"));
+    Json.obj(importProperties.get("target_name"))
+        .put(
+            "description",
+            "Optionaler bestätigter CSV-Basisname mit Endung .csv: nur ASCII-Buchstaben, Ziffern und Unterstriche, kein Pfad. Nur die Kopie erhält diesen Namen.");
+    Json.obj(importProperties.get("human_statement"))
+        .put(
+            "description",
+            "Tatsächliche Benutzerzustimmung zum abweichenden Kopienamen; bei Namensänderung erforderlich. Keine fachliche Freigabe und keine erfundene Zustimmung.");
     tool(
         "read_file",
         "Zulässige Datei abschnittweise lesen (max. 6000 Zeichen). next_offset verwenden. report_url im Browser öffnen; keine erneute Prüfung zum Lesen. Keine Quellen/Secrets/state.json.",
@@ -70,7 +81,11 @@ final class WorkspaceFiles {
     Operations.validate(TOOLS, operation, args);
     return switch (operation) {
       case "import_attachment" ->
-          importAttachment(Json.required(args, "organization"), Json.required(args, "path"));
+          importAttachment(
+              Json.required(args, "organization"),
+              Json.required(args, "path"),
+              Json.str(args, "target_name", null),
+              Json.str(args, "human_statement", ""));
       case "read_file" ->
           read(
               Json.required(args, "path"),
@@ -289,17 +304,37 @@ final class WorkspaceFiles {
   }
 
   Map<String, Object> importAttachment(String organization, String value) {
+    return importAttachment(organization, value, null, "");
+  }
+
+  Map<String, Object> importAttachment(
+      String organization, String value, String targetName, String humanStatement) {
     Store.identifier(organization);
+
     Path original = Path.of(value);
     if (!original.isAbsolute()) throw new Problem("unsafe_path", "Absoluten Originalpfad angeben.");
     String name = original.getFileName().toString();
-    if (name.toLowerCase(Locale.ROOT).endsWith(".csv") && !name.matches("(?i)^[a-z0-9_]+\\.csv$"))
+    boolean csv = name.toLowerCase(Locale.ROOT).endsWith(".csv");
+    if (targetName != null && (!csv || !targetName.matches("(?i)^[a-z0-9_]+\\.csv$")))
+      throw new Problem(
+          "invalid_target_name",
+          "target_name ist nur ein gültiger CSV-Basisname, kein Pfad und kein anderer Dateityp.");
+    String copyName = targetName == null ? name : targetName;
+    boolean renamed = !copyName.equals(name);
+    if (renamed && (humanStatement == null || humanStatement.isBlank()))
+      throw new Problem(
+          "human_statement_missing",
+          "Tatsächliche Benutzerzustimmung zur Namensänderung der Kopie in human_statement angeben.");
+    if (csv && !copyName.matches("(?i)^[a-z0-9_]+\\.csv$"))
       throw new Problem(
           "invalid_csv_filename",
-          "CSV-Originalnamen nur mit ASCII-Buchstaben, Ziffern und Unterstrichen verwenden; Umbenennung ausdrücklich beauftragen.");
+          "CSV-Namen nur mit ASCII-Buchstaben, Ziffern und Unterstrichen verwenden; gültigen target_name vorschlagen und nach ausdrücklicher Zustimmung mit human_statement importieren.");
     Path source = canonical(value);
     if (!name.matches("(?i).+\\.(csv|xtf|xlsx)")
         || !source.getFileName().toString().matches("(?i).+\\.(csv|xtf|xlsx)")) throw denied();
+    if (targetName != null
+        && !source.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".csv"))
+      throw denied();
     if (!Files.isRegularFile(source))
       throw new Problem(
           "input_path_unavailable",
@@ -325,7 +360,7 @@ final class WorkspaceFiles {
       Files.createDirectories(base);
       Path directory = Json.inside(base, organization + "/" + UUID.randomUUID());
       Files.createDirectories(directory);
-      Path copy = directory.resolve(name);
+      Path copy = directory.resolve(copyName);
       String before = Json.sha(source);
       copier.copy(source, copy);
       String after = Json.sha(source), copied = Json.sha(copy);
@@ -335,24 +370,28 @@ final class WorkspaceFiles {
             "input_checksum_mismatch",
             "Original hat sich verändert; Datei wird nicht weitergereicht.");
       }
-      Json.atomic(
-          directory.resolve(".verified-input.json"),
+      var proof =
           Json.map(
-              "name", name,
-              "source_sha256_before", before,
-              "source_sha256_after", after,
-              "copy_sha256", copied));
-      return Json.map(
-          "path",
-          copy.toString(),
-          "source_sha256_before",
-          before,
-          "source_sha256_after",
-          after,
-          "copy_sha256",
-          copied,
-          "verified",
-          true);
+              "name",
+              copyName,
+              "original_name",
+              name,
+              "target_name",
+              copyName,
+              "renamed",
+              renamed,
+              "source_sha256_before",
+              before,
+              "source_sha256_after",
+              after,
+              "copy_sha256",
+              copied);
+      if (renamed) proof.put("human_statement", humanStatement);
+      Json.atomic(directory.resolve(".verified-input.json"), proof);
+      var result = new LinkedHashMap<>(proof);
+      result.put("path", copy.toString());
+      result.put("verified", true);
+      return result;
     } catch (java.io.IOException e) {
       throw new Problem(
           "input_copy_failed",

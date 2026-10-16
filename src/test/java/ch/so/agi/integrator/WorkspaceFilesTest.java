@@ -21,6 +21,109 @@ class WorkspaceFilesTest {
     files = new WorkspaceFiles(new Settings(root.resolve("config/local.toml")));
   }
 
+  static final String RENAME_APPROVAL =
+      "Synthetische isolierte Testzustimmung: Kopie als valid_name.csv anlegen.";
+
+  @Test
+  void importsApprovedCsvNameAndPreservesOriginalAndReceipt() throws Exception {
+    Path original = temp.resolve("invalid-name.csv");
+    byte[] bytes = "Id;Wert\r\n0012;3.40\r\n".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    Files.write(original, bytes);
+    var args =
+        Json.map(
+            "organization",
+            "agi",
+            "path",
+            original.toString(),
+            "target_name",
+            "valid_name.csv",
+            "human_statement",
+            RENAME_APPROVAL);
+    var result = Json.obj(files.call("import_attachment", args));
+    Path copy = Path.of(Json.required(result, "path"));
+    assertEquals("valid_name.csv", copy.getFileName().toString());
+    assertEquals("invalid-name.csv", result.get("original_name"));
+    assertEquals("valid_name.csv", result.get("target_name"));
+    assertEquals(true, result.get("renamed"));
+    assertEquals(RENAME_APPROVAL, result.get("human_statement"));
+    assertEquals(Json.hash(bytes), result.get("source_sha256_before"));
+    assertEquals(result.get("source_sha256_before"), result.get("source_sha256_after"));
+    assertEquals(result.get("source_sha256_before"), result.get("copy_sha256"));
+    assertArrayEquals(bytes, Files.readAllBytes(original));
+    assertArrayEquals(bytes, Files.readAllBytes(copy));
+    var proof = Json.read(copy.getParent().resolve(".verified-input.json"));
+    assertEquals("valid_name.csv", proof.get("name"));
+    assertEquals(RENAME_APPROVAL, proof.get("human_statement"));
+    files.handoff(copy.toString(), "data");
+    assertNotEquals(
+        result.get("path"), Json.obj(files.call("import_attachment", args)).get("path"));
+    Files.writeString(copy, "changed");
+    assertEquals(
+        "input_checksum_mismatch",
+        assertThrows(Problem.class, () -> files.handoff(copy.toString(), "data")).code);
+  }
+
+  @Test
+  void rejectsUnapprovedInvalidOrNonCsvTargetNamesBeforeCopying() throws Exception {
+    Path original = temp.resolve("bad-name.csv");
+    Files.writeString(original, "Id\n1\n");
+    for (String statement : List.of("", "   "))
+      assertEquals(
+          "human_statement_missing",
+          assertThrows(
+                  Problem.class,
+                  () -> files.importAttachment("agi", original.toString(), "valid.csv", statement))
+              .code);
+    for (String target :
+        List.of(
+            "",
+            "../valid.csv",
+            "/valid.csv",
+            "dir/valid.csv",
+            "dir\\valid.csv",
+            "bad-name.csv",
+            "ä.csv",
+            "bad name.csv",
+            "data.xlsx"))
+      assertEquals(
+          "invalid_target_name",
+          assertThrows(
+                  Problem.class,
+                  () -> files.importAttachment("agi", original.toString(), target, RENAME_APPROVAL))
+              .code);
+    Path xlsx = temp.resolve("input.xlsx");
+    Files.writeString(xlsx, "fixture");
+    assertEquals(
+        "invalid_target_name",
+        assertThrows(
+                Problem.class,
+                () -> files.importAttachment("agi", xlsx.toString(), "valid.csv", RENAME_APPROVAL))
+            .code);
+    Path alias = temp.resolve("alias.csv");
+    Files.createSymbolicLink(alias, xlsx);
+    assertEquals(
+        "workspace_access_denied",
+        assertThrows(
+                Problem.class,
+                () -> files.importAttachment("agi", alias.toString(), "valid.csv", RENAME_APPROVAL))
+            .code);
+    assertFalse(Files.exists(root.resolve(".datenportal-integrator/input")));
+  }
+
+  @Test
+  void legacyReceiptAndUnchangedNameNeedNoRenameApproval() throws Exception {
+    Path original = temp.resolve("valid.csv");
+    Files.writeString(original, "Id\n1\n");
+    var result = files.importAttachment("agi", original.toString(), "valid.csv", "");
+    assertEquals(false, result.get("renamed"));
+    assertFalse(result.containsKey("human_statement"));
+    Path copy = Path.of(Json.required(result, "path"));
+    var proof = Json.read(copy.getParent().resolve(".verified-input.json"));
+    for (String key : List.of("original_name", "target_name", "renamed")) proof.remove(key);
+    Json.atomic(copy.getParent().resolve(".verified-input.json"), proof);
+    files.handoff(copy.toString(), "data");
+  }
+
   @Test
   void skillAliasesCopiesAndInternalLinksShareReadBoundary() throws Exception {
     String reference = "model/references/types.md";
@@ -63,6 +166,14 @@ class WorkspaceFilesTest {
     var denied =
         assertThrows(Problem.class, () -> restricted.importAttachment("agi", original.toString()));
     assertEquals("input_path_not_allowed", denied.code);
+    assertEquals(
+        "input_path_not_allowed",
+        assertThrows(
+                Problem.class,
+                () ->
+                    restricted.importAttachment(
+                        "agi", original.toString(), "valid_name.csv", RENAME_APPROVAL))
+            .code);
     assertEquals(original.toString(), denied.details.get("path"));
     assertTrue(denied.getMessage().contains("input_roots"));
     assertFalse(denied.getMessage().contains("mount"));
@@ -196,7 +307,11 @@ class WorkspaceFilesTest {
             });
     assertEquals(
         "input_checksum_mismatch",
-        assertThrows(Problem.class, () -> changing.importAttachment("agi", original.toString()))
+        assertThrows(
+                Problem.class,
+                () ->
+                    changing.importAttachment(
+                        "agi", original.toString(), "valid_name.csv", RENAME_APPROVAL))
             .code);
     try (var inputs = Files.walk(root.resolve(".datenportal-integrator/input"))) {
       assertEquals(0, inputs.filter(Files::isRegularFile).count());
