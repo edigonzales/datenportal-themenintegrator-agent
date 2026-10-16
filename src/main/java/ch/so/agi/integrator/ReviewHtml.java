@@ -40,6 +40,9 @@ final class ReviewHtml {
           Map.entry("label", "Bezeichnung"),
           Map.entry("current", "Aktuelle Ausgabe"),
           Map.entry("publication_status", "Publikationsstatus"),
+          Map.entry("access_level", "Zugangslevel"),
+          Map.entry("decision_source", "Gesichertes Herkunftsdatenblatt"),
+          Map.entry("provenance", "Herkunft fachlicher Angaben"),
           Map.entry("creator_ref", "Zuständige Dienststelle"),
           Map.entry("organization", "Organisation"),
           Map.entry("identity", "Modellidentität"),
@@ -173,7 +176,7 @@ final class ReviewHtml {
         take(business, remaining, "transform");
       }
       case METADATA -> {
-        take(business, remaining, "sheet");
+        take(business, remaining, "sheet", "provenance", "decision_source");
         business.append(modelSummary(report.get("model")));
       }
       case MODEL_CANDIDATE, MODEL -> business.append(modelSummary(report));

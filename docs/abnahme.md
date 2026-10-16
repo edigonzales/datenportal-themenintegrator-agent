@@ -2184,3 +2184,73 @@ anschliessend beide `connected`. Die neuen OpenCode-Kindprozesse verwenden das
 JAR aus dem neuen Paket. Prüfsummen aller 1930 bestehenden Vorgangsdateien und
 der lokalen Konfiguration vor/nach dem Update identisch. Keine echte
 Seed-Übernahme oder Datenlieferung ausgeführt; diese fachliche Abnahme bleibt offen.
+
+## 2026-10-16: Skill-Referenzen, Metadatenentscheidungen und Folgelieferungen
+
+Implementiert: Workspace-MCP liest/listet Markdown unter `skills/` und
+`.agents/skills/`, relativ und absolut, einschliesslich interner Skill-Links.
+Externe Symlink-Ziele und Konfigurationsdateien bleiben gesperrt. Zugangslevel
+und Publikationsstatus benötigen belegte Werte; fehlende, widersprüchliche oder
+nur vom Agenten angenommene Angaben blockieren fachliche Freigabe und Lieferung.
+`provenance` unterstützt wertbezogene Benutzerantworten und prüfbare XLSX-Zellen;
+übernommene Datenblätter werden als gesicherte Herkunft erhalten. Werte und
+Herkunft erscheinen im Review. Historische Lieferungen werden nicht migriert.
+Der Herkunftsnachweis beeinflusst nur den fachlichen Metadatenfingerprint;
+Datenfreigaben und Fingerprints alter Vorgänge ohne Herkunftsbeleg behalten
+ihr bisheriges Format. Ein eigener Regressionstest sichert diese Trennung.
+
+`prepare_followup_delivery` bereitet nach eindeutig angenommener abgeschlossener
+Lieferung einen geänderten und freigegebenen Stand als neue Generation vor.
+Die bisherige Lieferung bleibt archiviert; die Vorbereitung startet keinen Seed
+und keinen Upload. INT-/PROD-Pläne und deren Freigaben müssen erneuert werden.
+Generation und Jenkins-Zuordnung bleiben auch beim Ersatz eines fehlgeschlagenen
+Seeds erhalten. Bereits passende separat gestartete Seeds werden wiederverwendet.
+`retry_delivery` und die Sperren bei unbestätigter Einreichung bleiben wirksam.
+
+Die Nachprüfung unterscheidet Annahme, Katalogstand, Publikationsstatus und
+öffentliche Erreichbarkeit. Ein Draft im vollständigen Katalog ist allein kein
+Fehler: das Portal filtert nicht veröffentlichte Einträge aus seiner öffentlichen
+Ansicht. Nach bestätigter Katalogübernahme werden Zielstatus und Detailroute
+geprüft; Server-/Verbindungsfehler lassen die Sichtbarkeitsprüfung offen.
+Status/Ergebnisse markieren noch nicht gelieferte Korrekturen; kompakte Antworten
+behalten Aktions-, Referenz-, Generations- und Wiederaufnahmeinformationen.
+
+**Simuliert:** 306 Unit-/Regressionstests erfolgreich. Neue Fälle prüfen beide
+Skill-Wurzeln und Symlink-Grenzen, fehlende/erfundene/widersprüchliche Entscheidungen,
+XLSX-Zellnachweise, angenommene Draft-Lieferung mit neuer Korrektur, idempotente
+Folgelieferung, fehlgeschlagenen Folgeseed mit manueller Übernahme, Erhalt der
+Generation, gesperrte Folgelieferung bei Upload-404 sowie grosse MCP-Antworten.
+Jenkins und Publikation werden ausschliesslich durch einen Loopback-Server
+simuliert; Testfreigaben gehören nur zu isolierten Testvorgängen.
+
+**Tatsächlich ausgeführt:** JDK-21-Build mit `test jar spotlessCheck
+javaDistribution` erfolgreich. Integration mit expliziter Konfiguration
+`build/xtf-contract-integration/integration.toml` und
+`DATENPORTAL_AGENT_HOME=…/build/java-distribution`: 24 Tests, 23 erfolgreich,
+ein optionaler Docker-/Publikationsfall übersprungen. Ein erster Lauf ohne
+Paketumgebung scheiterte an fehlenden MCP-JARs; nach korrekter Paketzuordnung
+vollständig erfolgreich. Die Integration enthält echte stdio-Prozesse der
+Fach-MCPs und Leseaufrufe der Modellreferenz über beide Skill-Wurzeln.
+
+Paket `0.2.37-local-followup-r2` mit unveränderten Fach-MCP-Artefakten aus
+`0.2.36-local-manual-seed` gebaut und im bestehenden Operator-Workspace durch
+`workspace update --preserve-run-state` installiert. `init` meldet `ready=true`
+mit erfolgreichem synthetischem Selbsttest; `doctor` bestätigt beide Fach-MCPs.
+Zusätzlicher öffentlicher stdio-Test des installierten Pakets: vier Referenzlesungen
+(relativ/absolut, beide Wurzeln), zwei Verzeichnislisten, verweigerter
+Konfigurationszugriff sowie Schemas von `prepare_followup_delivery`, `adopt_seed`
+und `provenance` erfolgreich. Keine Business-Operation im realen Vorgang ausgeführt.
+
+OpenCode war untätig; beide MCP-Verbindungen explizit deaktiviert und wieder
+aktiviert. Anschliessend beide `connected`, neue Java-Prozesse verwenden das
+installierte JAR. Die ursprüngliche Session blieb geöffnet und unverändert.
+Alle 2599 zuvor erfassten Vorgangs-/Konfigurationsdateien haben nach Installation,
+Prüfung und Neustart unveränderte SHA-256-Prüfsummen.
+
+**Offen:** Die echte fachliche Fortsetzung des korrigierten Leerwohnungen-Vorgangs
+und eine reale Folgelieferung. Dafür fehlende Metadatenentscheidungen tatsächlich
+beantworten, aktuelle Prüfungen/Freigaben herstellen und die öffentliche
+Folgelieferungsoperation verwenden. Kein Zurücksetzen von Zustandsdateien oder
+Portal-Releases, keine echte Seed-/Upload-Ausführung für diese technische Abnahme.
+Ein erneuter vollständiger Agentendurchlauf in OpenCode wurde nicht simuliert;
+der GUI-Nachweis betrifft den erfolgreichen MCP-Neustart.

@@ -106,8 +106,7 @@ final class WorkspaceFiles {
     String name = path.getFileName().toString();
     if (name.startsWith(".") || Set.of("state.json", "credentials.json").contains(name))
       return false;
-    for (Path base : List.of(packagePath("skills"), packagePath("docs/agent")))
-      if (path.startsWith(base) && name.endsWith(".md")) return true;
+    if (referencePath(path) && name.endsWith(".md")) return true;
     if (path.equals(packagePath("AGENTS.md"))
         || path.equals(packagePath("README.md"))
         || path.equals(packagePath("docs/anwenderhandbuch.md"))) return true;
@@ -127,6 +126,12 @@ final class WorkspaceFiles {
       return name.matches("(?i).+\\.(xtf|xml|ili|gradle|yaml|yml)");
     }
     return false;
+  }
+
+  boolean referencePath(Path path) {
+    return List.of("skills", ".agents/skills", "docs/agent").stream()
+        .map(this::packagePath)
+        .anyMatch(path::startsWith);
   }
 
   boolean converterPath(Path path) {
@@ -215,6 +220,7 @@ final class WorkspaceFiles {
     Path path = canonical(value);
     if (!List.of(
                 packagePath("skills"),
+                packagePath(".agents/skills"),
                 packagePath("docs"),
                 packagePath("topics"),
                 packagePath(".datenportal-integrator/input"))
@@ -229,7 +235,7 @@ final class WorkspaceFiles {
         if (Files.isRegularFile(real) && readable(real))
           entries.add(Json.map("path", real.toString(), "directory", false));
         else if (Files.isDirectory(real)
-            && !Files.isSymbolicLink(file)
+            && (!Files.isSymbolicLink(file) || referencePath(real))
             && !file.getFileName().toString().startsWith(".")
             && !Set.of("src", "build", "config").contains(file.getFileName().toString()))
           entries.add(Json.map("path", real.toString(), "directory", true));

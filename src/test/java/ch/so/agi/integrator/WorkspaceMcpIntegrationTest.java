@@ -47,6 +47,19 @@ class WorkspaceMcpIntegrationTest {
           McpClient.sync(transport).initializationTimeout(Duration.ofSeconds(30)).build()) {
         client.initialize();
         if (command.equals("serve-workspace")) {
+          for (String base : List.of("skills", ".agents/skills")) {
+            String path =
+                base + "/datenportal-validierungsmodell/references/typableitung-und-reparatur.md";
+            for (String reference : List.of(path, root.resolve(path).toString())) {
+              var referenceResult =
+                  client.callTool(
+                      new McpSchema.CallToolRequest("read_file", Json.map("path", reference)));
+              assertFalse(
+                  Boolean.TRUE.equals(referenceResult.isError()), Json.text(referenceResult));
+              assertFalse(
+                  Json.str(Json.obj(referenceResult.structuredContent()), "content", "").isBlank());
+            }
+          }
           assertEquals(
               WorkspaceFiles.TOOLS.keySet(),
               new HashSet<>(
@@ -90,6 +103,11 @@ class WorkspaceMcpIntegrationTest {
           assertEquals(
               "workspace_access_denied", Json.obj(rejected.structuredContent()).get("error"));
         } else {
+          var followup =
+              client.callTool(
+                  new McpSchema.CallToolRequest(
+                      "operation_schema", Json.map("operation", "prepare_followup_delivery")));
+          assertFalse(Boolean.TRUE.equals(followup.isError()));
           var response =
               client.callTool(
                   new McpSchema.CallToolRequest(

@@ -169,6 +169,8 @@ public final class Xml {
         text(n, "creatorRef"),
         "publication_status",
         text(selected.isEmpty() ? n : selected.getFirst(), "publicationStatus"),
+        "access_level",
+        text(n, "accessLevel"),
         "attributes",
         attrs,
         "fields",

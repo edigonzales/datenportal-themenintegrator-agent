@@ -126,3 +126,27 @@ dem Kandidaten entsprechen. Danach die betroffenen Prüfungen und menschlichen
 Freigaben erneuern. Veränderte oder entfernte bereits übernommene Dateien werden
 nicht ungeprüft überschrieben. Nach geändertem Prüfstand den passenden manuellen
 Seed erneut zuordnen; die frühere Zuordnung ist kein Nachweis für neue Bytes.
+
+## Angenommene Lieferung korrigieren
+
+`publication=accepted` bestätigt die Annahme, nicht die öffentliche Sichtbarkeit.
+`verified`, `visibility_check` und `publication_status` getrennt lesen. Ein
+Draft kann im Katalog stehen und dennoch öffentlich nicht erreichbar sein.
+Bei offener Nachprüfung den bestehenden Lauf mit `verify_delivery` prüfen;
+kein erneuter Upload zur Behebung eines Reload-/Sichtbarkeitsfehlers.
+
+Sind tatsächlich geänderte Daten oder Metadaten neu geprüft und freigegeben,
+`prepare_followup_delivery(run_id, environment)` im bestehenden Vorgang aufrufen.
+Die Operation archiviert die eindeutig angenommene abgeschlossene Lieferung
+und bereitet eine neue Generation vor, ohne Seed/Upload. Danach für INT/PROD
+einen neuen `publication_plan` zeigen und ausdrücklich freigeben lassen;
+lokal genügt weiterhin die aktuelle fachliche Freigabe. Mit `deliver` fortsetzen.
+Ein passender zugeordneter Seed wird verwendet, sonst ein eigener gestartet.
+
+Identische Vorbereitungen sind wirkungslos. Unveränderte Lieferinhalte, laufende
+oder unbestätigte Starts erlauben keine Folgelieferung. `retry_delivery` bleibt
+für eindeutig fehlgeschlagene, nicht angenommene Einreichungen reserviert.
+`current_candidate_delivered=false` zeigt noch nicht gelieferte Korrekturen;
+die alte Nachprüfung bleibt an ihren eingefrorenen Stand gebunden. Bei grossen
+Antworten enthält `diagnostics` die wesentlichen Zustände und nächsten Schritte;
+nicht wiederholt Megabyte-Ausgaben lesen oder terminale Lieferungen starten.

@@ -22,6 +22,34 @@ class WorkspaceFilesTest {
   }
 
   @Test
+  void skillAliasesCopiesAndInternalLinksShareReadBoundary() throws Exception {
+    String reference = "model/references/types.md";
+    for (String base : List.of("skills", ".agents/skills")) {
+      Path p = root.resolve(base).resolve(reference);
+      Json.write(p, "reference");
+      assertEquals("reference", Json.obj(files.read(base + "/" + reference)).get("content"));
+      assertEquals("reference", Json.obj(files.read(p.toString())).get("content"));
+      assertEquals(
+          1, Json.list(Json.obj(files.list(base + "/model/references")).get("entries")).size());
+    }
+    Path alias = root.resolve(".agents/skills/alias");
+    Files.createSymbolicLink(alias, root.resolve("skills/model"));
+    assertEquals(
+        "reference",
+        Json.obj(files.read(alias.resolve("references/types.md").toString())).get("content"));
+    assertTrue(Json.text(files.list(".agents/skills")).contains("skills/model"));
+    Path outside = temp.resolve("private");
+    Json.write(outside.resolve("secret.md"), "private");
+    Files.createSymbolicLink(root.resolve(".agents/skills/escape"), outside);
+    assertThrows(Problem.class, () -> files.read(".agents/skills/escape/secret.md"));
+    assertThrows(Problem.class, () -> files.list(".agents/skills/escape"));
+    assertFalse(Json.text(files.list(".agents/skills")).contains(outside.toRealPath().toString()));
+    assertThrows(
+        Problem.class,
+        () -> files.write(Json.map("path", ".agents/skills/new.md", "content", "no")));
+  }
+
+  @Test
   void externalInputsRequireExplicitRootsAndRejectSymlinkEscapes() throws Exception {
     Path workspace = temp.resolve("business/operator");
     Path external = temp.resolve("external");

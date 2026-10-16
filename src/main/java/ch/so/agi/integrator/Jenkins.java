@@ -401,7 +401,11 @@ public final class Jenkins {
             "opendata",
             report.get("opendata"),
             "visible",
-            false,
+            null,
+            "visibility_check",
+            "pending",
+            "publication_status",
+            sheet.get("publication_status"),
             "verified",
             false);
     if (!Objects.equals(report.get("publication"), "accepted"))
@@ -449,12 +453,37 @@ public final class Jenkins {
                         && target.equals(Xml.text(n, "identifier")))
             .toList();
     if (!Objects.equals(sheet.get("publication_status"), "published")) {
-      result.put("verified", nodes.isEmpty());
+      result.put("catalog_present", !nodes.isEmpty());
+      if (nodes.size() > 1
+          || (!nodes.isEmpty()
+              && !Objects.equals(
+                  Xml.text(nodes.getFirst(), "publicationStatus"),
+                  sheet.get("publication_status"))))
+        return message(
+            result,
+            "Katalogstatus ist nicht eindeutig oder entspricht nicht dem angenommenen Datenblatt.");
+      String url = portalPage(sheet);
+      result.put("portal_url", url);
+      int status = pageStatus(url);
+      result.put("portal_http_status", status);
+      if (status == 404 || status == 410) {
+        result.put("visible", false);
+        result.put("visibility_check", "confirmed");
+        result.put("verified", true);
+        return message(
+            result,
+            "Bestand und Publikationsstatus übernommen; Thema ist öffentlich nicht erreichbar.");
+      }
+      if (status == 200) {
+        result.put("visible", true);
+        result.put("visibility_check", "mismatch");
+        return message(
+            result,
+            "Bestand übernommen, aber nicht öffentliches Thema ist über seine Portalseite erreichbar.");
+      }
       return message(
           result,
-          nodes.isEmpty()
-              ? "Bestand übernommen; Thema entsprechend Status nicht öffentlich."
-              : "Thema trotz nicht öffentlichem Status noch im Katalog.");
+          "Bestand übernommen; öffentliche Erreichbarkeit noch ungeklärt. Keine erneute Lieferung zur Nachprüfung starten.");
     }
     if (nodes.size() != 1)
       return message(result, "Thema/Ausgabe fehlt oder ist mehrdeutig im publizierten Katalog.");
@@ -483,22 +512,39 @@ public final class Jenkins {
           || !Objects.equals(Json.obj(formats.get("csv")).get("sha256"), Json.sha(source)))
         return message(result, "Downloads fehlen oder CSV entspricht nicht der gelieferten Datei.");
     }
+    String url = portalPage(sheet);
+    result.put("portal_url", url);
+    int status = pageStatus(url);
+    result.put("portal_http_status", status);
+    boolean visible = status == 200;
+    result.put("visible", visible ? true : status == 404 || status == 410 ? false : null);
+    result.put(
+        "visibility_check",
+        visible ? "confirmed" : status == 404 || status == 410 ? "mismatch" : "pending");
+    result.put("verified", visible);
+    return message(
+        result,
+        visible
+            ? "Publikation, Portalstand und Downloads bestätigt."
+            : "Öffentliche Sichtbarkeit noch nicht bestätigt; bestehende Lieferung nachprüfen.");
+  }
+
+  String portalPage(Map<String, Object> sheet) {
     String suffix = "/datasets/" + encode(Json.required(sheet, "identifier"));
     if (Objects.equals(sheet.get("kind"), "series")) {
       suffix = "/series/" + encode(Json.required(sheet, "identifier"));
       if (sheet.get("selected_issue") != null)
         suffix += "/issues/" + encode(sheet.get("selected_issue").toString());
     }
-    String url = Json.required(env, "portal_url") + suffix;
-    result.put("portal_url", url);
-    boolean visible = publicGet(url).statusCode() == 200;
-    result.put("visible", visible);
-    result.put("verified", visible);
-    return message(
-        result,
-        visible
-            ? "Publikation, Portalstand und Downloads bestätigt."
-            : "Thema noch nicht im Portal sichtbar.");
+    return Json.required(env, "portal_url") + suffix;
+  }
+
+  int pageStatus(String url) {
+    try {
+      return publicGet(url).statusCode();
+    } catch (Problem error) {
+      return Json.number(error.details, "status", 0);
+    }
   }
 
   static Map<String, Object> message(Map<String, Object> r, String message) {

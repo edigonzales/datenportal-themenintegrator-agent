@@ -99,6 +99,43 @@ class McpResultsTest {
   }
 
   @Test
+  void hugeStatusPreservesDeliveryAndDecisionDiagnostics() {
+    var item =
+        Json.map(
+            "phase",
+            "delivery_submitting",
+            "action",
+            "delivery",
+            "generation",
+            2,
+            "environment",
+            "local",
+            "reference",
+            Json.map("job", "upload", "queue", "123", "build_url", "http://fixture/14/"),
+            "next_operation",
+            "reconcile",
+            "verification",
+            Json.map("sheet", "x".repeat(90000)));
+    var source =
+        Json.map(
+            "external_runs",
+            Json.map("deliveries", Json.map("local", item)),
+            "decision_blockers",
+            List.of(Json.map("field", "access_level", "required_action", "ask_user")));
+    for (int i = 0; i < 100; i++) source.put("noise" + i, "x".repeat(900));
+    var result = Json.obj(McpResults.present(settings(), "status", source));
+    var diagnostics = Json.obj(result.get("diagnostics"));
+    var delivery =
+        Json.obj(
+            Json.obj(Json.obj(diagnostics.get("external_runs")).get("deliveries")).get("local"));
+    assertEquals("reconcile", delivery.get("next_operation"));
+    assertEquals(item.get("reference"), delivery.get("reference"));
+    assertEquals(2, delivery.get("generation"));
+    assertEquals(source.get("decision_blockers"), diagnostics.get("decision_blockers"));
+    assertTrue(Json.pretty(result).length() < McpResults.LIMIT);
+  }
+
+  @Test
   void schemasAreNeverShortened() {
     var schema = Json.map("description", "x".repeat(15000));
     assertSame(schema, McpResults.present(settings(), "operation_schema", schema));

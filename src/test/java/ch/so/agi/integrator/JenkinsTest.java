@@ -16,6 +16,7 @@ class JenkinsTest {
   String base, metadata, catalog;
   int uploads, seedStarts;
   boolean upload404, seedRunning;
+  int portalStatus = 200;
   String seedResult = "SUCCESS";
   boolean reload = true, missingLocation = false;
   boolean requireSessionCookie;
@@ -133,8 +134,10 @@ class JenkinsTest {
           "{\"publication\":\"accepted\",\"releaseId\":\"fixture-release\",\"reload\":\"failed\",\"opendata\":{\"status\":\"accepted\"}}";
     else if (path.endsWith("/file.csv")) body = "Jahr\n2025\n";
     else if (path.contains("/downloads/")) body = "fixture bytes";
-    else if (path.contains("/datasets/")) body = "<html>fixture</html>";
-    else {
+    else if (path.contains("/datasets/")) {
+      body = "<html>fixture</html>";
+      status = portalStatus;
+    } else {
       status = 404;
       body = "missing";
     }
@@ -159,6 +162,8 @@ class JenkinsTest {
                   Json.map(
                       "phase",
                       "seeding",
+                      "fingerprint",
+                      f.workflow.fingerprint(r, "metadata"),
                       "seed",
                       Json.map("queue_url", base + "/jenkins/queue/item/seed/"))));
           return null;
@@ -306,6 +311,8 @@ class JenkinsTest {
                   Json.map(
                       "phase",
                       "seeding",
+                      "fingerprint",
+                      f.workflow.fingerprint(r, "metadata"),
                       "seed",
                       Json.map("queue_url", base + "/jenkins/queue/item/seed/")));
           return null;
@@ -334,6 +341,8 @@ class JenkinsTest {
                   Json.map(
                       "phase",
                       "seeding",
+                      "fingerprint",
+                      f.workflow.fingerprint(r, "metadata"),
                       "seed",
                       Json.map("queue_url", base + "/jenkins/queue/item/seed/")));
           return null;
@@ -398,7 +407,24 @@ class JenkinsTest {
     assertEquals(0, uploads);
     seedRunning = false;
     assertEquals("running", f.call("deliver", "run_id", id).get("phase"));
+    assertEquals(
+        "complete",
+        Json.obj(Json.obj(f.call("status", "run_id", id).get("seeds")).get("local")).get("phase"));
     assertEquals(0, seedStarts);
+  }
+
+  @Test
+  void completedStandaloneSeedIsReused() throws Exception {
+    var f = workflow();
+    String id = f.metadataOnly();
+    f.approveAll(id);
+    f.call("seed", "run_id", id, "environment", "local");
+    f.call("seed", "run_id", id, "environment", "local");
+    f.call("deliver", "run_id", id);
+    f.call("deliver", "run_id", id);
+    assertEquals("complete", f.call("deliver", "run_id", id).get("phase"));
+    assertEquals(1, seedStarts);
+    assertEquals(1, uploads);
   }
 
   @Test
@@ -505,6 +531,108 @@ class JenkinsTest {
     assertEquals(1, seedStarts);
     assertEquals(1, uploads);
     assertEquals(1, Json.list(f.call("status", "run_id", id).get("seed_history")).size());
+  }
+
+  @Test
+  void acceptedDraftCanBeCorrectedInOneIdempotentFollowup() throws Exception {
+    var f = workflow();
+    String id = f.metadataOnly();
+    Path draft = temp.resolve("draft.xtf");
+    Json.write(draft, metadata.replace(">published<", ">draft<"));
+    f.call("attach", "run_id", id, "role", "metadata", "path", draft.toString());
+    f.approveAll(id);
+    metadata = Json.contents(draft);
+    catalog =
+        "<catalog><Dataset><identifier>ch.so.grundwasser.qualitaet</identifier><publicationStatus>draft</publicationStatus></Dataset></catalog>";
+    f.call("deliver", "run_id", id);
+    f.call("deliver", "run_id", id);
+    var failed = f.call("deliver", "run_id", id);
+    assertEquals("accepted", failed.get("publication"));
+    assertEquals("failed", failed.get("phase"));
+    f.error(
+        "followup_unchanged",
+        () -> f.call("prepare_followup_delivery", "run_id", id, "environment", "local"));
+    f.call(
+        "attach",
+        "run_id",
+        id,
+        "role",
+        "metadata",
+        "path",
+        Fixtures.FIXTURES.resolve("dataset.xtf").toString());
+    f.error(
+        "approval_required",
+        () -> f.call("prepare_followup_delivery", "run_id", id, "environment", "local"));
+    f.approveAll(id);
+    assertEquals(
+        "prepare_followup_delivery", f.call("deliver", "run_id", id).get("next_operation"));
+    assertEquals(
+        false,
+        f.call("verify_delivery", "run_id", id, "environment", "local")
+            .get("current_candidate_delivered"));
+    f.error("retry_unsafe", () -> f.call("retry_delivery", "run_id", id, "environment", "local"));
+    var prepared = f.call("prepare_followup_delivery", "run_id", id, "environment", "local");
+    assertEquals(2, prepared.get("generation"));
+    assertEquals(
+        prepared, f.call("prepare_followup_delivery", "run_id", id, "environment", "local"));
+    assertEquals(1, uploads);
+    assertEquals(1, Json.list(f.call("status", "run_id", id).get("delivery_history")).size());
+    metadata = Json.contents(Fixtures.FIXTURES.resolve("dataset.xtf"));
+    seedResult = "FAILURE";
+    f.call("deliver", "run_id", id);
+    assertEquals("failed", f.call("deliver", "run_id", id).get("phase"));
+    seedResult = "SUCCESS";
+    adopt(f, id);
+    assertEquals(2, f.call("deliver", "run_id", id).get("generation"));
+    f.call("deliver", "run_id", id);
+    assertTrue(multipart.contains("generation=2"));
+    assertEquals("complete", f.call("deliver", "run_id", id).get("phase"));
+    f.call("deliver", "run_id", id);
+    assertEquals(2, uploads);
+    assertEquals(2, seedStarts);
+  }
+
+  @Test
+  void draftPresenceAndHttpFailureAreNotVisibilityProof() {
+    metadata = metadata.replace(">published<", ">draft<");
+    Path path = temp.resolve("draft.xtf");
+    Json.write(path, metadata);
+    var sheet = Xml.describe(path, "ch.so.grundwasser.qualitaet", null);
+    catalog =
+        "<catalog><Dataset><identifier>ch.so.grundwasser.qualitaet</identifier><publicationStatus>draft</publicationStatus></Dataset></catalog>";
+    var report =
+        Json.map(
+            "publication",
+            "accepted",
+            "releaseId",
+            "fixture-release",
+            "opendata",
+            Json.map("status", "accepted"));
+    portalStatus = 503;
+    var pending = client().verify(report, sheet, null);
+    assertEquals(false, pending.get("verified"));
+    assertNull(pending.get("visible"));
+    assertEquals("pending", pending.get("visibility_check"));
+    portalStatus = 404;
+    var hidden = client().verify(report, sheet, null);
+    assertEquals(true, hidden.get("verified"));
+    assertEquals(false, hidden.get("visible"));
+    assertEquals(true, hidden.get("catalog_present"));
+  }
+
+  @Test
+  void unknownUploadCannotBecomeFollowup() throws Exception {
+    var f = workflow();
+    String id = f.metadataOnly();
+    f.approveAll(id);
+    upload404 = true;
+    f.call("deliver", "run_id", id);
+    assertThrows(Problem.class, () -> f.call("deliver", "run_id", id));
+    f.error(
+        "followup_unsafe",
+        () -> f.call("prepare_followup_delivery", "run_id", id, "environment", "local"));
+    f.error("seed_adoption_unsafe", () -> adopt(f, id));
+    assertEquals(1, uploads);
   }
 
   @Test

@@ -144,6 +144,8 @@ public final class Workflow implements AutoCloseable {
                   new Deliveries(this).verify(r, Json.required(args, "environment"));
               case "retry_delivery" ->
                   new Deliveries(this).retry(r, Json.required(args, "environment"));
+              case "prepare_followup_delivery" ->
+                  new Deliveries(this).followup(r, Json.required(args, "environment"));
               default -> throw new Problem("unknown_operation", "Operation ist nicht bekannt.");
             };
           } catch (Problem error) {
@@ -153,6 +155,8 @@ public final class Workflow implements AutoCloseable {
                     "adopt_seed",
                     "reconcile",
                     "reconcile_seed",
+                    "prepare_followup_delivery",
+                    "verify_delivery",
                     "retry_delivery")
                 .contains(operation)) {
               error.details.put("external_runs", Deliveries.states(r));
@@ -205,8 +209,10 @@ public final class Workflow implements AutoCloseable {
             store.attach(run, Path.of(Json.required(a, "data_path")), "original_data");
             store.attach(run, Path.of(Json.required(a, "data_path")), "data");
           }
-          if (a.containsKey("metadata_path"))
+          if (a.containsKey("metadata_path")) {
             store.attach(run, Path.of(Json.required(a, "metadata_path")), "metadata");
+            MetadataDecisions.source(run);
+          }
           return status(run);
         });
   }
@@ -329,6 +335,8 @@ public final class Workflow implements AutoCloseable {
         Path p = store.file(r, role);
         files.put(role, Json.sha(p));
       }
+    if (!gate.equals("data") && r.containsKey("decision_source"))
+      files.put("decision_source", Json.obj(r.get("decision_source")).get("sha256"));
     var changes = Json.map();
     if (!gate.equals("data"))
       Json.obj(r.get("changes"))
@@ -499,6 +507,7 @@ public final class Workflow implements AutoCloseable {
   }
 
   public void require(Map<String, Object> r, String gate) {
+    if (gate.equals("metadata") || gate.startsWith("publish:")) MetadataDecisions.require(this, r);
     if (!gate.equals("data")
         && !Set.of("organization", "office").contains(Json.str(r, "workflow", "topic")))
       exportRequired(r);
@@ -578,6 +587,23 @@ public final class Workflow implements AutoCloseable {
     }
     result.put("current_approvals", valid);
     result.put("external_runs", Deliveries.states(r));
+    var externalDeliveries = Json.obj(Json.obj(result.get("external_runs")).get("deliveries"));
+    externalDeliveries.replaceAll(
+        (name, item) -> {
+          try {
+            return new Deliveries(this).current(r, item);
+          } catch (Problem e) {
+            return item;
+          }
+        });
+    if (Json.str(r, "workflow", "topic").equals("topic")) {
+      try {
+        result.put("decision_blockers", MetadataDecisions.blockers(this, r, describe(r)));
+      } catch (Problem e) {
+        result.put(
+            "decision_blockers", List.of(Json.map("code", e.code, "message", e.getMessage())));
+      }
+    }
     if (r.get("identifier") != null)
       result.put("metadata_source", MetadataArtifacts.source(this, r));
     result.put("check_states", CheckStates.overview(this, r));
@@ -616,6 +642,7 @@ public final class Workflow implements AutoCloseable {
 
     if (role.equals("data")) store.attach(r, Path.of(Json.required(a, "path")), "original_data");
     if (role.equals("metadata")) {
+      MetadataDecisions.source(r);
       r.remove("draft");
       r.remove("draft_base");
       r.remove("exported_revision");
@@ -790,6 +817,7 @@ public final class Workflow implements AutoCloseable {
     Path data = store.file(r, "data");
     var errors = new ArrayList<Object>();
     var warnings = new ArrayList<Object>();
+    errors.addAll(MetadataDecisions.blockers(this, r, sheet));
     if (sheet.get("kind").equals("series") && data != null && r.get("issue") == null)
       errors.add(
           Json.map(
@@ -895,7 +923,9 @@ public final class Workflow implements AutoCloseable {
             "changes",
             r.get("changes"),
             "provenance",
-            r.get("provenance"));
+            r.get("provenance"),
+            "decision_source",
+            r.getOrDefault("decision_source", Json.obj(r.get("files")).get("accepted_metadata")));
     report.put("diagnostic_history", r.get("diagnostic_history"));
     report.put("fingerprint", fingerprint(r, "metadata"));
     CheckStates.record(this, r, "metadata", report, manifest);
@@ -913,6 +943,7 @@ public final class Workflow implements AutoCloseable {
 
   private Object approve(Map<String, Object> r, Map<String, Object> a) {
     String gate = Json.required(a, "gate");
+    if (gate.equals("metadata") || gate.startsWith("publish:")) MetadataDecisions.require(this, r);
     if (Offices.standalone(r) && !gate.equals("office")
         || !Offices.standalone(r) && gate.equals("office"))
       throw new Problem(

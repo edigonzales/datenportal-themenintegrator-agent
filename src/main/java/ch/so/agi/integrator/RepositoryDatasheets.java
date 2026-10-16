@@ -113,6 +113,7 @@ final class RepositoryDatasheets {
       // Check topic/issue before selecting and preserve the exact source bytes.
       Xml.describe(path, Json.required(r, "identifier"), Json.str(r, "issue", null));
       var saved = w.store.attach(r, path, "metadata");
+      MetadataDecisions.source(r);
       if (!Objects.equals(selected.get("sha256"), saved.get("sha256"))
           || !Objects.equals(saved.get("sha256"), Json.sha(Path.of(Json.required(saved, "path")))))
         throw new Problem(

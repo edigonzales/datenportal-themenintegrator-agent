@@ -51,3 +51,27 @@ zu `upsert_issue`, nicht auf die Serienebene.
 `create_datasheet` und `import_xtf` sind nur ohne bestehenden Entwurf zulässig.
 Bei vorhandenem Entwurf lesen, bearbeiten oder ausdrücklich `restore` verwenden.
 Keine zweite Erstellung als Fehlerumgehung versuchen.
+
+## Zugangslevel und Publikationsstatus belegen
+
+`access_level` (`accessLevel`) und `publication_status` (`publicationStatus`)
+sind unabhängige fachliche Entscheidungen. Fehlt eine eindeutige Angabe in
+Auftrag, XLSX oder übernommenem Datenblatt, zwingend den Menschen fragen.
+«Liefern» ist keine Vorgabe für `published`; aus öffentlichem Inhalt folgt
+nicht automatisch `open`. Widersprüche ebenfalls klären, keine Defaults setzen.
+
+`provenance(run_id, entries)` ersetzt die bisherige Herkunftsliste. Für diese
+beiden Felder enthalten Einträge `field`, `value`, `origin` und `source`.
+Bei `origin=user` zusätzlich `human_statement` mit der tatsächlichen Antwort
+angeben. Bei `origin=xlsx` zusätzlich `sheet` und `cell` (z. B. `B12`) der
+angehängten unveränderten Quelle angeben; der gespeicherte Zelltext muss dem
+Wert entsprechen. Andere Formulierungen/Zuordnungen vom Menschen bestätigen
+lassen. `origin=accepted` wird gegen das übernommene Datenblatt geprüft.
+`origin=llm` genügt nicht. Ein allgemeines Freigabe-OK ersetzt keine Fachantwort.
+
+Unverändert übernommene Angaben aus gesicherten Eingangs-/Repository-Datenblättern
+oder dem angenommenen Vergleichsstand werden direkt nachgewiesen. Änderungen
+benötigen einen passenden neuen Nachweis. Bestehende Vorgänge ohne gespeicherten
+Nachweis erhalten keine erfundene Herkunft: vor neuer Freigabe/Lieferung klären.
+`status.decision_blockers` nennt fehlende Entscheidungen. Entwürfe bleiben zur
+Bearbeitung möglich; Freigabe und Lieferung sind bis zur Klärung gesperrt.

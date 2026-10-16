@@ -18,6 +18,14 @@ final class McpResults {
             ? Json.obj(summarize(result, 0))
             : Json.map("result", summarize(result, 0));
     summary.put("response_compacted", true);
+    if (result instanceof Map<?, ?> raw) {
+      var diagnostics = Json.map();
+      for (String key : List.of("external_runs", "external_state", "decision_blockers"))
+        if (raw.containsKey(key)) diagnostics.put(key, diagnostic(raw.get(key)));
+      for (String key : DIAGNOSTIC_FIELDS)
+        if (raw.containsKey(key)) diagnostics.put(key, diagnostic(raw.get(key)));
+      if (!diagnostics.isEmpty()) summary.put("diagnostics", diagnostics);
+    }
     summary.put("full_result_path", artifact.toString());
     summary.put("full_result_sha256", Json.sha(artifact));
     summary.put(
@@ -28,6 +36,7 @@ final class McpResults {
       for (String key :
           List.of(
               "error",
+              "diagnostics",
               "message",
               "code",
               "run_id",
@@ -71,11 +80,56 @@ final class McpResults {
     if (Json.pretty(summary).length() > LIMIT) {
       for (String key : new ArrayList<>(summary.keySet())) {
         Object value = summary.get(key);
-        if (Json.pretty(value).length() > 1500)
+        if (!key.equals("diagnostics") && Json.pretty(value).length() > 1500)
           summary.put(key, Json.map("omitted", true, "reason", "Siehe full_result_path"));
       }
     }
     return summary;
+  }
+
+  static final Set<String> DIAGNOSTIC_FIELDS =
+      Set.of(
+          "action",
+          "environment",
+          "generation",
+          "phase",
+          "reference",
+          "submission_target",
+          "job",
+          "queue",
+          "queue_url",
+          "build_url",
+          "build_number",
+          "publication",
+          "verified",
+          "visible",
+          "visibility_check",
+          "publication_status",
+          "portal_http_status",
+          "current_candidate_delivered",
+          "next_operation",
+          "alternative_operation",
+          "code",
+          "field",
+          "value",
+          "required_action",
+          "message");
+
+  static Object diagnostic(Object value) {
+    if (value instanceof Map<?, ?> map) {
+      var result = Json.map();
+      map.forEach(
+          (key, item) -> {
+            if (DIAGNOSTIC_FIELDS.contains(key.toString())
+                || Set.of("deliveries", "seeds").contains(key.toString())
+                || (item instanceof Map<?, ?> child
+                    && (child.containsKey("phase") || child.containsKey("action"))))
+              result.put(key.toString(), diagnostic(item));
+          });
+      return result;
+    }
+    if (value instanceof List<?> list) return list.stream().map(McpResults::diagnostic).toList();
+    return value;
   }
 
   static Object summarize(Object value, int depth) {

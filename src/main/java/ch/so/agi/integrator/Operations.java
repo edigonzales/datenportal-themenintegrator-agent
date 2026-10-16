@@ -49,7 +49,16 @@ public final class Operations {
         "run_id!");
     add("baseline", "Angenommenen Metadatenstand laden.", "run_id!");
     add("analyze", "CSV vollständig prüfen und HTML-Vorschau schreiben.", "run_id!");
-    add("provenance", "Herkunft fachlicher Angaben festhalten.", "run_id!", "entries:array!");
+    add(
+        "provenance",
+        "Herkunft fachlicher Angaben festhalten. access_level und publication_status benötigen value, origin und source; user zusätzlich human_statement der tatsächlichen Antwort, xlsx zusätzlich sheet und cell der unveränderten Quelle. Fehlende oder widersprüchliche Angaben zwingend erfragen; llm ist kein Nachweis. entries ersetzt die bisherigen Einträge.",
+        "run_id!",
+        "entries:array!");
+    add(
+        "prepare_followup_delivery",
+        "Geänderten, geprüften und freigegebenen Stand nach eindeutig angenommener abgeschlossener Lieferung als neue Generation vorbereiten. Kein Seed/Upload; alte Lieferung bleibt in der Historie. Danach Publikationsplan für INT/PROD neu freigeben und deliver verwenden.",
+        "run_id!",
+        "environment!");
     add(
         "xlsx",
         "XLSX-Koordinaten und gespeicherte Formelwerte lesen.",
@@ -195,6 +204,23 @@ public final class Operations {
 
   private static void add(String name, String description, String... arguments) {
     var op = definition(description, arguments);
+    if (name.equals("provenance")) {
+      var entry =
+          definition(
+                  "Wertbezogene Herkunft; human_statement nur für tatsächliche Antworten.",
+                  "field!",
+                  "origin!",
+                  "source!",
+                  "value",
+                  "human_statement",
+                  "sheet",
+                  "cell")
+              .schema();
+      entry.put("additionalProperties", true);
+      Json.obj(Json.obj(entry.get("properties")).get("origin"))
+          .put("enum", List.of("user", "xlsx", "accepted", "llm"));
+      Json.obj(Json.obj(op.schema().get("properties")).get("entries")).put("items", entry);
+    }
     if (name.equals("metadata"))
       Json.obj(Json.obj(op.schema().get("properties")).get("operation"))
           .put("enum", MetadataContracts.NAMES);

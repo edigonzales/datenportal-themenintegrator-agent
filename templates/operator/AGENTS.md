@@ -8,6 +8,8 @@ Dieser Arbeitsbereich enthält ein installiertes Betriebspaket. Verwende seine
 - [Eigenständige Organisation](skills/datenportal-organisation/SKILL.md)
 
 Lies die benötigten Referenzen mit `datenportal_workspace.read_file`.
+Die Pfade `skills/…` und `.agents/skills/…` funktionieren relativ zum
+Arbeitsbereich oder absolut; Referenzpfade aus dem Skill entsprechend auflösen.
 Unbekannte Integrator-Verträge mit `datenportal_integrator.operation_schema`
 abfragen. Fehlende Fachangaben gezielt erfragen. Implementierungsquellen,
 Entwicklungscheckouts und Laufzeitprogramme weder lesen noch durchsuchen.
