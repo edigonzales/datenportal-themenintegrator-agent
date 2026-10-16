@@ -47,7 +47,9 @@ final class ReviewHtml {
           Map.entry("organization", "Organisation"),
           Map.entry("identity", "Modellidentität"),
           Map.entry("mapping", "Spaltenzuordnung"),
-          Map.entry("range_proposal", "Wertebereichsvorschlag des Agenten"),
+          Map.entry("range_proposal", "Ursprünglicher Wertebereichsvorschlag des Agenten"),
+          Map.entry("origin", "Herkunft"),
+          Map.entry("confirmation_source", "Grundlage der Bestätigung"),
           Map.entry("type_spec", "Vorgeschlagener Typ und Wertebereich"),
           Map.entry("precision", "Nachkommastellen"),
           Map.entry("reason", "Begründung"),
@@ -213,6 +215,14 @@ final class ReviewHtml {
   private static String modelSummary(Object data) {
     if (!(data instanceof Map<?, ?> report)) return "";
     var out = new StringBuilder();
+    if (report.containsKey("model_approval_current"))
+      out.append("<p>Aktueller Modellstand freigegeben: ")
+          .append(Boolean.TRUE.equals(report.get("model_approval_current")) ? "Ja" : "Nein")
+          .append("</p>");
+    if (report.containsKey("numeric_rule_confirmations"))
+      out.append(
+              "<h3>Bestätigung numerischer Fachregeln</h3><p>Die folgenden Angaben zeigen den effektiven Bestätigungsstatus. Ursprüngliche Vorschlagsdaten dokumentieren die Herkunft; ihre Bestätigungsfelder sind historisch. Die Freigabe des aktuellen Modellstands bleibt separat erforderlich.</p>")
+          .append(value(report.get("numeric_rule_confirmations"), "", 0));
     if (report.get("model_text") instanceof String text)
       out.append("<h3>INTERLIS-Modell</h3>").append(ReportCode.block(text, "INTERLIS"));
     if (report.containsKey("current_data_observations")) {

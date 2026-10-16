@@ -208,12 +208,28 @@ public final class Models {
         questions.add(column + ": fachliche Beschreibung fehlt.");
       if (!Json.str(a, "code_list", "").isBlank() && !confirmation.containsKey("type_spec"))
         questions.add(column + ": Codeliste ist belegt, aber Werte/Domain noch nicht bestätigt.");
+      var explicitConfirmation = confirmation;
+      var acceptedRule = ModelRuleApprovals.find(r, contract(sheet), column);
+      if (!acceptedRule.isEmpty()) {
+        var acceptedSpec = Json.obj(acceptedRule.get("type_spec"));
+        if (confirmation.containsKey("type_spec")
+            && !acceptedSpec.equals(confirmation.get("type_spec")))
+          throw new Problem(
+              "confirmed_semantics_conflict",
+              "Modellabnahme bestätigt diese Typsemantik; Änderung fachlich klären.",
+              "column",
+              column);
+        confirmation = new LinkedHashMap<>(confirmation);
+        confirmation.put("type_spec", acceptedSpec);
+        confirmation.put("confirmed", true);
+      }
       var typeSpec = Json.obj(confirmation.get("type_spec"));
       if (Json.bool(confirmation, "confirmed", false)) {
         String conflict = NumericModelContract.observationConflict(typeSpec, observed, type);
         if (conflict != null) questions.add(column + ": " + conflict);
       }
-      Map<String, Object> proposal = Json.map();
+      Map<String, Object> proposal =
+          new LinkedHashMap<>(Json.obj(acceptedRule.get("range_proposal")));
 
       if (proposals.containsKey(column)) {
         proposal = ModelRanges.proposal(column, Json.obj(proposals.get(column)), observed, type);
@@ -280,7 +296,7 @@ public final class Models {
               "range_proposal",
               proposal,
               "confirmed",
-              confirmation,
+              explicitConfirmation,
               "origin",
               "Datenblatt; Beobachtungen sind Vorschläge, keine fachlichen Wertebereiche/Schlüssel."));
     }
@@ -531,6 +547,8 @@ public final class Models {
     return Json.map(
         "status",
         result.get("status"),
+        "numeric_rule_confirmations",
+        ModelRuleApprovals.effective(r),
         "candidate",
         !authoringValid(result),
         "diagnostic_history",
@@ -550,6 +568,8 @@ public final class Models {
             Reports.Kind.MODEL_CANDIDATE,
             Json.str(r, "identifier", null),
             Json.map(
+                "numeric_rule_confirmations",
+                ModelRuleApprovals.effective(r),
                 "model_text",
                 text,
                 "model",
@@ -995,6 +1015,8 @@ public final class Models {
                   scope));
       }
     }
+    report.put("model_approval_current", ModelRuleApprovals.current(w, r));
+    report.put("numeric_rule_confirmations", ModelRuleApprovals.effective(r));
     report.put("scope", scope);
     report.put("approvable", scope.equals("integration") && Json.bool(report, "valid", false));
     report.put("diagnostic_history", r.get("diagnostic_history"));

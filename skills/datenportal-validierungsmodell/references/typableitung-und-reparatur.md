@@ -4,7 +4,7 @@ Vor der ersten Ableitung lesen; bei Fehlprüfungen den Reparaturabschnitt erneut
 
 CSV und konkrete Datenblatt-XTF benötigen denselben Vertrag. Modellname, absolute AT-URI und ISO-Version klären. Standard für neue CSV-Validierungsmodelle: INTERLIS 2.4, Profil `SO-DATA`, Zweck `VALIDATION`, zunächst eine flache Klasse. Modellname endet auf `_YYYYMMDD`, passend zum gültigen VERSION-Datum: `SO_Messwerte_20261010`, `VERSION "2026-10-10"`, Themen-Datei `SO_Messwerte_20261010.ili`. Keine Kommentare, `iliDoc` oder beschreibenden Metaattribute in dieser `.ili`; Kontakte, Titel und Kurzbeschreibung sind dafür keine zusätzlichen Pflichtangaben. Beschreibungen und Einheiten im Datenblatt erhalten. Zulässige Profile sind ausschliesslich `CORE`, `SO-GIS` und `SO-DATA`. Der frühere Wert `SO` wird mit `model_profile` zurückgewiesen; nicht still ersetzen. Gespeichertes Profil vorhandener Vorgänge beibehalten; eine ausdrücklich beauftragte Umstellung erzeugt einen neuen Kandidaten und verlangt erneute Prüfung/Freigabe. Kommentare vorhandener Modelle mit dem typisierten Batch `REMOVE_COMMENTS` entfernen. Gemeinsames Serienmodell nur bei gleichen Verträgen.
 
-`derive_model` verbindet bestätigte Datenblattangaben und gekennzeichnete Beobachtungen. Für numerische Spalten vollständige CSV-Statistik, Beschreibung und Einheit auswerten und unter `range_proposals.<spalte>` eine `type_spec` mit `baseType.kind=NUM_RANGE`, `min`, `max`, eine konkrete `reason` und `negative_values_possible` vorschlagen. Sinnvollen Spielraum für künftige Lieferungen begründen; keine pauschalen 64-Bit-Grenzen. Positive Stichproben allein belegen keine Nichtnegativität. Bei fehlender Fachgrundlage oder Widersprüchen gezielt nachfragen. Vorschläge sind Agentenschätzungen: niemals dafür `confirmations.confirmed=true` setzen. Vorhandene bestätigte Spezifikationen haben Vorrang. Beobachtungen begründen keine geschlossenen Codelisten, Schlüssel oder Pflichtigkeit. Zusätzliche Domains/Constraints nur mit bestätigter Semantik. Im Modellreview beobachtete und vorgeschlagene Grenzen, Genauigkeit und Begründung zusammen zeigen; die reguläre Modellfreigabe bestätigt den Kandidaten.
+`derive_model` verbindet bestätigte Datenblattangaben und gekennzeichnete Beobachtungen. Für numerische Spalten vollständige CSV-Statistik, Beschreibung und Einheit auswerten und unter `range_proposals.<spalte>` eine `type_spec` mit `baseType.kind=NUM_RANGE`, `min`, `max`, eine konkrete `reason` und `negative_values_possible` vorschlagen. Sinnvollen Spielraum für künftige Lieferungen begründen; keine pauschalen 64-Bit-Grenzen. Positive Stichproben allein belegen keine Nichtnegativität. Bei fehlender Fachgrundlage oder Widersprüchen gezielt nachfragen. Vor der menschlichen Modellabnahme sind Vorschläge Agentenschätzungen: dafür nicht eigenmächtig `confirmations.confirmed=true` setzen. Die Modellabnahme erfasst ihre Bestätigung über den Integrator. Vorhandene bestätigte Spezifikationen haben Vorrang. Beobachtungen begründen keine geschlossenen Codelisten, Schlüssel oder Pflichtigkeit. Zusätzliche Domains/Constraints nur mit bestätigter Semantik. Im Modellreview beobachtete und vorgeschlagene Grenzen, Genauigkeit und Begründung zusammen zeigen; die reguläre Modellfreigabe bestätigt den Kandidaten.
 
 Der Adapter nutzt `authorIliModel` beziehungsweise `applyIliModelChanges`. Mitgelieferte Reviews/Compiler-/Constraint-Nachweise verwenden; nicht reflexartig weitere Low-Level-Prüfungen starten. Kandidaten mit Fehlern oder unvollständigen Proofs nicht übernehmen. Manuelle Reviewpunkte zeigen. Separat veränderte Quellen müssen neu geprüft werden.
 
@@ -69,8 +69,8 @@ lesen. Es liefert das vollständige `derive_model`-Argumentobjekt mit dem vom
 konfigurierten INTERLIS-MCP übernommenen `changes`-Vertrag und allen referenzierten
 Definitionen. Keine Schemaerkundung durch `{}`, `NOOP` oder unvollständige
 Änderungsaufrufe. Gespeicherte Zahlenvorschläge werden bei unverändertem Vertrag
-wiederverwendet und an den aktuellen Beobachtungen geprüft. Sie bleiben
-`agent_estimate`, nicht menschlich bestätigte Regeln.
+wiederverwendet und an den aktuellen Beobachtungen geprüft. Ihre Herkunft bleibt `agent_estimate`. Nach expliziter Modellabnahme gelten die
+enthaltenen Grenzen und Genauigkeiten als bestätigte Fachregeln.
 
 Beispiel für das Argument `changes` nach ausdrücklich bestätigter BFS-Eindeutigkeit
 (Modell-/Klassenname an den vorhandenen Kandidaten anpassen):
@@ -142,3 +142,19 @@ Soll/Ist prüfen und die Komponente reparieren lassen. Nicht wiederholt ableiten
 keine Diagnose-Dateivarianten und insbesondere nicht `0.00` durch `0.01` ersetzen.
 `model_component_upgrade_required` verlangt einen aktualisierten INTERLIS-MCP
 mit dem Dezimalstring-Vertrag. Keine verlustbehafteten Zahlen-Fallbacks verwenden.
+
+### Modellabnahme und numerische Fachregeln
+
+Die ausdrückliche Abnahme des gesamten vorgelegten Modells bestätigt auch seine
+Zahlenbereiche und Dezimalgenauigkeiten. Keine zusätzliche Einzelabnahme verlangen.
+Vor der Abnahme dürfen Agentenvorschläge nicht als menschliche Bestätigung erfasst
+werden. Danach nennt `numeric_rule_confirmations` den effektiven Status und den
+Freigabenachweis; `range_proposal.origin=agent_estimate` dokumentiert weiterhin die
+Herkunft. Historisches `range_proposal.confirmed=false` ist kein aktueller Freigabestatus.
+Unveränderte Regeln bleiben innerhalb des Vorgangs bei gleichem Datenblattvertrag
+bestätigt. Ein geänderter Modellstand benötigt trotzdem seine reguläre Freigabe.
+Widersprechende Grenzen oder Genauigkeiten fachlich klären, nicht automatisch lockern.
+Bestehende aktuelle Modellfreigaben werden beim nächsten schreibenden Schritt
+nachvollziehbar ergänzt; aus veralteten Freigaben wird keine Bestätigung abgeleitet.
+Im Abschluss beispielsweise schreiben: «Die Zahlenbereiche und Genauigkeiten wurden
+vom Agenten vorgeschlagen und mit der Modellabnahme bestätigt.»

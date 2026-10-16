@@ -88,10 +88,13 @@ class ModelRevalidationIntegrationTest {
       var initial = f.call("validate_model", "run_id", id);
       assertEquals(true, initial.get("valid"), Json.pretty(initial));
       f.approve(id, "model", initial);
+      var approvedRules = f.call("status", "run_id", id).get("numeric_rule_confirmations");
+      assertEquals(true, Json.obj(Json.list(approvedRules).getFirst()).get("confirmed"));
       Object originalSource = Json.obj(initial.get("model")).get("source_data_sha256");
       int before = calls.size();
       attach(f, id, "Jahr\n2026\n");
       var corrected = f.call("validate_model", "run_id", id);
+      assertEquals(approvedRules, corrected.get("numeric_rule_confirmations"));
       assertEquals(true, corrected.get("valid"), Json.pretty(corrected));
       assertEquals(before, calls.size());
       assertEquals(originalSource, Json.obj(corrected.get("model")).get("source_data_sha256"));

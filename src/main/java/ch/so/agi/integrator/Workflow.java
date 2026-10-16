@@ -82,13 +82,14 @@ public final class Workflow implements AutoCloseable {
       return store.read(
           Json.required(args, "run_id"),
           r -> new Repository(this).plan(r, Json.required(args, "environment")));
+    if (operation.equals("status")) return store.read(Json.required(args, "run_id"), this::status);
     return store.edit(
         Json.required(args, "run_id"),
         r -> {
           try {
             Offices.operation(r, operation);
+            if (!Set.of("xlsx", "approve").contains(operation)) ModelRuleApprovals.recover(this, r);
             return switch (operation) {
-              case "status" -> status(r);
               case "set_issue" -> IssueSelection.set(r, args);
               case "attach" -> attach(r, args);
               case "provenance" -> provenance(r, args);
@@ -586,6 +587,7 @@ public final class Workflow implements AutoCloseable {
       }
     }
     result.put("current_approvals", valid);
+    result.put("numeric_rule_confirmations", ModelRuleApprovals.view(this, r));
     result.put("external_runs", Deliveries.states(r));
     var externalDeliveries = Json.obj(Json.obj(result.get("external_runs")).get("deliveries"));
     externalDeliveries.replaceAll(
@@ -987,12 +989,23 @@ public final class Workflow implements AutoCloseable {
             "publication_review_required", "Konkreten Publikationsplan zuerst anzeigen.");
       requireLocalTest(r);
     }
+    if (!gate.equals("model")) ModelRuleApprovals.recover(this, r);
     var record = Json.map("at", Json.now(), "fingerprint", fp, "human_statement", statement);
     Json.obj(r.get("approvals")).put(gate, record);
+    if (gate.equals("model")) ModelRuleApprovals.record(this, r, record);
     Store.event(
         r, "approve", Json.map("gate", gate, "fingerprint", fp, "human_statement", statement));
     return Json.map(
-        "approved", gate, "at", record.get("at"), "fingerprint", fp, "human_statement", statement);
+        "approved",
+        gate,
+        "at",
+        record.get("at"),
+        "fingerprint",
+        fp,
+        "human_statement",
+        statement,
+        "numeric_rule_confirmations",
+        ModelRuleApprovals.effective(r));
   }
 
   public Map<String, Object> metadata(Map<String, Object> r, String op, Map<String, Object> input) {

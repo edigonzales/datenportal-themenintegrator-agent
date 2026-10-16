@@ -700,6 +700,151 @@ class ModelsTest {
   }
 
   @Test
+  void failedApprovalNeverConfirmsRules() {
+    f.call("derive_model", "run_id", id, "identity", identity(), "range_proposals", proposals());
+    prepareReference();
+    var report = f.call("validate_model", "run_id", id);
+    f.error(
+        "stale_review",
+        () ->
+            f.call(
+                "approve",
+                "run_id",
+                id,
+                "gate",
+                "model",
+                "fingerprint",
+                "stale",
+                "human_statement",
+                "Synthetische isolierte Testfreigabe"));
+    f.error(
+        "human_statement_missing",
+        () ->
+            f.call(
+                "approve",
+                "run_id",
+                id,
+                "gate",
+                "model",
+                "fingerprint",
+                report.get("fingerprint"),
+                "human_statement",
+                ""));
+    var state = f.call("status", "run_id", id);
+    assertTrue(Json.list(state.get("model_rule_approvals")).isEmpty());
+    assertEquals(
+        false,
+        Json.obj(Json.list(state.get("numeric_rule_confirmations")).getFirst()).get("confirmed"));
+  }
+
+  @Test
+  void newCsvCannotExpandAnApprovedRange() {
+    approveNumericModel();
+    Path csv = temp.resolve("outside.csv");
+    Json.write(csv, "Jahr\n2200\n");
+    f.call("attach", "run_id", id, "role", "data", "path", csv.toString());
+    f.approve(id, "data", f.call("analyze", "run_id", id));
+    var derived = f.call("derive_model", "run_id", id, "identity", identity());
+    assertEquals("NEEDS_INPUT", derived.get("status"));
+    assertTrue(Json.text(derived.get("open_questions")).contains("Bestätigter Bereich"));
+    var state = f.call("status", "run_id", id);
+    assertEquals(
+        true,
+        Json.obj(Json.list(state.get("numeric_rule_confirmations")).getFirst()).get("confirmed"));
+    assertEquals(false, Json.obj(state.get("current_approvals")).get("model"));
+  }
+
+  void approveNumericModel() {
+    f.call("derive_model", "run_id", id, "identity", identity(), "range_proposals", proposals());
+    prepareReference();
+    var checked = f.call("validate", "run_id", id);
+    f.approve(id, "metadata", checked);
+    f.approve(id, "model", Json.obj(checked.get("model")));
+  }
+
+  @Test
+  void modelApprovalConfirmsRulesWithoutChangingFingerprints() throws Exception {
+    approveNumericModel();
+    var state = f.call("status", "run_id", id);
+    assertEquals(true, Json.obj(state.get("current_approvals")).get("model"));
+    assertEquals(true, Json.obj(state.get("current_approvals")).get("metadata"));
+    var rule = Json.obj(Json.list(state.get("numeric_rule_confirmations")).getFirst());
+    assertEquals(true, rule.get("confirmed"));
+    assertEquals("agent_estimate", rule.get("origin"));
+    assertEquals("model_approval", rule.get("confirmation_source"));
+    var evidence = Json.obj(rule.get("evidence"));
+    assertNotNull(evidence.get("model_sha256"));
+    assertFalse(Json.str(Json.obj(evidence.get("approval")), "human_statement", "").isBlank());
+    var report = f.call("validate_model", "run_id", id);
+    assertEquals(state.get("numeric_rule_confirmations"), report.get("numeric_rule_confirmations"));
+    assertTrue(
+        Files.readString(Path.of(Json.required(report, "review_path")))
+            .contains("Bestätigung numerischer Fachregeln"));
+    assertEquals(
+        true, Json.obj(f.call("status", "run_id", id).get("current_approvals")).get("model"));
+  }
+
+  @Test
+  void approvedRulesSurviveIndependentChangeAndRejectConflicts() {
+    approveNumericModel();
+    reply.put("status", "APPLIED");
+    f.call(
+        "derive_model",
+        "run_id",
+        id,
+        "identity",
+        identity(),
+        "changes",
+        List.of(Json.map("operation", "REMOVE_COMMENTS")));
+    var state = f.call("status", "run_id", id);
+    assertEquals(false, Json.obj(state.get("current_approvals")).get("model"));
+    assertEquals(
+        true,
+        Json.obj(Json.list(state.get("numeric_rule_confirmations")).getFirst()).get("confirmed"));
+    var changed = proposals();
+    Json.obj(Json.obj(Json.obj(changed.get("Jahr")).get("type_spec")).get("baseType"))
+        .put("max", "2200");
+    f.error(
+        "range_proposal_conflict",
+        () ->
+            f.call(
+                "derive_model", "run_id", id, "identity", identity(), "range_proposals", changed));
+  }
+
+  @Test
+  void oldApprovalRecoveredOnlyOnWriteAndOnlyWhenCurrent() throws Exception {
+    approveNumericModel();
+    f.workflow.store.edit(id, r -> r.remove("model_rule_approvals"));
+    Path statePath = f.workflow.store.directory(id).resolve("state.json");
+    String before = Files.readString(statePath);
+    f.call("status", "run_id", id);
+    assertEquals(before, Files.readString(statePath));
+    f.call("validate_model", "run_id", id);
+    assertFalse(Json.list(f.call("status", "run_id", id).get("model_rule_approvals")).isEmpty());
+    f.workflow.store.edit(
+        id,
+        r -> {
+          r.remove("model_rule_approvals");
+          Json.obj(Json.obj(r.get("approvals")).get("model")).put("fingerprint", "stale");
+          return null;
+        });
+    f.call("validate_model", "run_id", id);
+    assertTrue(Json.list(f.call("status", "run_id", id).get("model_rule_approvals")).isEmpty());
+  }
+
+  @Test
+  void ruleMatchingIncludesContractAndDecimalPrecision() {
+    approveNumericModel();
+    var state = f.call("status", "run_id", id);
+    var model = Json.obj(state.get("model"));
+    var mapping = Json.obj(Json.list(model.get("mapping")).getFirst());
+    Json.obj(Json.obj(mapping.get("type_spec")).get("baseType")).put("max", "2100.0");
+    assertEquals(false, Json.obj(ModelRuleApprovals.effective(state).getFirst()).get("confirmed"));
+    model.put("contract_sha256", "different");
+    assertTrue(ModelRuleApprovals.find(state, "different", "Jahr").isEmpty());
+  }
+
+  @Test
   void proposalIsNotAConfirmationAndRechecksPreserveApproval() {
     var result =
         f.call(

@@ -2353,3 +2353,33 @@ Git-Repositories und synthetische Freigaben/GitHub-Antworten.
 323 Tests, keine Fehler und keine übersprungenen Fälle. Keine echte Lieferung,
 PR-Erstellung oder Installation zur Abnahme ausgelöst. Die Linux-/macOS-CI wird
 für den gepushten Fix separat kontrolliert.
+
+## Modellabnahme bestätigt numerische Fachregeln (16. Oktober 2026)
+
+Die Modellfreigabe speichert numerische Regelentscheidungen separat vom
+Modell-Fingerprint. Herkunft und historische Vorschlagsdaten bleiben erhalten;
+Status und neue Reviews zeigen den effektiven Bestätigungsnachweis. Unveränderte
+Regeln werden bei gleichem Datenblattvertrag weiterverwendet. Neue Modellstände
+benötigen weiterhin ihre Freigabe. Statusabfragen schreiben keine Zustandsdatei;
+aktuelle ältere Freigaben werden beim nächsten schreibenden Schritt ergänzt.
+
+Isolierte, ausdrücklich synthetische Freigaben in `ModelsTest` prüfen die
+Fingerprint-Stabilität beider Freigaben, Wiederaufnahme, Wiederverwendung,
+Konflikte, Dezimalgenauigkeit und Vertragsbindung, fehlgeschlagene Freigaben,
+CSV-Werte ausserhalb bestätigter Grenzen sowie die HTML-Darstellung.
+`ModelRevalidationIntegrationTest` prüft zusätzlich den Erhalt der Bestätigung
+mit den konfigurierten echten MCPs und Validatoren auf isolierten Testdaten.
+
+Ausgeführt: `./bin/datenportal-agent gradle test jar spotlessCheck` im gemeinsamen
+Gradle-Lauf mit dem Integrationstest; alle 329 regulären Tests bestanden ohne
+Auslassungen, JAR und Formatprüfung erfolgreich.
+
+Offen: `ModelRevalidationIntegrationTest` mit echten MCPs. Die expliziten
+Konfigurationen `build/model-contract-runtime/integration.toml` und
+`build/xtf-contract-integration/integration.toml` scheitern bereits am Abruf des
+vollständigen `applyIliModelChanges`-Vertrags (`ModelContracts.schema`), vor den
+neuen Assertions. `config/local.toml` ist nicht vorhanden. Deshalb besteht für
+diese Änderung kein erfolgreicher aktueller Nachweis mit echten MCPs; externe
+Komponenten und Konfigurationen wurden nicht verändert.
+Dies ist keine menschliche Fachabnahme eines realen Vorgangs und keine
+INT-/PROD-Publikationsabnahme.

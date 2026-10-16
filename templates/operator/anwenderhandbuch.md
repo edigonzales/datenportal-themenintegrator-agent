@@ -208,7 +208,7 @@ eine erfolgreiche Neuprüfung ersetzt keine menschliche Freigabe.
 
 Bei fachlicher Modelländerung zuerst das Änderungsschema lesen. Gespeicherte
 Zahlenvorschläge und bestätigte Typangaben werden bei unverändertem Vertrag
-wiederverwendet, Schätzungen bleiben unbestätigt. Eine neu beobachtete Eindeutigkeit
+wiederverwendet, Ohne Modellabnahme bleiben Schätzungen unbestätigt. Die explizite Modellabnahme bestätigt enthaltene Zahlenbereiche und Dezimalgenauigkeiten; unveränderte Regeln bleiben bei gleichem Datenblattvertrag bestätigt. Eine neu beobachtete Eindeutigkeit
 darf vorgeschlagen, aber erst nach menschlicher Bestätigung als UNIQUE eingebaut
 werden. Das vollständige Beispiel steht in der Modellskill-Referenz
 `skills/datenportal-validierungsmodell/references/typableitung-und-reparatur.md`.
@@ -256,3 +256,19 @@ endet. Dann den Datenlieferlauf klären, keinen Seed zuordnen oder blind erneut
 liefern. `status.external_runs` zeigt Aktion, Referenz und nächsten Schritt.
 Manuell veränderte oder entfernte Dateien nicht mit alten Kandidaten
 überschreiben; Korrekturen neu vorbereiten, prüfen und gegebenenfalls freigeben.
+
+### Modellabnahme und numerische Fachregeln
+
+Die ausdrückliche Abnahme des gesamten vorgelegten Modells bestätigt auch seine
+Zahlenbereiche und Dezimalgenauigkeiten. Keine zusätzliche Einzelabnahme verlangen.
+Vor der Abnahme dürfen Agentenvorschläge nicht als menschliche Bestätigung erfasst
+werden. Danach nennt `numeric_rule_confirmations` den effektiven Status und den
+Freigabenachweis; `range_proposal.origin=agent_estimate` dokumentiert weiterhin die
+Herkunft. Historisches `range_proposal.confirmed=false` ist kein aktueller Freigabestatus.
+Unveränderte Regeln bleiben innerhalb des Vorgangs bei gleichem Datenblattvertrag
+bestätigt. Ein geänderter Modellstand benötigt trotzdem seine reguläre Freigabe.
+Widersprechende Grenzen oder Genauigkeiten fachlich klären, nicht automatisch lockern.
+Bestehende aktuelle Modellfreigaben werden beim nächsten schreibenden Schritt
+nachvollziehbar ergänzt; aus veralteten Freigaben wird keine Bestätigung abgeleitet.
+Im Abschluss beispielsweise schreiben: «Die Zahlenbereiche und Genauigkeiten wurden
+vom Agenten vorgeschlagen und mit der Modellabnahme bestätigt.»

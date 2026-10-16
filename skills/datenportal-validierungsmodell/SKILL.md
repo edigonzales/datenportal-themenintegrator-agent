@@ -29,7 +29,7 @@ Nur ausdrücklich beauftragte Modellierung ausführen. Original-CSV und bestäti
 
 Nur CSV geändert: im selben Vorgang verifiziert übernehmen, `attach(role=data)`, `analyze` und echte aktuelle Datenfreigabe; danach das vorhandene Modell mit `validate_model(scope="integration")` erneut prüfen. Fehlt die vorbereitete Modellreferenz noch, zuerst `validate_model(scope="model")`, `prepare_model_reference`, dann die Integrationsprüfung. Kein `derive_model`, kein `NOOP` und kein leerer Änderungsbatch zur Neubindung. Neue CSV entwertet abhängige Freigaben; erneute Prüfung ist keine Freigabe. Wertebereichs- oder UNIQUE-Verletzungen fachlich klären, nicht automatisch das Modell lockern.
 
-Echte Modelländerung: vor dem Batch `operation_schema("derive_model.changes")` lesen. Die Auskunft enthält den vollständigen Integrator-Vertrag inklusive verschachtelter Definitionen. Unbekannte Felder nicht durch ausführende Probeaufrufe erraten; bei nicht verfügbarem Vertrag die Zugangs-/Versionsdiagnose klären. Bei unverändertem Datenblattvertrag übernimmt der Integrator gespeicherte Zahlenvorschläge und Bestätigungen; Schätzungen bleiben unbestätigt. Neue Eindeutigkeit ist nur ein Vorschlag, bis ein Mensch die Fachregel bestätigt. `allow_breaking=true` nur bei ausdrücklich beauftragter Zulassung potenziell brechender Änderungen.
+Echte Modelländerung: vor dem Batch `operation_schema("derive_model.changes")` lesen. Die Auskunft enthält den vollständigen Integrator-Vertrag inklusive verschachtelter Definitionen. Unbekannte Felder nicht durch ausführende Probeaufrufe erraten; bei nicht verfügbarem Vertrag die Zugangs-/Versionsdiagnose klären. Bei unverändertem Datenblattvertrag übernimmt der Integrator gespeicherte Zahlenvorschläge und Bestätigungen; Ohne Modellabnahme bleiben Schätzungen unbestätigt. Die explizite Modellabnahme bestätigt enthaltene Zahlenbereiche und Dezimalgenauigkeiten; unveränderte Regeln bleiben bei gleichem Datenblattvertrag bestätigt. Neue Eindeutigkeit ist nur ein Vorschlag, bis ein Mensch die Fachregel bestätigt. `allow_breaking=true` nur bei ausdrücklich beauftragter Zulassung potenziell brechender Änderungen.
 
 ## Review und Abschluss
 
@@ -64,3 +64,19 @@ und historische Dateistände anhand `status.check_states` und Manifest untersche
 Details stehen in der Referenz „Typableitung und Reparatur“.
 
 Bei unverändert wiederkehrendem Fehler die konkrete Diagnose als Blocker melden. Keine Dateinamenvarianten oder Diagnose-Kopien erzeugen. Identifier- und Typfehler am Datenblatt anhand des öffentlichen Schemas korrigieren, danach exportieren.
+
+### Modellabnahme und numerische Fachregeln
+
+Die ausdrückliche Abnahme des gesamten vorgelegten Modells bestätigt auch seine
+Zahlenbereiche und Dezimalgenauigkeiten. Keine zusätzliche Einzelabnahme verlangen.
+Vor der Abnahme dürfen Agentenvorschläge nicht als menschliche Bestätigung erfasst
+werden. Danach nennt `numeric_rule_confirmations` den effektiven Status und den
+Freigabenachweis; `range_proposal.origin=agent_estimate` dokumentiert weiterhin die
+Herkunft. Historisches `range_proposal.confirmed=false` ist kein aktueller Freigabestatus.
+Unveränderte Regeln bleiben innerhalb des Vorgangs bei gleichem Datenblattvertrag
+bestätigt. Ein geänderter Modellstand benötigt trotzdem seine reguläre Freigabe.
+Widersprechende Grenzen oder Genauigkeiten fachlich klären, nicht automatisch lockern.
+Bestehende aktuelle Modellfreigaben werden beim nächsten schreibenden Schritt
+nachvollziehbar ergänzt; aus veralteten Freigaben wird keine Bestätigung abgeleitet.
+Im Abschluss beispielsweise schreiben: «Die Zahlenbereiche und Genauigkeiten wurden
+vom Agenten vorgeschlagen und mit der Modellabnahme bestätigt.»
