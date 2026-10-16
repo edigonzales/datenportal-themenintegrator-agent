@@ -91,7 +91,7 @@ class RepositoryRecoveryTest {
     git(f.repo, "config", "user.email", "fixture@example.org");
     git(f.repo, "add", ".");
     git(f.repo, "commit", "-m", "Synthetic base");
-    git(temp, "init", "--bare", remote.toString());
+    git(temp, "init", "--bare", "--initial-branch=main", remote.toString());
     git(f.repo, "remote", "add", "origin", remote.toString());
     git(f.repo, "push", "-u", "origin", "main");
     f.workflow.github =
@@ -179,7 +179,9 @@ class RepositoryRecoveryTest {
           r.remove("git_bases");
           return null;
         });
-    git(temp, "clone", remote.toString(), checkout().toString());
+    String expectedBase = git(remote, "rev-parse", "refs/heads/main");
+    git(temp, "clone", "--branch", "main", remote.toString(), checkout().toString());
+    assertEquals(expectedBase, git(checkout(), "rev-parse", "HEAD"));
     git(checkout(), "switch", "-c", "codex/themenintegration-" + id.substring(0, 12));
     Json.write(checkout().resolve(model), "INTERLIS 2.3;\n");
     String before = Json.contents(f.workflow.store.directory(id).resolve("state.json"));
@@ -310,7 +312,9 @@ class RepositoryRecoveryTest {
           return null;
         });
     Path other = temp.resolve("other");
-    git(temp, "clone", remote.toString(), other.toString());
+    String expectedBase = git(remote, "rev-parse", "refs/heads/main");
+    git(temp, "clone", "--branch", "main", remote.toString(), other.toString());
+    assertEquals(expectedBase, git(other, "rev-parse", "HEAD"));
     git(other, "config", "user.name", "Synthetic fixture");
     git(other, "config", "user.email", "fixture@example.org");
     Json.write(other.resolve("unrelated.txt"), "remote work");

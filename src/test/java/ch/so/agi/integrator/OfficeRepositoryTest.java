@@ -74,7 +74,7 @@ class OfficeRepositoryTest {
     git(f.repo, "config", "user.email", "fixture@example.org");
     git(f.repo, "add", ".");
     git(f.repo, "commit", "-m", "Synthetic base");
-    git(temp, "init", "--bare", remote.toString());
+    git(temp, "init", "--bare", "--initial-branch=main", remote.toString());
     git(f.repo, "remote", "add", "origin", remote.toString());
     git(f.repo, "push", "-u", "origin", "main");
     String[] head = {""};

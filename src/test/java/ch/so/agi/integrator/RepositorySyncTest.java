@@ -50,7 +50,7 @@ class RepositorySyncTest {
     old = git(f.repo, "rev-parse", "HEAD");
     remote = temp.resolve("remote.git");
     writer = temp.resolve("writer");
-    git(temp, "init", "--bare", remote.toString());
+    git(temp, "init", "--bare", "--initial-branch=main", remote.toString());
     git(f.repo, "remote", "add", "origin", remote.toString());
     git(f.repo, "push", "origin", "main");
     git(temp, "clone", "--branch", "main", remote.toString(), writer.toString());

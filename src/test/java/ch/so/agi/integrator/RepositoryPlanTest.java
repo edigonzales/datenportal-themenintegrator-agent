@@ -55,7 +55,8 @@ class RepositoryPlanTest {
     system.checked(List.of("git", "config", "user.email", "fixture@example.org"), f.repo, 60);
     system.checked(List.of("git", "add", "."), f.repo, 60);
     system.checked(List.of("git", "commit", "-m", "Synthetic base"), f.repo, 60);
-    system.checked(List.of("git", "init", "--bare", bare.toString()), temp, 60);
+    system.checked(
+        List.of("git", "init", "--bare", "--initial-branch=main", bare.toString()), temp, 60);
     system.checked(List.of("git", "remote", "add", "origin", bare.toString()), f.repo, 60);
     system.checked(List.of("git", "push", "-u", "origin", "main"), f.repo, 60);
     return f;

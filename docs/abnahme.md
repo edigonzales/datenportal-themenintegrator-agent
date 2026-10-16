@@ -2325,3 +2325,31 @@ selben Vorgang über `repository_plan` → `prepare_pr` fortgesetzt werden.
 23 erfolgreich, ein optionaler Docker-/Publikationsfall übersprungen, keine
 Fehler. Die Fach-MCPs laufen dabei als echte stdio-Prozesse; dies ist keine
 Abnahme einer realen Datenlieferung oder eines GitHub-PRs.
+
+## 2026-10-16 – Git-Test-Fixtures ohne impliziten Standardbranch
+
+**Ursache und Reproduktion:** Die beiden CI-Fehler in
+`RepositoryRecoveryTest` liessen sich lokal mit `init.defaultBranch=master`
+reproduzieren. Die Test-Remotes enthielten `main`, ihr symbolischer `HEAD`
+zeigte aber auf das nicht vorhandene `master`. Zwei Klone ohne Branchangabe
+hatten deshalb keinen gültigen Ausgangscommit. Die lokale Git-Vorgabe `main`
+hatte diesen Fehler verdeckt. Die Deprecation-Hinweise waren nicht ursächlich.
+
+**Änderung:** Alle fünf Bare-Remotes der Repository-Testklassen werden mit
+`--initial-branch=main` angelegt. Die beiden betroffenen Klone wählen zusätzlich
+`--branch main` und prüfen ihren HEAD gegen den erwarteten Remote-Commit.
+Produktionslogik, Geschäftsvorgänge und installierte MCPs bleiben unverändert;
+`DEMO.md` gehört nicht zu dieser Änderung.
+
+**Simulierte Gegenprüfung:** Je 41 Repository-Tests mit erzwungenem
+`init.defaultBranch=master` und `init.defaultBranch=main` erfolgreich, keine
+Fehler oder übersprungenen Fälle. Die Vorgabe erfolgte ausschliesslich über
+prozesslokale `GIT_CONFIG_*`-Umgebungsvariablen; keine globale Git-Konfiguration
+wurde geändert. Der zweite Durchlauf verwendete `--rerun-tasks`, damit beide
+Konfigurationen tatsächlich ausgeführt wurden. Die Tests verwenden isolierte
+Git-Repositories und synthetische Freigaben/GitHub-Antworten.
+
+**Lokale Buildprüfung:** JDK 21, `test jar spotlessCheck` erfolgreich;
+323 Tests, keine Fehler und keine übersprungenen Fälle. Keine echte Lieferung,
+PR-Erstellung oder Installation zur Abnahme ausgelöst. Die Linux-/macOS-CI wird
+für den gepushten Fix separat kontrolliert.

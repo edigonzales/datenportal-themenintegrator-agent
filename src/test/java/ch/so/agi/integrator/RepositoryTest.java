@@ -90,7 +90,8 @@ class RepositoryTest {
     system.checked(List.of("git", "add", "."), f.repo, 60);
     system.checked(List.of("git", "commit", "-m", "Isolated synthetic fixture"), f.repo, 60);
     Path remote = temp.resolve("remote.git");
-    system.checked(List.of("git", "init", "--bare", remote.toString()), temp, 60);
+    system.checked(
+        List.of("git", "init", "--bare", "--initial-branch=main", remote.toString()), temp, 60);
     system.checked(List.of("git", "remote", "add", "origin", remote.toString()), f.repo, 60);
     system.checked(List.of("git", "push", "-u", "origin", "main"), f.repo, 60);
     var env =
