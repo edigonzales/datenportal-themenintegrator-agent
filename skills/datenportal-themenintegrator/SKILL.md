@@ -163,3 +163,13 @@ keine Aufforderung zur Repository-Bereinigung ableiten. Bei Blockern
 Vorgang mit `repository_plan` und bei Bereitschaft `prepare_pr` fortsetzen;
 keine erneute Lieferung. Einzelheiten unter
 [Neue Repository-Dateien und unterbrochene PR-Vorbereitung](../../docs/agent/lieferung-und-wiederaufnahme.md#neue-repository-dateien-und-unterbrochene-pr-vorbereitung).
+
+Bei fehlgeschlagener Lieferung ohne Bericht zuerst `inspect_delivery` im selben
+Vorgang verwenden. `blocked_reason=publication_unconfirmed` bedeutet Betreiberklärung,
+nicht Wiederholung von `deliver`/`retry_delivery` oder Modellableitung. Nur eine
+belegte, ausdrücklich menschlich bestätigte Nichtpublikation über
+`confirm_delivery_not_published` protokollieren; „Fehler korrigiert“ genügt nicht.
+Danach konkrete Änderungen anhand `approval_changes` prüfen, nötige Prüfungen und
+Freigaben erneuern und den Retry vorbereiten. Organisations-`build.gradle` nicht
+mit Themen-`dataset.gradle` verwechseln. Ohne Vergleichsevidenz keine Änderung
+unterstellen. Details: [Lieferung und Wiederaufnahme](../../docs/agent/lieferung-und-wiederaufnahme.md#fehlgeschlagene-lieferung-ohne-publikationsbericht).

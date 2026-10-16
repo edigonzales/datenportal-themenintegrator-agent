@@ -2455,3 +2455,79 @@ explizit synthetischer Testzustimmung. Ergebnis: `verified=true`, `renamed=true`
 alle drei SHA-256-Werte gleich. Originalbytes, Kopie und Importnachweis wurden
 zusätzlich direkt verglichen. Kein Fachvorgang, keine fachliche Freigabe und
 keine Veröffentlichung wurden für diesen Test ausgelöst. `DEMO.md` unverändert.
+
+## 2026-10-16: Diagnose und Wiederaufnahme fehlgeschlagener Jenkins-Läufe
+
+**Implementiert:** `inspect_delivery` liest den gespeicherten Build erneut und
+übernimmt nachträgliche Publikationsberichte. Fehlende/mehrdeutige Berichte liefern
+keine unerfüllbare `verify_delivery`-Empfehlung mehr, sondern einen Blocker mit
+Betreiberhandlung und begrenztem, bereinigtem Konsolenauszug. Publikationswerte
+`not-published` und `candidates-uploaded` bleiben wiederholbar; `accepted`,
+`unknown` und unbekannte Werte werden nicht als Nichtpublikation interpretiert.
+`confirm_delivery_not_published` bindet eine belegte menschliche Erklärung an den
+beendeten Fehlversuch; erneute Statusprüfung, Historie und Versuchsgeneration
+verhindern eine Übertragung auf einen späteren Upload. Fachfreigaben bleiben nötig.
+
+`approval_changes` erklärt Datei-/Kontextänderungen anhand optionaler Hash-Snapshots
+in Status, Fehlern und Prüfberichten. Organisations-`build.gradle` wird von
+Themenkandidaten unterschieden. Manuelle Änderungen werden nicht überschrieben;
+alte Freigaben ohne Snapshot erhalten keine erfundene Ursachenanalyse. Die
+Fingerprint-Berechnung bleibt identisch. Der Checkout verwendet bereits Schema 3;
+diese bestehende Versionsgrenze wird nicht abgesenkt und kein Altvorgang migriert.
+
+**Tatsächlich ausgeführt:** JDK-21-Build, 344 Unit-/Regressionstests ohne Fehler oder
+Auslassungen, `jar`, `spotlessCheck` und `javaDistribution`. Nach einer letzten
+Eingrenzung der Diagnose auf gate-relevante Repository-Kandidaten bestanden die
+41 gezielten Tests für Jenkins, Lieferzustände, Freigabediagnosen und MCP-Kürzung
+nochmals; Paket und Formatprüfung wurden erneut gebaut/geprüft. `init` mit dem
+gebauten Paket, echten MCP-JARs und ilivalidator ist erfolgreich. Die dafür
+verwendete neue Konfiguration und das synthetische Testrepository liegen
+unter `build/delivery-recovery-integration`; von `init` erzeugte Änderungen an den
+Entwicklungs-Harnessdateien wurden zurückgenommen.
+
+**Simuliert:** Jenkins-HTTP-Antworten, Konsolenfehler inklusive HTTP 403,
+Zugangsdatenmaskierung, übergrosse Logs, fremde URLs, abweichende Buildnummer,
+fehlende/mehrdeutige/später verfügbare Berichte, menschliche Testbestätigungen,
+blockierte Wiederholungen und genau ein neuer Upload nach bestätigter
+Nichtpublikation sowie erneuten Fachfreigaben. Alle Bestätigungen sind isolierte,
+ausdrücklich synthetische Fixtures und autorisieren keine Geschäftslieferung.
+
+**Offen:** Reale Ende-zu-Ende-Abnahme gegen Jenkins/Portal/Downloads und Installation
+im Betriebsworkspace. Build 18, der aktuelle OpenCode-Vorgang, das Themenrepository
+und reale Publikationen wurden durch diese Umsetzung nicht verändert oder erneut
+gestartet. Die bereits vorhandene Benutzeränderung an `DEMO.md` bleibt erhalten.
+
+**Integration tatsächlich ausgeführt:**
+`DATENPORTAL_AGENT_HOME=$PWD/build/java-distribution ./bin/datenportal-agent gradle integrationTest -PintegrationConfig=build/delivery-recovery-integration/integration.toml`:
+24 Tests, davon zunächst 22 bestanden, ein optionaler Docker-/Jenkins-Test
+übersprungen und ein Organisationstest wegen fehlender synthetischer Teams im
+neu angelegten Testrepo fehlgeschlagen. Nach Ergänzung der Fixture-Teams
+`datenportal-read` und `agi-build` wurde ausschliesslich
+`IntegrationTest.realEmptyOrganizationGradleAndOfficeValidation` mit derselben
+Konfiguration wiederholt: bestanden. Insgesamt somit 23 erfolgreiche
+Integrationstests und eine ausdrücklich offene optionale Stack-Abnahme; keine
+Produktivzugänge oder Geschäftslieferungen verwendet.
+
+### Lokale Installation und OpenCode-Prüfung (16. Oktober 2026)
+
+Auf Benutzerauftrag wurde `0.2.41-local-delivery-recovery` gebaut und unter
+`/Users/stefan/datenportal/pakete/datenportal-themenintegrator-agent-0.2.41-local-delivery-recovery`
+installiert. `workspace update --preserve-run-state` aktualisierte den bestehenden
+Betriebsworkspace. Beide Fach-MCP-JARs sind SHA-256-identisch zum vorherigen Paket
+`0.2.40-local-csv-import-name`. Private vollständige Sicherung und Nachweise:
+`build/operator-update-delivery-recovery` (nur für den Benutzer zugänglich).
+Von 7068 gesicherten Vorgangs-/Konfigurationsdateien änderte sich beim Update nur
+`.datenportal-integrator/init.json`; Konfiguration und vorhandene Fachvorgänge
+blieben bytegleich. `init` und `doctor` bestätigen JDK 21, beide Fach-MCPs,
+aktuelle Initialisierung und gesunden lokalen Stack.
+
+Die unterbrochene OpenCode-Fachsitzung wurde nicht fortgesetzt. Beide MCPs wurden
+in der Oberfläche getrennt und wieder verbunden; anschliessend beide `connected`.
+Die OpenCode-Kindprozesse für `serve` und `serve-workspace` verwenden nachweislich
+das neue Paket. Der separate technische OpenCode-Chat
+`ses_ebab69167ffeUJp4xPAXH7lczD` führte ausschliesslich `operation_schema` für
+`inspect_delivery` und `confirm_delivery_not_published` sowie `read_file` für die
+Liefer-/Wiederaufnahmeanleitung aus. Beide Schemas und der neue Abschnitt wurden
+bestätigt. Keine Geschäftslieferung, Freigabe, Betreiberklärung oder Wiederholung
+wurde durch den Test ausgelöst. Ein anschliessend vom Benutzer bearbeiteter
+OpenCode-Entwurf wurde nicht verändert.

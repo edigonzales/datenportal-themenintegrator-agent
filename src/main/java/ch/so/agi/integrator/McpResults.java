@@ -64,6 +64,11 @@ final class McpResults {
               "approvable",
               "fingerprint",
               "current_approvals",
+              "approval_changes",
+              "blocked_reason",
+              "required_action",
+              "next_operation",
+              "diagnosis",
               "numeric_rule_confirmations",
               "model_approval_current",
               "errors",
@@ -120,6 +125,11 @@ final class McpResults {
           "current_candidate_delivered",
           "next_operation",
           "alternative_operation",
+          "blocked_reason",
+          "diagnosis",
+          "excerpt",
+          "console_url",
+          "truncated",
           "code",
           "field",
           "value",
@@ -140,6 +150,8 @@ final class McpResults {
       return result;
     }
     if (value instanceof List<?> list) return list.stream().map(McpResults::diagnostic).toList();
+    if (value instanceof String text && text.length() > 1600)
+      return text.substring(0, 1600) + " [gekürzt; siehe full_result_path]";
     return value;
   }
 
@@ -170,7 +182,10 @@ final class McpResults {
                 compactChecks.put(name.toString(), compactCheck);
               });
           out.put(key, compactChecks);
+        } else if (key.equals("approval_changes")) {
+          out.put(key, summarize(entry.getValue(), 0));
         } else if (Set.of(
+                "fingerprint_components",
                 "diff",
                 "events",
                 "approvals",

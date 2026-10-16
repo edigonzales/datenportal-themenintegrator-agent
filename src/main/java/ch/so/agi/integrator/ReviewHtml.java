@@ -166,6 +166,8 @@ final class ReviewHtml {
                   Json.map("state", report.get("state"), "manifest", report.get("manifest")),
                   "",
                   0)));
+    if (report.containsKey("approval_changes"))
+      out.append(section("Änderungen seit Freigabe", value(report.get("approval_changes"), "", 0)));
     var remaining = new LinkedHashMap<Object, Object>(report);
     var business = new StringBuilder();
     switch (kind) {

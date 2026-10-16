@@ -141,6 +141,10 @@ public final class Workflow implements AutoCloseable {
               case "adopt_seed" -> new Deliveries(this).adopt(r, args);
               case "reconcile" -> new Deliveries(this).reconcile(r, args, false);
               case "reconcile_seed" -> new Deliveries(this).reconcile(r, args, true);
+              case "inspect_delivery" ->
+                  new Deliveries(this).inspect(r, Json.required(args, "environment"));
+              case "confirm_delivery_not_published" ->
+                  new Deliveries(this).confirmNotPublished(r, args);
               case "verify_delivery" ->
                   new Deliveries(this).verify(r, Json.required(args, "environment"));
               case "retry_delivery" ->
@@ -158,7 +162,9 @@ public final class Workflow implements AutoCloseable {
                     "reconcile_seed",
                     "prepare_followup_delivery",
                     "verify_delivery",
-                    "retry_delivery")
+                    "retry_delivery",
+                    "inspect_delivery",
+                    "confirm_delivery_not_published")
                 .contains(operation)) {
               error.details.put("external_runs", Deliveries.states(r));
               String name = Json.str(args, "environment", "local");
@@ -173,6 +179,9 @@ public final class Workflow implements AutoCloseable {
                   "diagnostics",
                   Diagnostics.record(
                       this, r, "model_arguments", "INVALID_SPEC", error.result(), false));
+            if (Set.of("approval_required", "stale_review", "validation_required")
+                .contains(error.code))
+              error.details.put("approval_changes", ApprovalChanges.all(this, r));
             if (r.containsKey("diagnostic_history"))
               error.details.put("diagnostic_history", r.get("diagnostic_history"));
             if (r.containsKey("model_repair")) error.details.put("repair", r.get("model_repair"));
@@ -290,6 +299,10 @@ public final class Workflow implements AutoCloseable {
 
   String fingerprint(Map<String, Object> r, String gate, String policy) {
     if (Offices.standalone(r)) return new Offices(this).fingerprint(r);
+    return Json.digest(fingerprintParts(r, gate, policy));
+  }
+
+  Map<String, Object> fingerprintParts(Map<String, Object> r, String gate, String policy) {
 
     var context = Json.map();
     Path shared = settings.topics.resolve("shared");
@@ -357,40 +370,39 @@ public final class Workflow implements AutoCloseable {
       raw.remove("fingerprint");
       plan = raw;
     }
-    return Json.digest(
-        Json.map(
-            "gate",
-            gate,
-            "workflow",
-            r.get("workflow"),
-            "organization",
-            org,
-            "identifier",
-            r.get("identifier"),
-            "issue",
-            r.get("issue"),
-            "files",
-            files,
-            "settings",
-            policy,
-            "context",
-            context,
-            "offices",
-            gate.equals("data") ? null : Json.sha(offices(r)),
-            "changes",
-            changes,
-            "provenance",
-            gate.equals("data") ? null : r.get("provenance"),
-            "transform",
-            r.get("transform"),
-            "baseline",
-            r.get("baseline"),
-            "model",
-            gate.equals("data") ? null : r.get("model"),
-            "organization_spec",
-            gate.equals("data") ? null : r.get("organization_spec"),
-            "publication_plan",
-            plan));
+    return Json.map(
+        "gate",
+        gate,
+        "workflow",
+        r.get("workflow"),
+        "organization",
+        org,
+        "identifier",
+        r.get("identifier"),
+        "issue",
+        r.get("issue"),
+        "files",
+        files,
+        "settings",
+        policy,
+        "context",
+        context,
+        "offices",
+        gate.equals("data") ? null : Json.sha(offices(r)),
+        "changes",
+        changes,
+        "provenance",
+        gate.equals("data") ? null : r.get("provenance"),
+        "transform",
+        r.get("transform"),
+        "baseline",
+        r.get("baseline"),
+        "model",
+        gate.equals("data") ? null : r.get("model"),
+        "organization_spec",
+        gate.equals("data") ? null : r.get("organization_spec"),
+        "publication_plan",
+        plan);
   }
 
   public void exportRequired(Map<String, Object> r) {
@@ -587,6 +599,7 @@ public final class Workflow implements AutoCloseable {
       }
     }
     result.put("current_approvals", valid);
+    result.put("approval_changes", ApprovalChanges.all(this, r));
     result.put("numeric_rule_confirmations", ModelRuleApprovals.view(this, r));
     result.put("external_runs", Deliveries.states(r));
     var externalDeliveries = Json.obj(Json.obj(result.get("external_runs")).get("deliveries"));
@@ -991,6 +1004,7 @@ public final class Workflow implements AutoCloseable {
     }
     if (!gate.equals("model")) ModelRuleApprovals.recover(this, r);
     var record = Json.map("at", Json.now(), "fingerprint", fp, "human_statement", statement);
+    record.put("fingerprint_components", ApprovalChanges.snapshot(this, r, gate));
     Json.obj(r.get("approvals")).put(gate, record);
     if (gate.equals("model")) ModelRuleApprovals.record(this, r, record);
     Store.event(

@@ -114,6 +114,8 @@ final class CheckStates {
       Map<String, Object> started) {
     String gate = key.equals("model_preparation") ? "model" : key;
     report.put("manifest", started);
+    report.put("fingerprint_components", ApprovalChanges.snapshot(w, run, gate));
+    report.put("approval_changes", ApprovalChanges.describe(w, run, gate));
     boolean current;
     try {
       current = Json.digest(started).equals(Json.digest(manifest(w, run, gate)));

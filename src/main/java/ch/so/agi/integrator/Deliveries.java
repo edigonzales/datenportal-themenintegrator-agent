@@ -35,13 +35,45 @@ public final class Deliveries {
             : phase.equals("seed_submitting")
                 ? "reconcile_seed"
                 : phase.equals("failed")
-                    ? (seed ? "adopt_seed" : "verify_delivery")
+                    ? (seed
+                        ? "adopt_seed"
+                        : accepted(item)
+                            ? "verify_delivery"
+                            : retrySafe(item) ? "retry_delivery" : null)
                     : phase.equals("complete") ? null : standaloneSeed ? "seed" : "deliver");
     if (phase.equals("failed") && seed && !standaloneSeed)
       result.put("alternative_operation", "retry_delivery");
     if (phase.equals("running") && "accepted".equals(result.get("publication")))
       result.put("next_operation", "verify_delivery");
+    if (phase.equals("failed") && !seed && !accepted(item) && !retrySafe(item)) {
+      result.put("blocked_reason", "publication_unconfirmed");
+      result.put(
+          "required_action",
+          "Bestehenden Lauf mit inspect_delivery untersuchen. Publikationsausgang durch Betreiber klären; nur bei belegter Nichtpublikation confirm_delivery_not_published mit tatsächlicher menschlicher Erklärung verwenden. Keine Modellableitung oder Dateiübernahme als Umgehung; deliver und retry_delivery nicht wiederholen.");
+    }
     return result;
+  }
+
+  static boolean accepted(Map<String, Object> item) {
+    return "accepted".equals(Json.obj(item.get("report")).get("publication"));
+  }
+
+  static boolean retrySafe(Map<String, Object> item) {
+    if (!"failed".equals(item.get("phase"))) return false;
+    var report = Json.obj(item.get("report"));
+    if (Set.of("accepted", "unknown").contains(Json.str(report, "publication", ""))) return false;
+    if (!item.containsKey("job")) return true;
+    if (!report.isEmpty())
+      return Set.of("not-published", "candidates-uploaded")
+          .contains(Json.str(report, "publication", ""));
+    var proof = Json.obj(item.get("nonpublication_confirmation"));
+    return !proof.isEmpty()
+        && Set.of("FAILURE", "ABORTED").contains(Json.str(item, "result", ""))
+        && Json.number(item, "report_count", -1) == 0
+        && Objects.equals(proof.get("job"), item.get("job"))
+        && Objects.equals(proof.get("build_url"), item.get("build_url"))
+        && Objects.equals(proof.get("fingerprint"), item.get("fingerprint"))
+        && Json.number(proof, "generation", 0) == Json.number(item, "generation", 1);
   }
 
   static Map<String, Object> states(Map<String, Object> r) {
@@ -535,10 +567,33 @@ public final class Deliveries {
       item.put("phase", "running");
       return describe(item);
     }
-    var status = j.status(Json.obj(item.get("job")));
-    if (!Json.bool(status, "complete", false)) return describe(item);
+    return observe(r, name, env, item, j);
+  }
+
+  Object observe(
+      Map<String, Object> r,
+      String name,
+      Map<String, Object> env,
+      Map<String, Object> item,
+      Jenkins j) {
+    var job = new LinkedHashMap<>(Json.obj(item.get("job")));
+    Object previousBuild = job.get("build");
+    var status = j.status(job);
+    if (previousBuild != null && !Objects.equals(previousBuild, job.get("build")))
+      throw new Problem(
+          "wrong_delivery",
+          "Jenkins-Status verweist auf einen anderen Build; bestehenden Lauf nicht ersetzen.");
+    item.put("job", job);
+    if (!Json.bool(status, "complete", false)) {
+      item.remove("nonpublication_confirmation");
+      item.put("phase", "running");
+      return describe(item);
+    }
+    item.put("result", status.get("status"));
+    item.put("build_url", status.get("consoleUrl"));
     try {
       item.put("report", j.report(status));
+      item.remove("nonpublication_confirmation");
     } catch (Problem e) {
       if (!e.code.equals("report_missing")) throw e;
       item.putAll(
@@ -546,13 +601,18 @@ public final class Deliveries {
               "phase",
               "failed",
               "error",
-              "Jenkins-Lauf ohne Publikationsbericht beendet; Konsole prüfen.",
+              "Jenkins-Lauf ohne eindeutigen Publikationsbericht beendet; Konsole prüfen.",
               "build_url",
               status.get("consoleUrl"),
               "result",
               status.get("status")));
+      item.put("report_count", e.details.get("report_count"));
+      item.put("diagnosis", j.diagnosis(status));
       return describe(item);
     }
+    item.remove("error");
+    item.remove("report_count");
+    item.remove("diagnosis");
     outcome(r, name, env, item);
     item.put("build_url", status.get("consoleUrl"));
     return describe(item);
@@ -588,6 +648,69 @@ public final class Deliveries {
     item.put("phase", Json.bool(item, "verified", false) ? "complete" : "failed");
   }
 
+  public Object inspect(Map<String, Object> r, String name) {
+    var item = Json.obj(Json.obj(r.get("deliveries")).get(name));
+    if (!item.containsKey("job")
+        || Set.of("delivery_submitting", "seed_submitting").contains(Json.str(item, "phase", "")))
+      throw new Problem(
+          "delivery_inspection_unavailable",
+          "Kein eindeutig gespeicherter Lieferlauf; gegebenenfalls zuerst reconcile verwenden.");
+    return observe(
+        r,
+        name,
+        w.settings.environment(name),
+        item,
+        w.jenkins.apply(name, w.settings.environment(name)));
+  }
+
+  public Object confirmNotPublished(Map<String, Object> r, Map<String, Object> args) {
+    String name = Json.required(args, "environment");
+    String statement = Json.required(args, "human_statement").trim();
+    String evidence = Json.required(args, "evidence").trim();
+    if (statement.isEmpty() || evidence.isEmpty())
+      throw new Problem(
+          "nonpublication_evidence_required",
+          "Begründung und tatsächliche menschliche Nichtpublikationsbestätigung erforderlich.");
+    var item = Json.obj(Json.obj(r.get("deliveries")).get(name));
+    String build = Json.required(args, "build_url");
+    if (!Objects.equals(build, item.get("build_url")))
+      throw new Problem(
+          "wrong_delivery", "Build-URL muss exakt dem gespeicherten Lieferlauf entsprechen.");
+    inspect(r, name);
+    w.persist(r);
+    if (!Objects.equals(build, item.get("build_url"))
+        || !"failed".equals(item.get("phase"))
+        || !Set.of("FAILURE", "ABORTED").contains(Json.str(item, "result", ""))
+        || !Json.obj(item.get("report")).isEmpty()
+        || Json.number(item, "report_count", -1) != 0)
+      throw new Problem(
+          "nonpublication_confirmation_unsafe",
+          "Nur beendeten, fehlgeschlagenen Build ohne Bericht bestätigen; widersprüchliche Zustände zuerst klären.");
+    var proof =
+        Json.map(
+            "run_id",
+            r.get("id"),
+            "environment",
+            name,
+            "job",
+            Json.read(Json.text(item.get("job"))),
+            "build_url",
+            build,
+            "generation",
+            Json.number(item, "generation", 1),
+            "fingerprint",
+            item.get("fingerprint"),
+            "at",
+            Json.now(),
+            "evidence",
+            evidence,
+            "human_statement",
+            statement);
+    item.put("nonpublication_confirmation", proof);
+    Store.event(r, "confirm_delivery_not_published", proof);
+    return describe(item);
+  }
+
   public Object verify(Map<String, Object> r, String name) {
     var item = Json.obj(Json.obj(r.get("deliveries")).get(name));
     if (!Objects.equals(Json.obj(item.get("report")).get("publication"), "accepted"))
@@ -605,15 +728,15 @@ public final class Deliveries {
     approved(r);
     var item = Json.obj(Json.obj(r.get("deliveries")).get(name));
     var report = Json.obj(item.get("report"));
-    if (!Objects.equals(item.get("phase"), "failed")
-        || Set.of("accepted", "unknown").contains(Json.str(report, "publication", ""))
-        || (item.containsKey("job") && report.isEmpty()))
+    if (!retrySafe(item))
       throw new Problem(
           "retry_unsafe",
           "Nur eindeutig fehlgeschlagene, nicht publizierte Läufe können neu gestartet werden.");
     if (!r.containsKey("delivery_history")) r.put("delivery_history", new ArrayList<>());
     Json.list(r.get("delivery_history")).add(Json.map("environment", name, "attempt", item));
     Json.obj(r.get("deliveries")).remove(name);
+    Json.obj(r.computeIfAbsent("delivery_generations", k -> Json.map()))
+        .put(name, Json.map("generation", Json.number(item, "generation", 1) + 1));
     var adopted = Json.obj(Json.obj(r.get("seeds")).get(name));
     if ("manual".equals(Json.obj(adopted.get("seed")).get("origin"))) {
       if (!r.containsKey("seed_history")) r.put("seed_history", new ArrayList<>());

@@ -18,6 +18,45 @@ class McpResultsTest {
   }
 
   @Test
+  void compactFailureKeepsBlockerConsoleAndApprovalChanges() {
+    var source =
+        Json.map(
+            "external_state",
+            Json.map(
+                "action",
+                "delivery",
+                "phase",
+                "failed",
+                "next_operation",
+                null,
+                "blocked_reason",
+                "publication_unconfirmed",
+                "required_action",
+                "Betreiberklärung erforderlich",
+                "diagnosis",
+                Json.map(
+                    "excerpt",
+                    "Project must define ext.datenportalOrganization",
+                    "console_url",
+                    "http://localhost/console")),
+            "approval_changes",
+            Json.map(
+                "data",
+                Json.map(
+                    "state",
+                    "changed",
+                    "changes",
+                    List.of(Json.map("component", "context/agi/build.gradle")))),
+            "diagnostic_history",
+            "x".repeat(50000));
+    String result = Json.text(McpResults.present(settings(), "status", source));
+    assertTrue(result.contains("publication_unconfirmed"));
+    assertTrue(result.contains("datenportalOrganization"));
+    assertTrue(result.contains("context/agi/build.gradle"));
+    assertTrue(result.length() < McpResults.LIMIT);
+  }
+
+  @Test
   void largeStatusKeepsNumericRuleConfirmations() {
     var rules =
         List.of(

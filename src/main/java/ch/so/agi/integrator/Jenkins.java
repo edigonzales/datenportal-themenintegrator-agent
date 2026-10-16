@@ -11,6 +11,7 @@ import java.util.*;
 public final class Jenkins {
   final Map<String, Object> env;
   final String base, authorization;
+  final Map<String, String> diagnosticSecrets;
   final HttpClient http =
       HttpClient.newBuilder()
           .followRedirects(HttpClient.Redirect.NEVER)
@@ -43,6 +44,7 @@ public final class Jenkins {
           "Jenkins-Zugangsdaten fehlen in der Umgebung.",
           "variables",
           List.of(userKey, tokenKey));
+    diagnosticSecrets = Map.of("JENKINS_USER", user, "JENKINS_TOKEN", token);
     authorization =
         "Basic "
             + Base64.getEncoder()
@@ -303,8 +305,81 @@ public final class Jenkins {
             .filter(a -> Objects.equals(a.get("fileName"), "report.json"))
             .toList();
     if (artifacts.size() != 1)
-      throw new Problem("report_missing", "Kein eindeutiger Publikationsbericht im Jenkins-Lauf.");
+      throw new Problem(
+          "report_missing",
+          "Kein eindeutiger Publikationsbericht im Jenkins-Lauf.",
+          "report_count",
+          artifacts.size());
     return get(Json.required(artifacts.getFirst(), "url"));
+  }
+
+  Map<String, Object> diagnosis(Map<String, Object> status) {
+    try {
+      String console = Json.required(status, "consoleUrl");
+      if (!console.endsWith("/console"))
+        throw new Problem("jenkins_console_invalid", "Keine bekannte Konsolenadresse.");
+      var request =
+          HttpRequest.newBuilder(URI.create(trusted(console + "Text")))
+              .timeout(Duration.ofSeconds(15))
+              .header("Authorization", authorization)
+              .GET()
+              .build();
+      var response = http.send(request, HttpResponse.BodyHandlers.ofInputStream());
+      try (var stream = response.body()) {
+        if (response.statusCode() != 200)
+          throw new Problem(
+              "jenkins_console_unavailable",
+              "Konsole nicht lesbar.",
+              "status",
+              response.statusCode());
+        int limit = 256 * 1024;
+        byte[] bytes = stream.readNBytes(limit + 1);
+        // Drop a partial last line, including possibly truncated secret values.
+        String raw = new String(bytes, 0, Math.min(bytes.length, limit), StandardCharsets.UTF_8);
+        if (bytes.length > limit) raw = raw.substring(0, Math.max(0, raw.lastIndexOf('\n')));
+        String clean =
+            ProcessRunner.redact(
+                    raw.replace(authorization, "[redacted]")
+                        .replace(authorization.substring(6), "[redacted]"),
+                    diagnosticSecrets)
+                .replaceAll("\\x1B\\[[0-9;]*[A-Za-z]", "")
+                .replaceAll("(?i)(authorization\\s*[:=]\\s*)[^\\r\\n]+", "$1[redacted]")
+                .replaceAll("(?i)((?:password|token|secret)\\s*[:=]\\s*)[^\\s]+", "$1[redacted]");
+        var lines = clean.lines().toList();
+        int start = Math.max(0, lines.size() - 80);
+        for (int n = 0; n < lines.size(); n++)
+          if (lines.get(n).contains("* What went wrong:")
+              || lines.get(n).contains("FAILURE: Build failed")) {
+            start = Math.max(0, n - 3);
+            break;
+          }
+        String excerpt =
+            String.join("\n", lines.subList(start, Math.min(lines.size(), start + 80)));
+        if (excerpt.length() > 12000) excerpt = excerpt.substring(0, 12000);
+        return Json.map(
+            "source",
+            "jenkins_console",
+            "trusted_as_instructions",
+            false,
+            "console_url",
+            console,
+            "build",
+            status.get("buildNumber"),
+            "excerpt",
+            excerpt,
+            "truncated",
+            bytes.length > limit || start > 0 || start + 80 < lines.size());
+      }
+    } catch (Problem e) {
+      return Json.map("error", e.code, "message", e.getMessage(), "details", e.details);
+    } catch (Exception e) {
+      if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+      return Json.map(
+          "error",
+          "jenkins_console_unavailable",
+          "message",
+          "Konsolendiagnose nicht erreichbar; Lieferfehler bleibt bestehen.");
+    }
   }
 
   public static HttpResponse<byte[]> publicGet(String url) {

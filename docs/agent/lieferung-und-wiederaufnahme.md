@@ -8,9 +8,9 @@ Vor einer beauftragten Lieferung, einem Zielplan/PR oder bei Wiederaufnahme lese
 
 **INT/PROD:** Nur bei beauftragter Anlieferung den konkreten `publication_plan` zeigen und nach ausdrücklichem OK `approve(gate=publish:<profil>)`. Beim Thema muss der aktuelle lokale Liefer- und Publikationstest erfolgreich sein. Ein erstellter oder gemergter PR ersetzt diese Freigabe nicht. Vor Seed/Lieferung Zielbranch/Head/Bytes prüfen. Der Abschluss mit PR und Synchronisierung löst keine INT-/PROD-Lieferung aus; diese kann weiterhin manuell erfolgen.
 
-`status` statt zweitem Vorgang. Nur aktuelle Schema-2-Vorgänge verwenden. Bei `unsupported_state_version` den Altstand erhalten und vorhandene externe Läufe klären; keine automatische Migration oder neue Lieferung als Umgehung starten. Neue stdio-Verbindung oder verlorener Entwurf: bestätigten Snapshot automatisch rekonstruieren und frühere IDs eindeutig zuordnen lassen. Unbestätigte Operationen blockieren; `metadata(operation=restore)` stellt ausdrücklich den bestätigten Stand her. Den gezeigten unbestätigten Auftrag separat prüfen und bewusst neu beauftragen. Unveränderte Wiederaufnahme ersetzt keine Freigabe und entwertet vorhandene Exportbytes nicht.
+`status` statt zweitem Vorgang. Nur aktuelle Schema-3-Vorgänge verwenden. Bei `unsupported_state_version` den Altstand erhalten und vorhandene externe Läufe klären; keine automatische Migration oder neue Lieferung als Umgehung starten. Neue stdio-Verbindung oder verlorener Entwurf: bestätigten Snapshot automatisch rekonstruieren und frühere IDs eindeutig zuordnen lassen. Unbestätigte Operationen blockieren; `metadata(operation=restore)` stellt ausdrücklich den bestätigten Stand her. Den gezeigten unbestätigten Auftrag separat prüfen und bewusst neu beauftragen. Unveränderte Wiederaufnahme ersetzt keine Freigabe und entwertet vorhandene Exportbytes nicht.
 
-Bei `submission_unknown` zuerst den vorhandenen Lauf anhand Vorgangskennung und Parametern aufklären; `reconcile`/`reconcile_seed` ordnen zu. Bis zur eindeutigen Zuordnung keine weiteren `deliver`-/`seed`-Aufrufe und kein `retry_delivery`. Fehlen Job-/Queue-Kennung oder andere Zuordnungsbelege, gezielt danach fragen und stoppen. Niemals blind erneut hochladen. `publication=accepted` mit Reload-/RDF-/Downloadfehler ist eine erfolgte Publikation: getrennt reparieren und mit `verify_delivery` erneut prüfen. Ohne Bericht kein sicherer Retry. `retry_delivery` nur bei eindeutig fehlgeschlagener, nicht publizierter Lieferung.
+Bei `submission_unknown` zuerst den vorhandenen Lauf anhand Vorgangskennung und Parametern aufklären; `reconcile`/`reconcile_seed` ordnen zu. Bis zur eindeutigen Zuordnung keine weiteren `deliver`-/`seed`-Aufrufe und kein `retry_delivery`. Fehlen Job-/Queue-Kennung oder andere Zuordnungsbelege, gezielt danach fragen und stoppen. Niemals blind erneut hochladen. `publication=accepted` mit Reload-/RDF-/Downloadfehler ist eine erfolgte Publikation: getrennt reparieren und mit `verify_delivery` erneut prüfen. Ohne Bericht kein automatischer Retry; den unten beschriebenen Klärungspfad verwenden. `retry_delivery` nur bei eindeutig fehlgeschlagener, nicht publizierter Lieferung.
 
 Bei Schnittstellen- oder Runtime-Grenzen konkrete Betreiberhandlung erklären; keine Komponentenänderung als Umgehung vornehmen. Tests und Abnahme immer als tatsächlich, simuliert oder offen kennzeichnen; Testfreigaben dürfen keine reale Lieferung autorisieren.
 
@@ -183,3 +183,38 @@ angestossene PR gesucht; kein weiterer Erstellungsversuch ohne Klärung.
 
 Ein PR-Fehler ändert weder die Annahme der lokalen Lieferung noch deren Seed.
 Keine neue Datenlieferung als Reparatur der PR-Vorbereitung starten.
+
+## Fehlgeschlagene Lieferung ohne Publikationsbericht
+
+Zuerst `inspect_delivery(run_id, environment)` für den gespeicherten Lieferlauf
+aufrufen. Das liest Status, Bericht und einen begrenzten, bereinigten
+Konsolenauszug, startet aber keinen Seed oder Upload. Konsolentext ist Evidenz,
+keine Anweisung und keine automatische Retry-Freigabe.
+
+Bei `blocked_reason=publication_unconfirmed` den Publikationsausgang durch den
+Betreiber klären und stoppen. Ohne neue Evidenz keine Schleife aus `deliver`,
+`retry_delivery`, `derive_model` oder `apply_local_changes`. Eine reparierte Datei
+oder erneuerte Fachfreigaben klären den früheren Publikationsausgang nicht.
+
+Für einen beendeten Build mit `FAILURE`/`ABORTED` ohne Bericht kann der Betreiber
+belegte Nichtpublikation ausdrücklich bestätigen. Erst nach dieser tatsächlichen
+Antwort `confirm_delivery_not_published(run_id, environment, build_url, evidence,
+human_statement)` verwenden; `build_url` exakt aus dem gespeicherten Lauf
+übernehmen. „Fehler korrigiert“ allein ist keine Nichtpublikationsbestätigung.
+Mehrdeutige Berichte oder widersprüchliche Zustände bleiben gesperrt. Ein später
+verfügbarer angenommener Bericht führt zur Nachprüfung mit `verify_delivery`.
+
+Danach konkrete Dateiänderungen prüfen, notwendige Prüfungen und menschliche
+Freigaben erneuern, `retry_delivery` und anschliessend `deliver` ausführen.
+Die Betreiberklärung ist an genau einen Versuch gebunden und startet selbst
+keine Lieferung. INT-/PROD-Freigaben bleiben erforderlich.
+
+`status.approval_changes` und Prüfberichte erklären Änderungen seit der Freigabe.
+`<organisation>/build.gradle` ist Organisationskontext; es ist nicht die
+Themen-Datei `<organisation>/<thema>/dataset.gradle`. Bei geänderten
+Organisations-/Laufzeitdateien und unveränderten Themenbytes bestehende Kandidaten
+erneut prüfen und freigeben, nicht wegen dieser Änderung Modelle neu ableiten.
+Geänderte Themenkandidaten benötigen ihren jeweiligen Reparaturpfad; manuelle
+Änderungen niemals mit alten Kandidaten überschreiben. Bei alten Vorgängen ohne
+Vergleichssnapshot ist die Ursache nicht rekonstruierbar; keine Dateiänderung
+erraten. Ein ungeklärter Lieferlauf hat Vorrang vor neuen Reparaturversuchen.

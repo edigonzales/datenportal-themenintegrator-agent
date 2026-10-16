@@ -154,6 +154,19 @@ public final class Operations {
         "environment!",
         "queue!");
     add(
+        "inspect_delivery",
+        "Bestehenden Lieferlauf und Diagnose erneut lesen; kein Seed oder Upload.",
+        "run_id!",
+        "environment!");
+    add(
+        "confirm_delivery_not_published",
+        "Tatsächliche menschliche Bestätigung der belegten Nichtpublikation eines fehlgeschlagenen Builds protokollieren. Fehlerkorrektur allein ist keine Bestätigung. Kein Upload.",
+        "run_id!",
+        "environment!",
+        "build_url!",
+        "evidence!",
+        "human_statement!");
+    add(
         "verify_delivery",
         "Angenommene Publikation erneut prüfen; keinen Upload starten.",
         "run_id!",

@@ -15,6 +15,10 @@ class JenkinsTest {
   HttpServer server;
   String base, metadata, catalog;
   int uploads, seedStarts;
+  int reportCount = 1, consoleStatus = 200, deliveryBuild = 14;
+  boolean deliveryRunning;
+  String consoleLog =
+      "FAILURE: Build failed\n* What went wrong:\nProject : must define ext.datenportalOrganization\n";
   boolean upload404, seedRunning;
   int portalStatus = 200;
   String seedResult = "SUCCESS";
@@ -95,16 +99,24 @@ class JenkinsTest {
         x.getResponseHeaders()
             .add("Location", base + "/jenkins/gretl-datenportal/run?job=fixture&queue=123");
       status = upload404 ? 404 : 303;
+    } else if (path.endsWith("/consoleText")) {
+      body = consoleLog;
+      status = consoleStatus;
     } else if (path.endsWith("/gretl-datenportal/runStatus"))
       body =
           Json.text(
               Json.map(
                   "complete",
-                  true,
+                  !deliveryRunning,
+                  "status",
+                  "FAILURE",
+                  "consoleUrl",
+                  base + "/jenkins/job/fixture/14/console",
                   "buildNumber",
-                  14,
+                  deliveryBuild,
                   "artifacts",
-                  List.of(
+                  Collections.nCopies(
+                      reportCount,
                       Json.map("fileName", "report.json", "url", base + "/jenkins/report.json"))));
     else if (path.endsWith("/queue/item/seed/api/json"))
       body = Json.text(Json.map("executable", Json.map("url", base + "/jenkins/job/seed/1/")));
@@ -145,6 +157,159 @@ class JenkinsTest {
     x.sendResponseHeaders(status, bytes.length);
     x.getResponseBody().write(bytes);
     x.close();
+  }
+
+  String failedDelivery(Fixtures f) {
+    String id = f.topic(false, "Jahr\n2025\n");
+    f.approveAll(id);
+    reportCount = 0;
+    f.call("deliver", "run_id", id);
+    f.call("deliver", "run_id", id);
+    var failed = f.call("deliver", "run_id", id);
+    assertEquals("failed", failed.get("phase"));
+    assertNull(failed.get("next_operation"));
+    assertEquals(1, uploads);
+    return id;
+  }
+
+  Map<String, Object> confirm(Fixtures f, String id) {
+    return f.call(
+        "confirm_delivery_not_published",
+        "run_id",
+        id,
+        "environment",
+        "local",
+        "build_url",
+        base + "/jenkins/job/fixture/14/console",
+        "evidence",
+        "Synthetic fixture: Gradle configuration aborted before any publication task.",
+        "human_statement",
+        "SYNTHETIC TEST ONLY: I confirm this build did not publish.");
+  }
+
+  @Test
+  void inspectionRejectsChangedBuildAndRetainsOriginalFailureOnConsole403() throws Exception {
+    var f = workflow();
+    String id = failedDelivery(f);
+    consoleStatus = 403;
+    var inspected = f.call("inspect_delivery", "run_id", id, "environment", "local");
+    assertEquals("failed", inspected.get("phase"));
+    assertEquals("jenkins_console_unavailable", Json.obj(inspected.get("diagnosis")).get("error"));
+    deliveryBuild = 15;
+    f.error(
+        "wrong_delivery", () -> f.call("inspect_delivery", "run_id", id, "environment", "local"));
+    var saved = f.call("deliver", "run_id", id);
+    assertEquals("14", Json.obj(saved.get("job")).get("build"));
+    assertEquals(1, uploads);
+  }
+
+  @Test
+  void configurationRepairRequiresExplanationThenExactlyOneNewUpload() throws Exception {
+    var f = workflow();
+    String id = failedDelivery(f);
+    var inspected = f.call("inspect_delivery", "run_id", id, "environment", "local");
+    assertTrue(Json.text(inspected.get("diagnosis")).contains("datenportalOrganization"));
+    Json.write(
+        f.repo.resolve("agi/build.gradle"),
+        "ext.datenportalOrganization = [id: projectDir.name]\n");
+    var state = f.call("status", "run_id", id);
+    assertEquals(false, Json.obj(state.get("current_approvals")).get("data"));
+    String explanation = Json.text(state.get("approval_changes"));
+    assertTrue(explanation.contains("context/agi/build.gradle"));
+    assertTrue(explanation.contains("keine Modellableitung"));
+    for (int n = 0; n < 3; n++) {
+      assertNull(f.call("deliver", "run_id", id).get("next_operation"));
+      f.call("inspect_delivery", "run_id", id, "environment", "local");
+    }
+    assertEquals(1, uploads);
+    assertEquals("retry_delivery", confirm(f, id).get("next_operation"));
+    assertEquals(
+        "retry_delivery",
+        f.call("inspect_delivery", "run_id", id, "environment", "local").get("next_operation"));
+    f.error(
+        "approval_required", () -> f.call("retry_delivery", "run_id", id, "environment", "local"));
+    f.approveAll(id);
+    f.call("retry_delivery", "run_id", id, "environment", "local");
+    f.call("deliver", "run_id", id);
+    f.call("deliver", "run_id", id);
+    var failedAgain = f.call("deliver", "run_id", id);
+    assertEquals(2, failedAgain.get("generation"));
+    assertEquals(2, uploads);
+    f.error("retry_unsafe", () -> f.call("retry_delivery", "run_id", id, "environment", "local"));
+  }
+
+  @Test
+  void lateAndAmbiguousReportsNeverPermitHumanOverride() throws Exception {
+    var f = workflow();
+    String id = failedDelivery(f);
+    reportCount = 2;
+    f.error("nonpublication_confirmation_unsafe", () -> confirm(f, id));
+    reportCount = 1;
+    f.error("nonpublication_confirmation_unsafe", () -> confirm(f, id));
+    assertEquals("accepted", f.call("deliver", "run_id", id).get("publication"));
+    f.error("retry_unsafe", () -> f.call("retry_delivery", "run_id", id, "environment", "local"));
+    assertEquals(1, uploads);
+  }
+
+  @Test
+  void runningWrongBuildAndMissingHumanStatementCannotConfirm() throws Exception {
+    var f = workflow();
+    String id = failedDelivery(f);
+    f.error(
+        "wrong_delivery",
+        () ->
+            f.call(
+                "confirm_delivery_not_published",
+                "run_id",
+                id,
+                "environment",
+                "local",
+                "build_url",
+                base + "/jenkins/job/other/1/console",
+                "evidence",
+                "fixture",
+                "human_statement",
+                "fixture"));
+    f.error(
+        "missing_argument",
+        () ->
+            f.call(
+                "confirm_delivery_not_published",
+                "run_id",
+                id,
+                "environment",
+                "local",
+                "build_url",
+                base + "/jenkins/job/fixture/14/console",
+                "evidence",
+                "fixture",
+                "human_statement",
+                " "));
+    deliveryRunning = true;
+    f.error("nonpublication_confirmation_unsafe", () -> confirm(f, id));
+    assertEquals(1, uploads);
+  }
+
+  @Test
+  void consoleDiagnosisIsBoundedRedactedAndAccessFailureIsSeparate() {
+    var j = client();
+    var status = Json.map("consoleUrl", base + "/jenkins/job/fixture/14/console");
+    consoleLog +=
+        "synthetic-fixture\nAuthorization: Basic hidden\ntoken=other-secret\n"
+            + "x\n".repeat(150000);
+    var diagnosis = j.diagnosis(status);
+    String text = Json.text(diagnosis);
+    assertFalse(text.contains("synthetic-fixture"));
+    assertFalse(text.contains("hidden"));
+    assertFalse(text.contains("other-secret"));
+    assertTrue(text.contains("datenportalOrganization"));
+    assertEquals(true, diagnosis.get("truncated"));
+    assertTrue(text.length() < 15000);
+    consoleStatus = 403;
+    assertEquals("jenkins_console_unavailable", j.diagnosis(status).get("error"));
+    assertEquals(
+        "jenkins_url_mismatch",
+        j.diagnosis(Json.map("consoleUrl", "https://example.org/console")).get("error"));
   }
 
   @Test
