@@ -2531,3 +2531,45 @@ Liefer-/Wiederaufnahmeanleitung aus. Beide Schemas und der neue Abschnitt wurden
 bestätigt. Keine Geschäftslieferung, Freigabe, Betreiberklärung oder Wiederholung
 wurde durch den Test ausgelöst. Ein anschliessend vom Benutzer bearbeiteter
 OpenCode-Entwurf wurde nicht verändert.
+
+## Maven-Release 0.2.45 und lokale Betriebsinstallation (16. Oktober 2026)
+
+**Tatsächlich ausgeführt:** Release-Workflow
+[#45](https://github.com/sogis/datenportal-themenintegrator-agent/actions/runs/38932989609)
+für Commit `92ad3bc` erfolgreich: Linux-/macOS-Tests und MCP-Transporttests,
+Paketprüfung, Maven-Publikation und geprüfter Rückdownload. Enthalten:
+Datenblatt-MCP `0.2.3`, INTERLIS-MCP `0.0.581-1`, `developmentArtifacts=false`.
+Der erste Releaseversuch #44 scheiterte vor der Veröffentlichung an der
+veralteten Workflow-Vorgabe `0.0.579-1` (`model_component_upgrade_required`).
+#45 verwendet ausdrücklich den Parameter `interlis_version=0.0.581-1`;
+die Workflow-Vorgabe selbst ist weiterhin alt.
+
+Das veröffentlichte Archiv wurde heruntergeladen und alle 42 Manifest-Prüfsummen
+geprüft. Archiv-SHA-256:
+`baf9926098247190015cbc12a989876e6816bb891e6d19d4e79470063aac58df`.
+Installation unter
+`/Users/stefan/datenportal/pakete/datenportal-themenintegrator-agent-0.2.45`,
+Update von `/Users/stefan/datenportal/datenportal-betrieb` mit
+`--preserve-run-state`. `init` und `doctor` erfolgreich, `ready=true`,
+`smoke_current=true`, Java und beide Fach-MCPs gültig. Von 8947 gesicherten
+Konfigurations-/Zustandsdateien änderte sich ausschliesslich
+`.datenportal-integrator/init.json`; keine Datei fehlt. Vollständige private
+Sicherung: `build/maven-release-044/workspace-before`.
+
+OpenCode-Konfiguration neu geladen; beide Projekt-MCPs danach in der Oberfläche
+wieder aktiviert und als `connected` geprüft. Beide neuen MCP-Java-Prozesse
+verwenden nachweislich Paket `0.2.45`. Ein separater technischer OpenCode-Chat
+mit dem bereits verwendeten `deepseek/deepseek-flash#high` rief die Schemas
+`inspect_delivery`, `confirm_delivery_not_published` und `derive_model.changes`
+sowie die vollständige Wiederaufnahmeanleitung erfolgreich ab. Ein vorausgehender
+Versuch mit dem voreingestellten Anbieter scheiterte vor den Werkzeugaufrufen
+an dessen Kontingent (HTTP 402). Keine Kontingente oder Zugänge geändert.
+Nachweise: `build/maven-release-045/`.
+
+**Simuliert:** Die lokale Paketprüfung vor dem korrigierten Release verwendete
+isolierte synthetische Dateien und prüfte Installation, MCPs, Validierung,
+Workspace-Update und unveränderte Vorgangsbytes.
+
+**Offen/nicht ausgeführt:** Neue Ende-zu-Ende-Geschäftslieferung gegen Jenkins,
+Portal und Downloads. Bestehende Fachvorgänge wurden für diesen technischen
+Installationstest weder fortgesetzt noch freigegeben oder publiziert.
