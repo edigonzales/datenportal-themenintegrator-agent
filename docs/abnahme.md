@@ -2383,3 +2383,36 @@ diese Änderung kein erfolgreicher aktueller Nachweis mit echten MCPs; externe
 Komponenten und Konfigurationen wurden nicht verändert.
 Dies ist keine menschliche Fachabnahme eines realen Vorgangs und keine
 INT-/PROD-Publikationsabnahme.
+
+### Lokale Installation und OpenCode-Prüfung (16. Oktober 2026)
+
+Auf Benutzerauftrag wurde das Paket `0.2.39-local-model-approval-r3` unter
+`/Users/stefan/datenportal/pakete/datenportal-themenintegrator-agent-0.2.39-local-model-approval-r3`
+gebaut und mit `workspace update --preserve-run-state` im bestehenden
+`/Users/stefan/datenportal/datenportal-betrieb` installiert. Die Fach-MCP-JARs
+stammen unverändert aus `0.2.38-local-pr-recovery-r2`; insbesondere bleibt der
+bereits eingesetzte lokale INTERLIS-Build erhalten. Keine neue Ausnahme für alte
+Prüf-Fingerprints wurde hinzugefügt.
+
+`init` meldet `ready=true`; `doctor` bestätigt JDK 21, beide Fach-MCPs und die
+aktuelle Initialisierung. Von 4936 zuvor gesicherten Vorgangs-/Konfigurationsdateien
+änderte sich nur der Initialisierungsbericht `.datenportal-integrator/init.json`.
+Sicherung und lokale Prüfberichte liegen privat unter
+`build/operator-update-model-approval`.
+
+Beide MCP-Verbindungen wurden in der untätigen OpenCode-Sitzung getrennt und neu
+verbunden. Ein eigener rein lesender OpenCode-Test prüft Skill-Referenz,
+`operation_schema(derive_model.changes)` und `status` eines bestehenden Vorgangs.
+Dabei wurde eine Auslassung in der gekürzten MCP-Antwort erkannt und korrigiert:
+`numeric_rule_confirmations` und `model_approval_current` bleiben in der
+wesentlichen Antwort erhalten. Ein Regressionstest erzwingt diese zweite
+Kürzungsstufe für Status, Freigabeantwort und Modellprüfung. Vollständige
+Nachweise bleiben über `full_result_path` lesbar; gekürzte `evidence` ist keine
+fehlende Fachbestätigung.
+
+Der zuvor offene `ModelRevalidationIntegrationTest` besteht jetzt mit echten
+Fach-MCPs, isolierten synthetischen Daten und Freigaben. Erforderlich sind der
+absolute Pfad zur Betriebskonfiguration sowie `DATENPORTAL_AGENT_HOME` mit dem
+installierten Paketpfad. Ohne diese Paketzuordnung schlugen frühere Schemaabrufe
+fehl. Der Test ändert keine realen Vorgänge. Paketbau, gezielte MCP-Ausgabetests
+und Formatprüfung sind ebenfalls erfolgreich. Keine INT-/PROD-Publikation.

@@ -18,6 +18,37 @@ class McpResultsTest {
   }
 
   @Test
+  void largeStatusKeepsNumericRuleConfirmations() {
+    var rules =
+        List.of(
+            Json.map(
+                "column",
+                "Jahr",
+                "confirmed",
+                true,
+                "origin",
+                "agent_estimate",
+                "confirmation_source",
+                "model_approval"));
+    var source =
+        Json.map(
+            "numeric_rule_confirmations",
+            rules,
+            "model_approval_current",
+            false,
+            "current_approvals",
+            Json.map("model", false));
+    for (int i = 0; i < 40; i++) source.put("large_field_" + i, "x".repeat(1000));
+    for (String operation : List.of("status", "approve", "validate_model")) {
+      var result = Json.obj(McpResults.present(settings(), operation, source));
+      assertEquals(rules, result.get("numeric_rule_confirmations"));
+      assertEquals(false, result.get("model_approval_current"));
+      assertEquals(true, result.get("response_compacted"));
+      assertTrue(Json.pretty(result).length() < McpResults.LIMIT);
+    }
+  }
+
+  @Test
   void statusKeepsFailedMetadataVisibleBesideSuccessfulModel() {
     var checks =
         Json.map(

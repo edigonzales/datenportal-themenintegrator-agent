@@ -64,6 +64,8 @@ final class McpResults {
               "approvable",
               "fingerprint",
               "current_approvals",
+              "numeric_rule_confirmations",
+              "model_approval_current",
               "errors",
               "review_path",
               "checks",
