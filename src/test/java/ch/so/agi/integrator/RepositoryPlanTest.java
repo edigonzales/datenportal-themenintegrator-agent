@@ -12,23 +12,53 @@ class RepositoryPlanTest {
   @TempDir Path temp;
 
   Fixtures fixture(String remote) throws Exception {
-    return new Fixtures(
-        temp,
-        new Fixtures.FakeProcess() {
-          @Override
-          public String checked(List<String> args, Path cwd, int timeout) {
-            if (args.equals(List.of("git", "remote", "get-url", "origin"))) return remote;
-            if (args.getFirst().equals("git"))
-              throw new AssertionError("Unexpected Git mutation: " + args);
-            return super.checked(args, cwd, timeout);
-          }
-        },
-        (n, a) -> {
-          throw new AssertionError("No datasheet calls");
-        },
-        (n, a) -> {
-          throw new AssertionError("No model calls");
-        });
+    var system = new ProcessRunner();
+    Path bare = temp.resolve("remote.git");
+    var f =
+        new Fixtures(
+            temp,
+            new Fixtures.FakeProcess() {
+              @Override
+              public String checked(List<String> args, Path cwd, int timeout) {
+                if (args.equals(List.of("git", "remote", "get-url", "origin"))) return remote;
+                if (args.getFirst().equals("git")) return system.checked(args, cwd, timeout);
+                return super.checked(args, cwd, timeout);
+              }
+
+              @Override
+              public Result run(List<String> args, Path cwd, int timeout, Path log) {
+                if (args.getFirst().equals("git")) return system.run(args, cwd, timeout, log);
+                return super.run(args, cwd, timeout, log);
+              }
+
+              @Override
+              public Result run(
+                  List<String> args,
+                  Path cwd,
+                  int timeout,
+                  Path log,
+                  Map<String, String> environment) {
+                var local = new ArrayList<>(args);
+                int index = local.indexOf(remote);
+                if (index >= 0) local.set(index, bare.toString());
+                return system.run(local, cwd, timeout, log);
+              }
+            },
+            (n, a) -> {
+              throw new AssertionError("No datasheet calls");
+            },
+            (n, a) -> {
+              throw new AssertionError("No model calls");
+            });
+    system.checked(List.of("git", "init", "--initial-branch=main"), f.repo, 60);
+    system.checked(List.of("git", "config", "user.name", "Synthetic fixture"), f.repo, 60);
+    system.checked(List.of("git", "config", "user.email", "fixture@example.org"), f.repo, 60);
+    system.checked(List.of("git", "add", "."), f.repo, 60);
+    system.checked(List.of("git", "commit", "-m", "Synthetic base"), f.repo, 60);
+    system.checked(List.of("git", "init", "--bare", bare.toString()), temp, 60);
+    system.checked(List.of("git", "remote", "add", "origin", bare.toString()), f.repo, 60);
+    system.checked(List.of("git", "push", "-u", "origin", "main"), f.repo, 60);
+    return f;
   }
 
   void stage(Fixtures f, String id) {

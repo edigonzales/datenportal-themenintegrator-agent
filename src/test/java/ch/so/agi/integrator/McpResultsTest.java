@@ -140,4 +140,40 @@ class McpResultsTest {
     var schema = Json.map("description", "x".repeat(15000));
     assertSame(schema, McpResults.present(settings(), "operation_schema", schema));
   }
+
+  @Test
+  void compactRepositoryConflictKeepsComparisonAndNextStep() {
+    var source =
+        Json.map(
+            "error",
+            "pr_base_conflict",
+            "action",
+            "prepare_pr",
+            "path",
+            "org/topic/dataset.gradle",
+            "basis_sha256",
+            "base",
+            "target_sha256",
+            "target",
+            "candidate_sha256",
+            "candidate",
+            "required_action",
+            "Zieländerung prüfen",
+            "next_operation",
+            "repository_plan",
+            "events",
+            List.of("x".repeat(50000)));
+    var output = Json.obj(McpResults.present(settings(), "prepare_pr", source));
+    var diagnostic = Json.obj(output.get("diagnostics"));
+    for (String key :
+        List.of(
+            "error",
+            "action",
+            "path",
+            "basis_sha256",
+            "target_sha256",
+            "candidate_sha256",
+            "required_action",
+            "next_operation")) assertEquals(source.get(key), diagnostic.get(key));
+  }
 }

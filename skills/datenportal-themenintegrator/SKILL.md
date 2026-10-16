@@ -153,3 +153,13 @@ Dateikorrekturen bei `local_changes_modified`/`local_changes_missing` erhalten,
 als neue Kandidaten prüfen und nötige Freigaben erneuern; keine automatische
 Wiederherstellung mit `apply_local_changes`. Details stehen in
 [Lieferung und Wiederaufnahme](../../docs/agent/lieferung-und-wiederaufnahme.md#manuell-repariert-und-geseedet).
+
+## Neue Dateien und PR-Wiederaufnahme
+
+`repository_plan` prüft den aktuellen Git-Zielstand. Lokal vorhandene,
+unversionierte Dateien können zulässige `addition`-Kandidaten sein; daraus
+keine Aufforderung zur Repository-Bereinigung ableiten. Bei Blockern
+`required_action` beachten. Nach unterbrochener PR-Vorbereitung denselben
+Vorgang mit `repository_plan` und bei Bereitschaft `prepare_pr` fortsetzen;
+keine erneute Lieferung. Einzelheiten unter
+[Neue Repository-Dateien und unterbrochene PR-Vorbereitung](../../docs/agent/lieferung-und-wiederaufnahme.md#neue-repository-dateien-und-unterbrochene-pr-vorbereitung).

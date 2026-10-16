@@ -143,6 +143,7 @@ tasks.register('runtimeArtifacts', Sync) {
 }
 tasks.register('distributionFiles', Sync) {
     dependsOn 'runtimeArtifacts', 'operatorWorkspace'
+    inputs.property('checkCompatibilityFromJar', providers.gradleProperty('checkCompatibilityFromJar').getOrElse(''))
     into layout.buildDirectory.dir('java-distribution')
     from(tasks.named('runtimeArtifacts')) { into 'lib' }
     from(layout.buildDirectory.dir('operator-workspace')) { into 'workspace' }
@@ -165,9 +166,19 @@ tasks.register('distributionFiles', Sync) {
         fileTree(destinationDir).files.findAll { it.isFile() && it.name != 'distribution.json' }.sort().each {
             inventory[destinationDir.toPath().relativize(it.toPath()).toString()] = java.security.MessageDigest.getInstance('SHA-256').digest(it.bytes).encodeHex().toString()
         }
+        // Explicit release-review decision, bound to both exact artifacts; never inherited by a later build.
+        def checkCompatibility = [:]
+        if (providers.gradleProperty('checkCompatibilityFromJar').isPresent()) {
+            def previous = file(providers.gradleProperty('checkCompatibilityFromJar').get())
+            if (!previous.isFile()) throw new GradleException('Previous check artifact is missing')
+            checkCompatibility = [
+                from: java.security.MessageDigest.getInstance('SHA-256').digest(previous.bytes).encodeHex().toString(),
+                to: inventory['lib/datenportal-integrator.jar']
+            ]
+        }
         new File(destinationDir, 'distribution.json').text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson([
             version: project.version.toString(), java: 21, developmentArtifacts: localMcpArtifacts.isPresent(),
-            datasheetVersion: datasheetVersion.orNull, interlisVersion: interlisVersion.orNull, files: inventory
+            datasheetVersion: datasheetVersion.orNull, interlisVersion: interlisVersion.orNull, files: inventory, checkCompatibility: checkCompatibility
         ])) + '\n'
     }
 }

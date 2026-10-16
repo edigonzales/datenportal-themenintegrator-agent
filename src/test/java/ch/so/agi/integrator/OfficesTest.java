@@ -215,7 +215,8 @@ class OfficesTest {
     Json.write(f.repo.resolve(Offices.PATH), Json.contents(f.repo.resolve(Offices.PATH)) + " ");
     assertEquals(
         false, Json.obj(f.call("status", "run_id", id).get("current_approvals")).get("office"));
-    f.error("approval_required", () -> f.call("prepare_pr", "run_id", id, "environment", "local"));
+    f.error(
+        "local_changes_modified", () -> f.call("prepare_pr", "run_id", id, "environment", "local"));
   }
 
   @Test

@@ -150,3 +150,36 @@ für eindeutig fehlgeschlagene, nicht angenommene Einreichungen reserviert.
 die alte Nachprüfung bleibt an ihren eingefrorenen Stand gebunden. Bei grossen
 Antworten enthält `diagnostics` die wesentlichen Zustände und nächsten Schritte;
 nicht wiederholt Megabyte-Ausgaben lesen oder terminale Lieferungen starten.
+
+## Neue Repository-Dateien und unterbrochene PR-Vorbereitung
+
+Vor `prepare_pr` mit demselben Vorgang `repository_plan` lesen. Der Plan prüft
+nun den aktuellen Remote-Zielcommit in einer temporären Arbeitskopie und nennt
+`target_commit`, `file_comparisons`, `blockers` und `next_operation`. Er verändert
+weder den Vorgang noch das lokale Themenrepository. Bei nicht erreichbarem
+Remote ist die Bereitschaft nicht bestätigt.
+
+`addition` bedeutet: Die geprüfte Datei fehlt in der belegten Git-Basis und im
+aktuellen Zielbranch. Auch eine lokal bereits vorhandene, unveränderte Datei
+kann eine solche Ergänzung sein. Das ist kein zu bereinigender Branchkonflikt.
+`modification` bezeichnet eine Änderung gegenüber der belegten Git-Basis;
+`already_on_target` bereits übernommene Kandidatenbytes. Der lokale Ausgangsstand
+und die Git-Basis sind unterschiedliche Nachweise.
+
+Bei `pr_base_conflict` die ausgegebenen Basis-, Ziel- und Kandidatenprüfsummen
+sowie `required_action` beachten. Tatsächliche Zielbranchänderungen fachlich
+abgleichen, betroffene Kandidaten erneut prüfen und gegebenenfalls freigeben.
+Bei `pr_basis_unknown` fehlt eine belegbare Git-Basis; nicht durch wiederholtes
+Staging oder eine neue Lieferung umgehen. `local_changes_missing` und
+`local_changes_modified` unterscheiden entfernte und manuell geänderte Dateien.
+Keine automatische Wiederherstellung durch Kopieren, Reset, Clean oder Stash.
+
+Nach einem Abbruch `repository_plan` und bei Bereitschaft `prepare_pr` im selben
+Vorgang verwenden. Eigene bekannte Vorbereitungsschritte werden wiederaufgenommen;
+eindeutig zuordenbare alte Teil-Checkouts bleiben als Archiv erhalten. Bei
+`pr_checkout_conflict` fremde Dateien oder Commits erhalten und die konkrete
+Diagnose klären. Bei `github_pr_ambiguous` wird ausschliesslich der bereits
+angestossene PR gesucht; kein weiterer Erstellungsversuch ohne Klärung.
+
+Ein PR-Fehler ändert weder die Annahme der lokalen Lieferung noch deren Seed.
+Keine neue Datenlieferung als Reparatur der PR-Vorbereitung starten.

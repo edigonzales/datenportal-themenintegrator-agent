@@ -2254,3 +2254,74 @@ Folgelieferungsoperation verwenden. Kein Zurücksetzen von Zustandsdateien oder
 Portal-Releases, keine echte Seed-/Upload-Ausführung für diese technische Abnahme.
 Ein erneuter vollständiger Agentendurchlauf in OpenCode wurde nicht simuliert;
 der GUI-Nachweis betrifft den erfolgreichen MCP-Neustart.
+
+## 2026-10-16 – Git-Basis und wiederaufnehmbare PR-Vorbereitung
+
+**Implementiert:** Lokale `before_sha256`-Werte und unveränderliche Git-Basen
+sind getrennt. `repository_plan` prüft Remote-Zielcommit, Kandidaten, lokalen
+Dateistand und vorhandene PR-Arbeitskopien lesend. Neue lokale Dateien werden
+als Ergänzungen erkannt. `prepare_pr` prüft alle Dateien vor dem Kopieren,
+sichert seinen Fortschritt und übernimmt nur eindeutig eigene Vorbereitungsspuren.
+Historische Teil-Checkouts werden erhalten und archiviert. Ein verlorenes
+Push-/POST-Ergebnis führt zu Abgleich beziehungsweise PR-Suche, nicht zu
+Force-Push oder einem blinden zweiten PR.
+
+**Simulierte Abnahme:** 323 Unit-/Regressionstests erfolgreich, keine Fehler.
+Neue Fälle verwenden echte temporäre Git-Repositories und synthetische GitHub-
+Antworten/Freigaben: unversioniertes Thema mit unverändertem Task, korrigierten
+Metadaten und neuem Modell; historischer Teil-Checkout; Abbrüche vor/nach Commit
+und Push sowie nach PR-POST; unklarer POST ohne erneute Erstellung; fremde
+Checkout-Dateien; Remote-Änderung und -Löschung; fehlende oder widersprüchliche
+historische Basis; bereits übernommene Bytes; unveränderte Basis nach Restaging;
+getrennte Diagnose lokaler Änderungen und Löschungen; kompakte MCP-Diagnosen.
+Die bestehenden Seed-, Liefer-, Freigabe-, Office- und Merge-Tests bleiben grün.
+
+**Upgrade-Nachweis:** Der erste installierte Prüflauf zeigte, dass der bisherige
+Prüfmanifestvergleich auch einen ausschliesslichen Git-Fix wegen geänderter
+Integrator-JAR-Prüfsumme als veraltet sperrt. Das endgültige Paket enthält daher
+in `distribution.json` einen expliziten `checkCompatibility`-Nachweis für die
+exakten alten und neuen JAR-Bytes. Alle übrigen Manifestfelder müssen identisch
+bleiben; Fingerprints und menschliche Freigaben werden weiterhin vollständig
+geprüft. Tests sperren andere JAR-Paare, Fach-MCP- und Dateiänderungen. Es werden
+keine historischen Nachweise oder Benutzerantworten neu geschrieben.
+
+Die Freigabe dieses konkreten Artefaktpaars gilt nur für den hier geprüften
+Repository-Fix. Beim Paketbau wird sie ausdrücklich über
+`-PcheckCompatibilityFromJar=<altes Integrator-JAR>` gesetzt; ohne diese Option
+gibt es keine Upgrade-Ausnahme. Nicht für Änderungen fachlicher Prüflogik
+verwenden. Ausgangsartefakt: `0.2.37-local-followup-r2`, SHA-256
+`41247c832457d3eef7f93057dd92c4845f6f754315c528f8946df80f7e99c106`.
+Der Zielhash wird beim Paketbau aus dem tatsächlichen neuen JAR ermittelt.
+
+**Tatsächliche lokale Funktionsprüfung:** JDK 21, `test jar spotlessCheck
+javaDistribution` erfolgreich. Endgültiges Paket
+`0.2.38-local-pr-recovery-r2` mit unveränderten Fach-MCP-Artefakten aus
+`0.2.36-local-manual-seed` gebaut, mit `workspace update --preserve-run-state`
+installiert. `init` meldet `ready=true`, `doctor` bestätigt beide Fach-MCPs.
+Öffentlicher stdio-MCP-Aufruf `repository_plan` für
+`b5021fa141774df7855cbd600006dd69`: `ready=true`, keine Blocker, drei `addition`-
+Dateien, Zielcommit `4ff11ab3fe84b14cfd13befd8538003652d04811`. Das betrifft das
+Modell, `dataset.gradle` und die Metadaten-XTF. Die bestehende lokale Lieferung
+und die tatsächlichen Freigaben wurden akzeptiert, ohne Vorgangsänderung.
+Der Testclient benötigt wie der installierte Launcher `DATENPORTAL_AGENT_HOME`;
+ein erster direkter Aufruf ohne diese Paketzuordnung wurde korrigiert.
+
+Zusätzlicher öffentlicher MCP-Smoke-Test: vier Skill-Referenzlesungen, zwei
+Verzeichnislisten, verweigerter Konfigurationszugriff und bestehende
+Folgelieferungs-/Seed-/Provenance-Schemas erfolgreich. Beide OpenCode-MCPs in der
+untätigen bestehenden Session getrennt und erneut verbunden. Neue Prozesse
+für `serve` und `serve-workspace` verwenden das endgültige Paket. Alle 2685 vor
+der Installation erfassten Vorgangs-, Themenrepository- und Konfigurationsdateien
+sind SHA-256-identisch geblieben. `DEMO.md` wurde nicht bearbeitet.
+
+**Offen:** Die echte PR-Erstellung und spätere menschliche Übernahme. Diese
+technische Abnahme führte weder `prepare_pr` noch Seed, Upload oder neue
+Freigaben im Geschäftsvorgang aus. Der bestehende PR-Auftrag kann jetzt im
+selben Vorgang über `repository_plan` → `prepare_pr` fortgesetzt werden.
+
+**Integration:** Endgültiges Paket mit
+`DATENPORTAL_AGENT_HOME=…/build/java-distribution` und expliziter Konfiguration
+`build/xtf-contract-integration/integration.toml` geprüft: 24 Integrationstests,
+23 erfolgreich, ein optionaler Docker-/Publikationsfall übersprungen, keine
+Fehler. Die Fach-MCPs laufen dabei als echte stdio-Prozesse; dies ist keine
+Abnahme einer realen Datenlieferung oder eines GitHub-PRs.

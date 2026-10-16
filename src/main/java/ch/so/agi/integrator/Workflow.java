@@ -781,6 +781,7 @@ public final class Workflow implements AutoCloseable {
             sha,
             "diff",
             "--- " + rel + " (Bestand)\n" + old + "\n+++ " + rel + " (Kandidat)\n" + candidate);
+    RepositoryChecks.capture(this, r, rel);
     changes.put(rel, change);
     Store.event(r, "stage_change", Json.map("path", rel, "sha256", sha));
     return change;

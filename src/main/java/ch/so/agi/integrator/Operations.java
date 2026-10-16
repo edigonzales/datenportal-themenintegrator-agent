@@ -105,7 +105,7 @@ public final class Operations {
         "environment!");
     add(
         "repository_plan",
-        "Git-Ziel, Änderungen und fehlende Freigaben/Liefernachweise lesend anzeigen; kein Push und kein Jenkins-Aufruf.",
+        "Aktuellen Git-Zielcommit, Dateiabgleich, Freigaben und Liefernachweise in temporärer Arbeitskopie prüfen; Vorgang und Themenrepository bleiben unverändert. Kein Push und kein Jenkins-Aufruf.",
         "run_id!",
         "environment!");
     add(

@@ -152,10 +152,33 @@ final class CheckStates {
         return gate.equals("data")
             && Objects.equals(report.get("fingerprint"), w.fingerprint(run, "data"));
       return !"stale".equals(report.get("state"))
-          && Json.digest(report.get("manifest")).equals(Json.digest(manifest(w, run, gate)));
+          && equivalent(w, Json.obj(report.get("manifest")), manifest(w, run, gate));
     } catch (Problem changed) {
       return false;
     }
+  }
+
+  static boolean equivalent(Workflow w, Map<String, Object> before, Map<String, Object> actual) {
+    if (Json.digest(before).equals(Json.digest(actual))) return true;
+    if (!AgentResources.installed()) return false;
+    Path distribution = AgentResources.resolve(w.settings.root, "distribution.json");
+    if (!Files.isRegularFile(distribution)) return false;
+    return compatible(before, actual, Json.obj(Json.read(distribution).get("checkCompatibility")));
+  }
+
+  /** A reviewed release may preserve evidence only for one exact old/new JAR pair. */
+  static boolean compatible(
+      Map<String, Object> before, Map<String, Object> actual, Map<String, Object> pair) {
+    Object from = pair.get("from"), to = pair.get("to");
+    if (!(from instanceof String oldHash)
+        || !oldHash.matches("[a-f0-9]{64}")
+        || !(to instanceof String newHash)
+        || !newHash.matches("[a-f0-9]{64}")
+        || !Objects.equals(from, Json.obj(before.get("components")).get("integrator"))
+        || !Objects.equals(to, Json.obj(actual.get("components")).get("integrator"))) return false;
+    var comparison = Json.read(Json.text(actual));
+    Json.obj(comparison.get("components")).put("integrator", from);
+    return Json.digest(before).equals(Json.digest(comparison));
   }
 
   static Map<String, Object> overview(Workflow w, Map<String, Object> run) {
@@ -181,6 +204,8 @@ final class CheckStates {
                       same ? "current" : "stale",
                       "valid",
                       same && Json.bool(check, "valid", false),
+                      "compatible_integrator_upgrade",
+                      same && !Json.digest(check.get("manifest")).equals(Json.digest(actual)),
                       "checked_manifest",
                       check.get("manifest"),
                       "current_manifest",

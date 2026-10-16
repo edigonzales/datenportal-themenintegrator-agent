@@ -70,7 +70,12 @@ public class ProcessRunner {
   }
 
   static String redact(String output, Map<String, String> environment) {
-    var secrets = new ArrayList<>(environment.values());
+    var secrets = new ArrayList<String>();
+    environment.forEach(
+        (key, value) -> {
+          // Git control flags are not secrets; replacing 0/2 corrupts ls-remote commit IDs.
+          if (!Set.of("GIT_TERMINAL_PROMPT", "GIT_CONFIG_COUNT").contains(key)) secrets.add(value);
+        });
     if (environment.containsKey("DATENPORTAL_BOOTSTRAP_USER")
         && environment.containsKey("DATENPORTAL_BOOTSTRAP_PASSWORD"))
       secrets.add(

@@ -89,6 +89,15 @@ final class McpResults {
 
   static final Set<String> DIAGNOSTIC_FIELDS =
       Set.of(
+          "error",
+          "path",
+          "basis_sha256",
+          "target_sha256",
+          "candidate_sha256",
+          "target_commit",
+          "ready",
+          "blockers",
+          "classification",
           "action",
           "environment",
           "generation",
